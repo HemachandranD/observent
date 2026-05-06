@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install lint/type-check tools
+        run: python -m pip install --upgrade pip ruff mypy pyyaml
+
+      - name: Import scripts (no extra deps required)
+        shell: python {0}
+        run: |
+          import importlib.util, sys
+          for path in [
+              ".claude/skills/bigboss/scripts/detect_framework.py",
+              ".claude/skills/bigboss/scripts/validate_setup.py",
+              ".claude/skills/bigboss/scripts/existing_setup.py",
+          ]:
+              spec = importlib.util.spec_from_file_location("m", path)
+              assert spec and spec.loader, path
+              spec.loader.exec_module(importlib.util.module_from_spec(spec))
+              print(f"OK: {path}")
+
+      - name: Validate SKILL.md frontmatter
+        shell: python {0}
+        run: |
+          import yaml
+          text = open(".claude/skills/bigboss/SKILL.md", encoding="utf-8").read()
+          assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
+          end = text.find("\n---\n", 4)
+          assert end != -1, "SKILL.md frontmatter must close with ---"
+          fm = yaml.safe_load(text[4:end])
+          assert fm.get("name") == "bigboss", f"name must be 'bigboss', got {fm.get('name')}"
+          assert "description" in fm and len(fm["description"]) > 50
+          assert len(fm["description"]) <= 1536, "description too long for Claude Code"
+          print("OK: SKILL.md frontmatter valid")
+
+      - name: Run detect_framework.py against this repo
+        run: python .claude/skills/bigboss/scripts/detect_framework.py
+
+      - name: Run existing_setup.py against this repo
+        run: python .claude/skills/bigboss/scripts/existing_setup.py
+
+      - name: Lint with ruff
+        run: ruff check .claude/skills/bigboss/scripts/
+
+      - name: Type-check with mypy
+        run: mypy --ignore-missing-imports --strict .claude/skills/bigboss/scripts/
