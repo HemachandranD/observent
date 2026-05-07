@@ -61,7 +61,7 @@ jobs:
       - name: Import scripts (no extra deps required)
         shell: python {0}
         run: |
-          import importlib.util
+          import importlib.util, sys
           for path in [
               "skills/bigboss/scripts/detect_framework.py",
               "skills/bigboss/scripts/validate_setup.py",
@@ -70,7 +70,9 @@ jobs:
           ]:
               spec = importlib.util.spec_from_file_location("m", path)
               assert spec and spec.loader, path
-              spec.loader.exec_module(importlib.util.module_from_spec(spec))
+              mod = importlib.util.module_from_spec(spec)
+              sys.modules["m"] = mod
+              spec.loader.exec_module(mod)
               print(f"OK: {path}")
 
       - name: Validate SKILL.md frontmatter
