@@ -46,7 +46,7 @@ def _gemini() -> ProviderInfo:
         "label": "Gemini CLI",
         "installed": _has_binary("gemini") or _dir_exists("~/.gemini"),
         "config_dir": str(Path("~/.gemini").expanduser()),
-        "install_cmd": "gemini extensions install HemachandranD/bigboss",
+        "install_cmd": "gemini extensions install https://github.com/HemachandranD/bigboss --auto-update",
     }
 
 

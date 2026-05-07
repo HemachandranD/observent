@@ -5,7 +5,9 @@ Greps for imports, env var references, and OTel TracerProvider setup.
 Reports which backend(s) appear to be already configured so SKILL.md can
 offer extend-vs-replace instead of blindly overwriting.
 
-Output: JSON to stdout.
+Output: JSON to stdout. When run from the bigboss repo itself,
+``self_scan_excluded`` is true and ``skills/bigboss/`` is skipped to
+suppress false-positive matches against the skill's own scripts.
 """
 from __future__ import annotations
 
@@ -109,6 +111,11 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
         name: {"imports": [], "env_vars": [], "env_files": []}
         for name in IMPORT_PATTERNS.keys()
     }
+    # Self-scan guard: when run from the bigboss repo root, skip its own
+    # skill tree so the OpenTelemetry imports inside validate_setup.py and
+    # the example markdown don't produce a false "opentelemetry detected".
+    self_scan = (root / "skills" / "bigboss" / "SKILL.md").is_file()
+    self_skip_root = (root / "skills" / "bigboss") if self_scan else None
     count = 0
     truncated = False
     for path in root.rglob("*"):
@@ -118,6 +125,12 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
             continue
         if path.suffix not in SCAN_SUFFIXES and not path.name.startswith(".env"):
             continue
+        if self_skip_root is not None:
+            try:
+                path.relative_to(self_skip_root)
+                continue
+            except ValueError:
+                pass
         if count >= max_files:
             truncated = True
             break
@@ -139,6 +152,7 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
         "cwd": str(root),
         "files_scanned": count,
         "files_truncated": truncated,
+        "self_scan_excluded": self_scan,
         "detected": detected,
     }
 

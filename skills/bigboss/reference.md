@@ -21,6 +21,35 @@ Complete reference for frameworks, backends, integration mechanics, span attribu
 
 ---
 
+## Verified Versions
+
+Last verified: 2026-05-07 against Python 3.12.
+
+| Package | Minimum version |
+|---|---|
+| arize-phoenix | >=5.0 |
+| langfuse | >=3.0 |
+| opentelemetry-sdk | >=1.25 |
+| opentelemetry-exporter-otlp-proto-http | >=1.25 |
+| langgraph | >=0.2 |
+| crewai | >=0.80 |
+| autogen-agentchat | >=0.4 |
+| anthropic | >=0.40 |
+| openai-agents | >=0.0.4 |
+| smolagents | >=1.0 |
+| llama-index | >=0.11 |
+| openinference-instrumentation-langchain | >=0.1 |
+| openinference-instrumentation-crewai | >=0.1 |
+| openinference-instrumentation-openai | >=0.1 |
+| openinference-instrumentation-openai-agents | >=0.1 |
+| openinference-instrumentation-anthropic | >=0.1 |
+| openinference-instrumentation-llama-index | >=2.0 |
+| openinference-instrumentation-smolagents | >=0.1 |
+
+These are the floors `examples.md` and the per-framework install commands below target. When bumping any minimum, update this table **and** the per-example "Last verified" footer in `examples.md` to match.
+
+---
+
 ## Per-Backend Reference
 
 ### Arize Phoenix

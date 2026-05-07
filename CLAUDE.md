@@ -71,8 +71,9 @@ Update in this order:
 1. `skills/bigboss/scripts/detect_framework.py` — add an entry to `FRAMEWORKS`.
 2. `skills/bigboss/SKILL.md` — add the framework to the `argument-hint`-eligible list and the description's auto-invocation triggers.
 3. `skills/bigboss/reference.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
-4. `skills/bigboss/examples.md` — add at least one runnable example (rotate which backend it uses).
-5. CI passes (frontmatter parse, imports, lint, type-check).
+4. `skills/bigboss/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
+5. `skills/bigboss/reference.md` § Verified Versions — add a row for the new framework + instrumentor packages and bump the table's "Last verified" date to today.
+6. CI passes (frontmatter parse, imports, lint, type-check).
 
 ### Adding a new backend
 
@@ -82,7 +83,8 @@ Update in this order:
 2. `skills/bigboss/scripts/detect_framework.py` — add an entry to `BACKENDS`.
 3. `skills/bigboss/SKILL.md` — update the description, the backend-options list, and the endpoints table.
 4. `skills/bigboss/reference.md` — add a "Per-backend reference" subsection and a column to the matrix.
-5. `skills/bigboss/examples.md` — add at least one example using the new backend.
+5. `skills/bigboss/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
+6. `skills/bigboss/reference.md` § Verified Versions — add a row for the backend's required package(s) and bump the table's "Last verified" date to today.
 
 ### Adding a new provider
 
@@ -119,3 +121,5 @@ The 8×3 matrix in `reference.md` is canonical. If you change a row or column th
 - `SKILL.md` (Step 6 endpoint table, the matrix-implicit instructions)
 - `README.md` (Supported matrix)
 - `examples.md` (if a removed combination had an example)
+
+The **Verified Versions** table in `reference.md` is the canonical record of dependency floors — when you bump a minimum, update that table. The per-example `*Last verified: …*` footers in `examples.md` are a different signal: they record when each individual example was last actually re-run end-to-end. Don't conflate them: the table is "what we claim works," the footer is "when we last proved it for this example."

@@ -52,6 +52,8 @@ export ANTHROPIC_API_KEY=sk-ant-...
 python main.py
 ```
 
+*Last verified: 2026-05-07 with Python 3.12.*
+
 ---
 
 ## 2. CrewAI + Langfuse (callback, cost tracking)
@@ -115,6 +117,8 @@ export OPENAI_API_KEY=sk-...
 python crew_main.py
 # Visit https://cloud.langfuse.com to see Crew → Agent → Task → LLM hierarchy
 ```
+
+*Last verified: 2026-05-07 with Python 3.12.*
 
 ---
 
@@ -191,6 +195,8 @@ export OPENAI_API_KEY=sk-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
 python autogen_signoz.py
 # UI: http://localhost:3301
 ```
+
+*Last verified: 2026-05-07 with Python 3.12.*
 
 ---
 
@@ -279,6 +285,8 @@ export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-...
 python anthropic_langfuse.py
 ```
 
+*Last verified: 2026-05-07 with Python 3.12.*
+
 ---
 
 ## 5. OpenAI Agents SDK + Arize Phoenix (native trace processor)
@@ -331,6 +339,8 @@ export OPENAI_API_KEY=sk-...
 python openai_agents_phoenix.py
 ```
 
+*Last verified: 2026-05-07 with Python 3.12.*
+
 ---
 
 ## 6. smolagents + Langfuse (OpenInference instrumentor)
@@ -382,6 +392,8 @@ export ANTHROPIC_API_KEY=sk-ant-...
 export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-... LANGFUSE_HOST=https://cloud.langfuse.com
 python smolagents_langfuse.py
 ```
+
+*Last verified: 2026-05-07 with Python 3.12.*
 
 ---
 
@@ -438,6 +450,8 @@ mkdir -p docs && echo "Sample document content." > docs/sample.txt
 export ANTHROPIC_API_KEY=sk-ant-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
 python llama_signoz.py
 ```
+
+*Last verified: 2026-05-07 with Python 3.12.*
 
 ---
 
@@ -585,6 +599,8 @@ if __name__ == "__main__":
     tracer_provider.shutdown()
 ```
 
+*Last verified: 2026-05-07 with Python 3.12.*
+
 ---
 
 ## Multi-Backend Fan-Out (Phoenix + SigNoz)
@@ -614,6 +630,8 @@ provider.add_span_processor(BatchSpanProcessor(
 trace.set_tracer_provider(provider)
 # All spans now go to BOTH backends. Failure in one doesn't affect the other.
 ```
+
+*Last verified: 2026-05-07 with Python 3.12.*
 
 ---
 

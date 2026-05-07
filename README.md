@@ -37,7 +37,7 @@ AutoGen v0.2 (`pyautogen`) is not supported — use the Custom path or upgrade t
 | Provider | How bigboss runs | Install method |
 |---|---|---|
 | **Claude Code** | Plugin — `/bigboss`, `/bigboss-detect`, `/bigboss-validate` slash commands | `claude plugin install HemachandranD/bigboss` |
-| **Gemini CLI** | Extension — loaded via `GEMINI.md` context file | `gemini extensions install HemachandranD/bigboss` |
+| **Gemini CLI** | Extension — loaded via `GEMINI.md` context file | `gemini extensions install https://github.com/HemachandranD/bigboss --auto-update` |
 | **Cursor** | Rule — `.cursor/rules/bigboss.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
 | **Windsurf** | Rule — `.windsurf/rules/bigboss.md` | `install.sh` or manual copy |
 | **Cline** | Rule — `.clinerules/bigboss.md` | `install.sh` or manual copy |
@@ -76,7 +76,7 @@ Adds three slash commands: `/bigboss`, `/bigboss-detect`, `/bigboss-validate`.
 ### Gemini CLI (extension)
 
 ```bash
-gemini extensions install HemachandranD/bigboss
+gemini extensions install https://github.com/HemachandranD/bigboss --auto-update
 ```
 
 ### Cursor / Windsurf / Cline (project-scoped rules)
