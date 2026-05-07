@@ -1,4 +1,4 @@
-# bigboss — Multi-Agent Observability Setup
+# observent — Multi-Agent Observability Setup
 
 **Invoke when** the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their Python agent app; or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 
@@ -7,20 +7,20 @@
 
 ---
 
-## How to run bigboss
+## How to run observent
 
-Core scripts live in `$BIGBOSS_HOME/scripts/` (default: `~/.bigboss/scripts/`).
+Core scripts live in `$OBSERVENT_HOME/scripts/` (default: `~/.observent/scripts/`).
 
 ### Step 1 — Detect environment
 
 ```bash
-python "$BIGBOSS_HOME/scripts/detect_framework.py"
-python "$BIGBOSS_HOME/scripts/existing_setup.py"
+python "$OBSERVENT_HOME/scripts/detect_framework.py"
+python "$OBSERVENT_HOME/scripts/existing_setup.py"
 ```
 
 ### Step 2 — Resolve framework
 
-Use the detector output. If the user passed a framework as an argument, use it directly. If multiple frameworks are found, ask the user to pick one. If `autogen-v0.2` is detected, inform them bigboss supports v0.4 only and offer the Custom path.
+Use the detector output. If the user passed a framework as an argument, use it directly. If multiple frameworks are found, ask the user to pick one. If `autogen-v0.2` is detected, inform them observent supports v0.4 only and offer the Custom path.
 
 ### Step 3 — Resolve backend
 
@@ -45,7 +45,7 @@ End with: *"Apply these changes? (yes / preview \<file\> / abort)"* — wait for
 
 ### Step 6 — Generate
 
-Use the integration matrix in `$BIGBOSS_HOME/reference.md`. Every generated file must include:
+Use the integration matrix in `$OBSERVENT_HOME/reference.md`. Every generated file must include:
 - Backend init from env vars (never hard-coded keys).
 - Framework instrumentor or native trace processor.
 - `openinference.span.kind`, `agent.name`, `agent.role`, `agent.framework` on every agent span.
@@ -58,9 +58,9 @@ Use the integration matrix in `$BIGBOSS_HOME/reference.md`. Every generated file
 ### Step 7 — Validate
 
 ```bash
-python "$BIGBOSS_HOME/scripts/validate_setup.py" <backend>
+python "$OBSERVENT_HOME/scripts/validate_setup.py" <backend>
 # With end-to-end smoke test (requires env vars set):
-python "$BIGBOSS_HOME/scripts/validate_setup.py" <backend> --smoke-test
+python "$OBSERVENT_HOME/scripts/validate_setup.py" <backend> --smoke-test
 ```
 
 Surface output verbatim. If it fails, explain the likely cause and suggest the fix.
@@ -71,5 +71,5 @@ Report: framework + backend chosen, files created/modified, `pip install` comman
 
 ---
 
-Full workflow details and examples: `$BIGBOSS_HOME/SKILL.md`
-Integration matrix, span attributes, context propagation patterns: `$BIGBOSS_HOME/reference.md`
+Full workflow details and examples: `$OBSERVENT_HOME/SKILL.md`
+Integration matrix, span attributes, context propagation patterns: `$OBSERVENT_HOME/reference.md`

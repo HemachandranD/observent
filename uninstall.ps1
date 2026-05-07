@@ -1,4 +1,4 @@
-# bigboss uninstaller — removes BIGBOSS_HOME and project-scoped adapter files.
+# observent uninstaller — removes OBSERVENT_HOME and project-scoped adapter files.
 # Usage: .\uninstall.ps1 [-ProjectDir <path>] [-DryRun]
 [CmdletBinding()]
 param(
@@ -7,27 +7,27 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$BigbossHome = if ($env:BIGBOSS_HOME) { $env:BIGBOSS_HOME } else { Join-Path $env:LOCALAPPDATA "bigboss" }
+$ObserventHome = if ($env:OBSERVENT_HOME) { $env:OBSERVENT_HOME } else { Join-Path $env:LOCALAPPDATA "observent" }
 
 function Invoke-Step {
     param([scriptblock]$Action, [string]$Label)
     if ($DryRun) { Write-Host "[dry-run] $Label" } else { & $Action }
 }
 
-Write-Host "bigboss uninstaller"
+Write-Host "observent uninstaller"
 if ($DryRun) { Write-Host "  Mode: dry-run" }
 Write-Host ""
 
-# Remove BIGBOSS_HOME
-if (Test-Path $BigbossHome) {
-    Invoke-Step { Remove-Item -Recurse -Force $BigbossHome } "rm -rf $BigbossHome"
-    Write-Host "✓ Removed $BigbossHome"
+# Remove OBSERVENT_HOME
+if (Test-Path $ObserventHome) {
+    Invoke-Step { Remove-Item -Recurse -Force $ObserventHome } "rm -rf $ObserventHome"
+    Write-Host "✓ Removed $ObserventHome"
 } else {
-    Write-Host "  $BigbossHome not found — skipping"
+    Write-Host "  $ObserventHome not found — skipping"
 }
 
 # Remove project-scoped adapter files
-foreach ($rel in @(".cursor\rules\bigboss.mdc", ".windsurf\rules\bigboss.md", ".clinerules\bigboss.md")) {
+foreach ($rel in @(".cursor\rules\observent.mdc", ".windsurf\rules\observent.md", ".clinerules\observent.md")) {
     $target = Join-Path $ProjectDir $rel
     if (Test-Path $target) {
         Invoke-Step { Remove-Item -Force $target } "rm $target"
@@ -35,14 +35,14 @@ foreach ($rel in @(".cursor\rules\bigboss.mdc", ".windsurf\rules\bigboss.md", ".
     }
 }
 
-# Remove BIGBOSS_HOME from user environment
+# Remove OBSERVENT_HOME from user environment
 if (-not $DryRun) {
-    [System.Environment]::SetEnvironmentVariable("BIGBOSS_HOME", $null, "User")
-    Write-Host "✓ Removed BIGBOSS_HOME from user environment"
+    [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $null, "User")
+    Write-Host "✓ Removed OBSERVENT_HOME from user environment"
 }
 
 Write-Host ""
-Write-Host "bigboss uninstalled."
+Write-Host "observent uninstalled."
 Write-Host "Note: Claude Code plugin and Gemini extension must be removed via their own CLIs:"
-Write-Host "  claude plugin remove bigboss"
-Write-Host "  gemini extensions uninstall bigboss"
+Write-Host "  claude plugin remove observent"
+Write-Host "  gemini extensions uninstall observent"

@@ -37,7 +37,7 @@ def _claude_code() -> ProviderInfo:
         "label": "Claude Code",
         "installed": _has_binary("claude") or _dir_exists("~/.claude"),
         "config_dir": str(Path("~/.claude").expanduser()),
-        "install_cmd": "claude plugin install HemachandranD/bigboss",
+        "install_cmd": "claude plugin install HemachandranD/observent",
     }
 
 
@@ -46,7 +46,7 @@ def _gemini() -> ProviderInfo:
         "label": "Gemini CLI",
         "installed": _has_binary("gemini") or _dir_exists("~/.gemini"),
         "config_dir": str(Path("~/.gemini").expanduser()),
-        "install_cmd": "gemini extensions install https://github.com/HemachandranD/bigboss --auto-update",
+        "install_cmd": "gemini extensions install https://github.com/HemachandranD/observent --auto-update",
     }
 
 
@@ -55,7 +55,7 @@ def _codex() -> ProviderInfo:
         "label": "OpenAI Codex CLI",
         "installed": _has_binary("codex") or _dir_exists("~/.codex"),
         "config_dir": str(Path("~/.codex").expanduser()),
-        "install_cmd": "copy .codex/ into ~/.codex/extensions/bigboss/",
+        "install_cmd": "copy .codex/ into ~/.codex/extensions/observent/",
     }
 
 
@@ -64,7 +64,7 @@ def _cursor() -> ProviderInfo:
         "label": "Cursor",
         "installed": _has_binary("cursor") or _dir_exists("~/.cursor"),
         "config_dir": str(Path("~/.cursor").expanduser()),
-        "install_cmd": "copy .cursor/rules/bigboss.mdc into <project>/.cursor/rules/",
+        "install_cmd": "copy .cursor/rules/observent.mdc into <project>/.cursor/rules/",
     }
 
 
@@ -73,7 +73,7 @@ def _windsurf() -> ProviderInfo:
         "label": "Windsurf",
         "installed": _has_binary("windsurf") or _dir_exists("~/.codeium/windsurf"),
         "config_dir": str(Path("~/.codeium/windsurf").expanduser()),
-        "install_cmd": "copy .windsurf/rules/bigboss.md into <project>/.windsurf/rules/",
+        "install_cmd": "copy .windsurf/rules/observent.md into <project>/.windsurf/rules/",
     }
 
 
@@ -88,7 +88,7 @@ def _cline() -> ProviderInfo:
         "label": "Cline (VS Code extension)",
         "installed": installed,
         "config_dir": config_dir,
-        "install_cmd": "copy .clinerules/bigboss.md into <project>/.clinerules/",
+        "install_cmd": "copy .clinerules/observent.md into <project>/.clinerules/",
     }
 
 

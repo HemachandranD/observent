@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "bigboss",
+  "name": "observent",
   "description": "Production-grade observability for multi-agent Python apps. Supports LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, and LlamaIndex × Arize Phoenix, Langfuse, and SigNoz.",
   "owner": {
     "name": "Hemachandran Dhinakaran",
@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "bigboss",
+      "name": "observent",
       "description": "Wire up observability for your multi-agent Python app in one command. 8 frameworks × 3 backends, correct span hierarchy and context propagation out of the box.",
       "source": "./",
       "category": "productivity"

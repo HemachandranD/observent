@@ -1,4 +1,4 @@
-# bigboss installer — detects installed providers and wires up each one.
+# observent installer — detects installed providers and wires up each one.
 # Usage: .\install.ps1 [-ProjectDir <path>] [-DryRun]
 [CmdletBinding()]
 param(
@@ -8,24 +8,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoDir = $PSScriptRoot
-$BigbossHome = if ($env:BIGBOSS_HOME) { $env:BIGBOSS_HOME } else { Join-Path $env:LOCALAPPDATA "bigboss" }
+$ObserventHome = if ($env:OBSERVENT_HOME) { $env:OBSERVENT_HOME } else { Join-Path $env:LOCALAPPDATA "observent" }
 
 function Invoke-Step {
     param([scriptblock]$Action, [string]$Label)
     if ($DryRun) { Write-Host "[dry-run] $Label" } else { & $Action }
 }
 
-Write-Host "bigboss installer"
+Write-Host "observent installer"
 Write-Host "  Repo:         $RepoDir"
-Write-Host "  BIGBOSS_HOME: $BigbossHome"
+Write-Host "  OBSERVENT_HOME: $ObserventHome"
 Write-Host "  Project:      $ProjectDir"
 if ($DryRun) { Write-Host "  Mode:         dry-run" }
 Write-Host ""
 
-# ── 1. Copy core skill files to BIGBOSS_HOME ──────────────────────────────────
-Invoke-Step { New-Item -ItemType Directory -Force -Path $BigbossHome | Out-Null } "mkdir $BigbossHome"
-Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\skills\bigboss\*" "$BigbossHome\" } "cp skills/bigboss → $BigbossHome"
-Write-Host "✓ Skill files → $BigbossHome"
+# ── 1. Copy core skill files to OBSERVENT_HOME ──────────────────────────────────
+Invoke-Step { New-Item -ItemType Directory -Force -Path $ObserventHome | Out-Null } "mkdir $ObserventHome"
+Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\skills\observent\*" "$ObserventHome\" } "cp skills/observent → $ObserventHome"
+Write-Host "✓ Skill files → $ObserventHome"
 
 # ── 2. Detect providers ────────────────────────────────────────────────────────
 $ProviderJson = python "$RepoDir\scripts\detect_providers.py" | ConvertFrom-Json
@@ -42,7 +42,7 @@ if (Is-Installed "claude_code") {
         Write-Host "    ↳ ~/.claude found but 'claude' not on PATH — skipping plugin install"
     } else {
         $alreadyInstalled = $false
-        try { $alreadyInstalled = (claude plugin list 2>$null) -match "bigboss" } catch {}
+        try { $alreadyInstalled = (claude plugin list 2>$null) -match "observent" } catch {}
         if ($alreadyInstalled) {
             Write-Host "    ↳ already installed — skipping"
         } else {
@@ -68,7 +68,7 @@ if (Is-Installed "gemini") {
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
 if (Is-Installed "codex") {
     Write-Host "  Detected: OpenAI Codex CLI"
-    $CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\bigboss"
+    $CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\observent"
     Invoke-Step { New-Item -ItemType Directory -Force -Path $CodexExt | Out-Null } "mkdir $CodexExt"
     Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\.codex\*" "$CodexExt\" } "cp .codex → $CodexExt"
     Write-Host "    ✓ Codex extension → $CodexExt"
@@ -80,7 +80,7 @@ function Install-Rule([string]$Provider, [string]$Src, [string]$DstDir, [string]
     $dstPath = Join-Path $ProjectDir $DstDir
     Invoke-Step { New-Item -ItemType Directory -Force -Path $dstPath | Out-Null } "mkdir $dstPath"
     $content = Get-Content "$RepoDir\$Src" -Raw
-    $content = $content -replace '\$\{BIGBOSS_HOME\}', $BigbossHome
+    $content = $content -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
     $outFile = Join-Path $dstPath $DstFile
     Invoke-Step { Set-Content -Path $outFile -Value $content -Encoding utf8 } "write $outFile"
     Write-Host "    ✓ $Provider rule → $outFile"
@@ -89,30 +89,30 @@ function Install-Rule([string]$Provider, [string]$Src, [string]$DstDir, [string]
 
 if (Is-Installed "cursor") {
     Write-Host "  Detected: Cursor"
-    Install-Rule "Cursor" ".cursor\rules\bigboss.mdc" ".cursor\rules" "bigboss.mdc"
+    Install-Rule "Cursor" ".cursor\rules\observent.mdc" ".cursor\rules" "observent.mdc"
 }
 
 if (Is-Installed "windsurf") {
     Write-Host "  Detected: Windsurf"
-    Install-Rule "Windsurf" ".windsurf\rules\bigboss.md" ".windsurf\rules" "bigboss.md"
+    Install-Rule "Windsurf" ".windsurf\rules\observent.md" ".windsurf\rules" "observent.md"
 }
 
 if (Is-Installed "cline") {
     Write-Host "  Detected: Cline"
-    Install-Rule "Cline" ".clinerules\bigboss.md" ".clinerules" "bigboss.md"
+    Install-Rule "Cline" ".clinerules\observent.md" ".clinerules" "observent.md"
 }
 
-# ── 7. Persist BIGBOSS_HOME in user environment ────────────────────────────────
+# ── 7. Persist OBSERVENT_HOME in user environment ────────────────────────────────
 if (-not $DryRun) {
-    [System.Environment]::SetEnvironmentVariable("BIGBOSS_HOME", $BigbossHome, "User")
-    Write-Host "  ✓ BIGBOSS_HOME set in user environment (restart terminal to apply)"
+    [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $ObserventHome, "User")
+    Write-Host "  ✓ OBSERVENT_HOME set in user environment (restart terminal to apply)"
 }
 
 # ── 8. Summary ─────────────────────────────────────────────────────────────────
 Write-Host ""
 if ($Installed.Count -gt 0) {
-    Write-Host "bigboss installed for: $($Installed -join ', ')"
-    Write-Host "  Scripts: $BigbossHome\scripts\"
+    Write-Host "observent installed for: $($Installed -join ', ')"
+    Write-Host "  Scripts: $ObserventHome\scripts\"
 } else {
     Write-Host "No supported providers were detected."
     Write-Host "Install Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, or Cline, then re-run."

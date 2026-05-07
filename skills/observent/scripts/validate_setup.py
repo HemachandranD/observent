@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate bigboss observability backend configuration.
+"""Validate observent observability backend configuration.
 
 Usage:
   python validate_setup.py phoenix [--smoke-test]
@@ -214,10 +214,10 @@ def _emit_smoke_span(r: Result, *, endpoint: str, headers: dict[str, str]) -> No
         r.warn(f"Skipping smoke test: {e}")
         return
 
-    provider = TracerProvider(resource=Resource.create({"service.name": "bigboss-smoke-test"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": "observent-smoke-test"}))
     exporter = OTLPSpanExporter(endpoint=endpoint, headers=headers)
     provider.add_span_processor(BatchSpanProcessor(exporter))
-    tracer = provider.get_tracer("bigboss.smoke_test")
+    tracer = provider.get_tracer("observent.smoke_test")
 
     with tracer.start_as_current_span("smoke-test-llm-call") as span:
         span.set_attribute("openinference.span.kind", "LLM")
@@ -248,7 +248,7 @@ CHECKS: dict[str, Callable[[bool], Result]] = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate bigboss observability setup.")
+    parser = argparse.ArgumentParser(description="Validate observent observability setup.")
     parser.add_argument("backend", choices=[*CHECKS.keys(), "all"])
     parser.add_argument("--smoke-test", action="store_true", help="Emit a synthetic LLM span")
     args = parser.parse_args()

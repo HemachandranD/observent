@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# bigboss installer — detects installed providers and wires up each one.
+# observent installer — detects installed providers and wires up each one.
 # Usage: bash install.sh [--project-dir <path>] [--dry-run]
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIGBOSS_HOME="${BIGBOSS_HOME:-$HOME/.bigboss}"
+OBSERVENT_HOME="${OBSERVENT_HOME:-$HOME/.observent}"
 PROJECT_DIR="${PROJECT_DIR:-$PWD}"
 DRY_RUN=false
 
@@ -20,17 +20,17 @@ run() {
   if $DRY_RUN; then echo "[dry-run] $*"; else "$@"; fi
 }
 
-echo "bigboss installer"
+echo "observent installer"
 echo "  Repo:         $REPO_DIR"
-echo "  BIGBOSS_HOME: $BIGBOSS_HOME"
+echo "  OBSERVENT_HOME: $OBSERVENT_HOME"
 echo "  Project:      $PROJECT_DIR"
 $DRY_RUN && echo "  Mode:         dry-run"
 echo ""
 
-# ── 1. Copy core skill files to BIGBOSS_HOME ──────────────────────────────────
-run mkdir -p "$BIGBOSS_HOME"
-run cp -r "$REPO_DIR/skills/bigboss/." "$BIGBOSS_HOME/"
-echo "✓ Skill files → $BIGBOSS_HOME"
+# ── 1. Copy core skill files to OBSERVENT_HOME ──────────────────────────────────
+run mkdir -p "$OBSERVENT_HOME"
+run cp -r "$REPO_DIR/skills/observent/." "$OBSERVENT_HOME/"
+echo "✓ Skill files → $OBSERVENT_HOME"
 
 # ── 2. Detect providers ────────────────────────────────────────────────────────
 PROVIDER_JSON="$(python3 "$REPO_DIR/scripts/detect_providers.py")"
@@ -50,7 +50,7 @@ if is_installed claude_code; then
   echo "  Detected: Claude Code"
   if ! command -v claude &>/dev/null; then
     echo "    ↳ ~/.claude found but 'claude' not on PATH — skipping plugin install"
-  elif claude plugin list 2>/dev/null | grep -q "bigboss"; then
+  elif claude plugin list 2>/dev/null | grep -q "observent"; then
     echo "    ↳ already installed — skipping"
     INSTALLED+=("Claude Code")
   else
@@ -75,7 +75,7 @@ fi
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
 if is_installed codex; then
   echo "  Detected: OpenAI Codex CLI"
-  CODEX_EXT="$HOME/.codex/extensions/bigboss"
+  CODEX_EXT="$HOME/.codex/extensions/observent"
   run mkdir -p "$CODEX_EXT"
   run cp -r "$REPO_DIR/.codex/." "$CODEX_EXT/"
   echo "    ✓ Codex extension → $CODEX_EXT"
@@ -87,13 +87,13 @@ _install_rule() {
   local provider="$1" src="$2" dst_dir="$3" dst_file="$4"
   local dst="$PROJECT_DIR/$dst_dir/$dst_file"
   run mkdir -p "$PROJECT_DIR/$dst_dir"
-  # Substitute ${BIGBOSS_HOME} with the actual path. Avoid wrapping the
+  # Substitute ${OBSERVENT_HOME} with the actual path. Avoid wrapping the
   # redirect in `run` — the outer shell would honor `>` even in dry-run mode
   # and write the dry-run echo text into the destination file.
   if $DRY_RUN; then
-    echo "[dry-run] sed 's|\${BIGBOSS_HOME}|$BIGBOSS_HOME|g' $REPO_DIR/$src > $dst"
+    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/$src > $dst"
   else
-    sed "s|\${BIGBOSS_HOME}|$BIGBOSS_HOME|g" "$REPO_DIR/$src" > "$dst"
+    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/$src" > "$dst"
   fi
   echo "    ✓ $provider rule → $dst"
   INSTALLED+=("$provider")
@@ -101,33 +101,33 @@ _install_rule() {
 
 if is_installed cursor; then
   echo "  Detected: Cursor"
-  _install_rule "Cursor" ".cursor/rules/bigboss.mdc" ".cursor/rules" "bigboss.mdc"
+  _install_rule "Cursor" ".cursor/rules/observent.mdc" ".cursor/rules" "observent.mdc"
 fi
 
 if is_installed windsurf; then
   echo "  Detected: Windsurf"
-  _install_rule "Windsurf" ".windsurf/rules/bigboss.md" ".windsurf/rules" "bigboss.md"
+  _install_rule "Windsurf" ".windsurf/rules/observent.md" ".windsurf/rules" "observent.md"
 fi
 
 if is_installed cline; then
   echo "  Detected: Cline"
-  _install_rule "Cline" ".clinerules/bigboss.md" ".clinerules" "bigboss.md"
+  _install_rule "Cline" ".clinerules/observent.md" ".clinerules" "observent.md"
 fi
 
-# ── 7. Export BIGBOSS_HOME in shell profile ────────────────────────────────────
+# ── 7. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
 SHELL_RC="$HOME/.bashrc"
 [[ "${SHELL:-}" == */zsh ]] && SHELL_RC="$HOME/.zshrc"
-if ! grep -q "BIGBOSS_HOME" "$SHELL_RC" 2>/dev/null; then
+if ! grep -q "OBSERVENT_HOME" "$SHELL_RC" 2>/dev/null; then
   run bash -c "echo '' >> \"$SHELL_RC\""
-  run bash -c "echo 'export BIGBOSS_HOME=\"$BIGBOSS_HOME\"  # bigboss' >> \"$SHELL_RC\""
-  echo "  ✓ BIGBOSS_HOME exported in $SHELL_RC (run: source $SHELL_RC)"
+  run bash -c "echo 'export OBSERVENT_HOME=\"$OBSERVENT_HOME\"  # observent' >> \"$SHELL_RC\""
+  echo "  ✓ OBSERVENT_HOME exported in $SHELL_RC (run: source $SHELL_RC)"
 fi
 
 # ── 8. Summary ─────────────────────────────────────────────────────────────────
 echo ""
 if [[ ${#INSTALLED[@]} -gt 0 ]]; then
-  echo "bigboss installed for: ${INSTALLED[*]}"
-  echo "  Scripts: $BIGBOSS_HOME/scripts/"
+  echo "observent installed for: ${INSTALLED[*]}"
+  echo "  Scripts: $OBSERVENT_HOME/scripts/"
 else
   echo "No supported providers were detected."
   echo "Install Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, or Cline, then re-run."

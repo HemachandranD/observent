@@ -1,4 +1,4 @@
-# bigboss Examples
+# observent Examples
 
 Eight runnable end-to-end examples — one per supported framework, with the three backends rotated to demonstrate all of them. Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
@@ -457,11 +457,11 @@ python llama_signoz.py
 
 ## 8. Custom multi-agent loop + Arize Phoenix (manual span hierarchy)
 
-When you don't use a framework, the skill writes a `bigboss_otel.py` helper module to your project. This example shows what that looks like and how to consume it.
+When you don't use a framework, the skill writes an `observent_otel.py` helper module to your project. This example shows what that looks like and how to consume it.
 
 ```python
-# bigboss_otel.py — generated helper (kept in your repo)
-"""bigboss-generated OpenTelemetry helpers for multi-agent apps."""
+# observent_otel.py — generated helper (kept in your repo)
+"""observent-generated OpenTelemetry helpers for multi-agent apps."""
 from __future__ import annotations
 import json
 import os
@@ -489,7 +489,7 @@ def _set(span, key: str, value: Any) -> None:
 
 @contextmanager
 def with_agent_span(name: str, role: str = "", framework: str = "custom"):
-    tracer = trace.get_tracer("bigboss")
+    tracer = trace.get_tracer("observent")
     with tracer.start_as_current_span(f"agent.{name}") as span:
         _set(span, "openinference.span.kind", "AGENT")
         _set(span, "agent.name", name)
@@ -548,7 +548,7 @@ import os
 import anthropic
 from opentelemetry import trace
 from phoenix.otel import register
-from bigboss_otel import with_agent_span, set_llm_attrs, set_tool_attrs
+from observent_otel import with_agent_span, set_llm_attrs, set_tool_attrs
 
 tracer_provider = register(
     project_name=os.getenv("PHOENIX_PROJECT_NAME", "custom-agent-demo"),

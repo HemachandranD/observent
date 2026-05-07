@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**bigboss** is a Claude Code plugin that wires up observability for multi-agent Python applications. It supports 8 frameworks × 3 backends (Arize Phoenix · Langfuse · SigNoz) — a full grid of 24 integration paths.
+**observent** is a Claude Code plugin that wires up observability for multi-agent Python applications. It supports 8 frameworks × 3 backends (Arize Phoenix · Langfuse · SigNoz) — a full grid of 24 integration paths.
 
-The repo *is* the plugin: skill files live under `skills/bigboss/`, plugin manifests under `.claude-plugin/`, and slash commands under `commands/`. Users install it via `claude plugin install HemachandranD/bigboss`.
+The repo *is* the plugin: skill files live under `skills/observent/`, plugin manifests under `.claude-plugin/`, and slash commands under `commands/`. Users install it via `claude plugin install HemachandranD/observent`.
 
 ## Repository Layout
 
@@ -15,10 +15,10 @@ The repo *is* the plugin: skill files live under `skills/bigboss/`, plugin manif
   plugin.json           # Claude Code plugin manifest — name, version, author
   marketplace.json      # Marketplace listing for `claude plugin install`
 commands/
-  bigboss.toml          # /bigboss [framework] [backend] — full setup workflow
-  bigboss-detect.toml   # /bigboss-detect — run detectors and report
-  bigboss-validate.toml # /bigboss-validate <backend> [--smoke-test]
-skills/bigboss/
+  observent.toml          # /observent [framework] [backend] — full setup workflow
+  observent-detect.toml   # /observent-detect — run detectors and report
+  observent-validate.toml # /observent-validate <backend> [--smoke-test]
+skills/observent/
   SKILL.md              # Skill entry point — frontmatter + 8-step instructions
   reference.md          # 8×3 matrix, per-framework + per-backend reference,
                         # span attributes, context propagation, troubleshooting
@@ -43,23 +43,23 @@ LICENSE                 # MIT
 
 ```bash
 # Detect frameworks/backends installed in the current project
-python skills/bigboss/scripts/detect_framework.py
+python skills/observent/scripts/detect_framework.py
 
 # Detect pre-existing observability config in the current project
-python skills/bigboss/scripts/existing_setup.py
+python skills/observent/scripts/existing_setup.py
 
 # Validate one backend's setup (env vars, packages, endpoint reachability)
-python skills/bigboss/scripts/validate_setup.py phoenix
-python skills/bigboss/scripts/validate_setup.py langfuse
-python skills/bigboss/scripts/validate_setup.py signoz
-python skills/bigboss/scripts/validate_setup.py all
+python skills/observent/scripts/validate_setup.py phoenix
+python skills/observent/scripts/validate_setup.py langfuse
+python skills/observent/scripts/validate_setup.py signoz
+python skills/observent/scripts/validate_setup.py all
 
 # Validate AND emit one synthetic LLM span to confirm end-to-end ingestion
-python skills/bigboss/scripts/validate_setup.py phoenix --smoke-test
+python skills/observent/scripts/validate_setup.py phoenix --smoke-test
 
 # Lint + type-check
-ruff check skills/bigboss/scripts/
-mypy --strict skills/bigboss/scripts/
+ruff check skills/observent/scripts/
+mypy --strict skills/observent/scripts/
 ```
 
 ## How to Extend
@@ -68,43 +68,43 @@ mypy --strict skills/bigboss/scripts/
 
 Update in this order:
 
-1. `skills/bigboss/scripts/detect_framework.py` — add an entry to `FRAMEWORKS`.
-2. `skills/bigboss/SKILL.md` — add the framework to the `argument-hint`-eligible list and the description's auto-invocation triggers.
-3. `skills/bigboss/reference.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
-4. `skills/bigboss/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
-5. `skills/bigboss/reference.md` § Verified Versions — add a row for the new framework + instrumentor packages and bump the table's "Last verified" date to today.
+1. `skills/observent/scripts/detect_framework.py` — add an entry to `FRAMEWORKS`.
+2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list and the description's auto-invocation triggers.
+3. `skills/observent/reference.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
+4. `skills/observent/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
+5. `skills/observent/reference.md` § Verified Versions — add a row for the new framework + instrumentor packages and bump the table's "Last verified" date to today.
 6. CI passes (frontmatter parse, imports, lint, type-check).
 
 ### Adding a new backend
 
 Update in this order:
 
-1. `skills/bigboss/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`.
-2. `skills/bigboss/scripts/detect_framework.py` — add an entry to `BACKENDS`.
-3. `skills/bigboss/SKILL.md` — update the description, the backend-options list, and the endpoints table.
-4. `skills/bigboss/reference.md` — add a "Per-backend reference" subsection and a column to the matrix.
-5. `skills/bigboss/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
-6. `skills/bigboss/reference.md` § Verified Versions — add a row for the backend's required package(s) and bump the table's "Last verified" date to today.
+1. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`.
+2. `skills/observent/scripts/detect_framework.py` — add an entry to `BACKENDS`.
+3. `skills/observent/SKILL.md` — update the description, the backend-options list, and the endpoints table.
+4. `skills/observent/reference.md` — add a "Per-backend reference" subsection and a column to the matrix.
+5. `skills/observent/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
+6. `skills/observent/reference.md` § Verified Versions — add a row for the backend's required package(s) and bump the table's "Last verified" date to today.
 
 ### Adding a new provider
 
 Update in this order:
 
 1. `scripts/detect_providers.py` — add a `_<provider>()` detector function and register it in `DETECTORS`.
-2. `install.sh` + `install.ps1` — add a detection block and install logic (copy adapter files, substitute `${BIGBOSS_HOME}`).
+2. `install.sh` + `install.ps1` — add a detection block and install logic (copy adapter files, substitute `${OBSERVENT_HOME}`).
 3. Provider adapter files:
    - For CLI tools with extension systems: add an extension manifest + context file (e.g., `gemini-extension.json` + `GEMINI.md`).
-   - For IDE rules: add a rule file under `.<provider>/rules/` (e.g., `.cursor/rules/bigboss.mdc`).
-   - Rule body must reference `${BIGBOSS_HOME}/scripts/` for script paths (substituted at install time).
+   - For IDE rules: add a rule file under `.<provider>/rules/` (e.g., `.cursor/rules/observent.mdc`).
+   - Rule body must reference `${OBSERVENT_HOME}/scripts/` for script paths (substituted at install time).
 4. `README.md` — add a row to the Supported providers table and document the install command.
 5. CI passes (detect_providers.py smoke test, lint, type-check).
 
 #### Which path placeholder to use
 
-- **Claude Code plugin** (`commands/*.toml`, `skills/bigboss/SKILL.md`): use `${CLAUDE_SKILL_DIR}`. Claude Code injects this at runtime; the files are loaded directly from the cloned plugin repo, not from `BIGBOSS_HOME`.
-- **All other adapters** (`GEMINI.md`, `.cursor/rules/*.mdc`, `.windsurf/rules/*.md`, `.clinerules/*.md`, `.codex/context.md`): use `${BIGBOSS_HOME}`. The installer literal-substitutes this at copy time so the rule files reference the absolute `~/.bigboss/scripts/` path on the user's machine.
+- **Claude Code plugin** (`commands/*.toml`, `skills/observent/SKILL.md`): use `${CLAUDE_SKILL_DIR}`. Claude Code injects this at runtime; the files are loaded directly from the cloned plugin repo, not from `OBSERVENT_HOME`.
+- **All other adapters** (`GEMINI.md`, `.cursor/rules/*.mdc`, `.windsurf/rules/*.md`, `.clinerules/*.md`, `.codex/context.md`): use `${OBSERVENT_HOME}`. The installer literal-substitutes this at copy time so the rule files reference the absolute `~/.observent/scripts/` path on the user's machine.
 
-Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${BIGBOSS_HOME}` is only resolved by the installer for files it copies.
+Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OBSERVENT_HOME}` is only resolved by the installer for files it copies.
 
 ## Design Constraints
 

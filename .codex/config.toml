@@ -1,5 +1,5 @@
 [extension]
-name = "bigboss"
+name = "observent"
 version = "0.1.0"
 description = "Observability setup for multi-agent Python apps"
 context_file = "context.md"

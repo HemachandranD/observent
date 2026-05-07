@@ -1,10 +1,10 @@
-# bigboss
+# observent
 
 A multi-provider plugin that wires up production-grade observability for multi-agent Python applications. Detects your agent framework, generates the right integration code for your chosen backend, and enforces the span attributes and context propagation patterns that actually make multi-agent traces useful.
 
 Works with Claude Code, Gemini CLI, Cursor, Windsurf, Cline, and OpenAI Codex CLI.
 
-## Why bigboss
+## Why observent
 
 Generic LLM tracing isn't enough for multi-agent apps. You need:
 
@@ -15,7 +15,7 @@ Generic LLM tracing isn't enough for multi-agent apps. You need:
 - **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per OpenInference and OpenTelemetry GenAI conventions so cost columns aren't $0.
 - **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
 
-bigboss generates code that does all of this correctly the first time.
+observent generates code that does all of this correctly the first time.
 
 ## Supported frameworks × backends
 
@@ -34,13 +34,13 @@ AutoGen v0.2 (`pyautogen`) is not supported — use the Custom path or upgrade t
 
 ## Supported providers
 
-| Provider | How bigboss runs | Install method |
+| Provider | How observent runs | Install method |
 |---|---|---|
-| **Claude Code** | Plugin — `/bigboss`, `/bigboss-detect`, `/bigboss-validate` slash commands | `claude plugin install HemachandranD/bigboss` |
-| **Gemini CLI** | Extension — loaded via `GEMINI.md` context file | `gemini extensions install https://github.com/HemachandranD/bigboss --auto-update` |
-| **Cursor** | Rule — `.cursor/rules/bigboss.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
-| **Windsurf** | Rule — `.windsurf/rules/bigboss.md` | `install.sh` or manual copy |
-| **Cline** | Rule — `.clinerules/bigboss.md` | `install.sh` or manual copy |
+| **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands | `claude plugin install HemachandranD/observent` |
+| **Gemini CLI** | Extension — loaded via `GEMINI.md` context file | `gemini extensions install https://github.com/HemachandranD/observent --auto-update` |
+| **Cursor** | Rule — `.cursor/rules/observent.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
+| **Windsurf** | Rule — `.windsurf/rules/observent.md` | `install.sh` or manual copy |
+| **Cline** | Rule — `.clinerules/observent.md` | `install.sh` or manual copy |
 | **OpenAI Codex CLI** | Extension — `.codex/context.md` injected as context | `install.sh` or manual copy |
 
 ## Install
@@ -51,14 +51,14 @@ The installer detects every provider present on your system and wires up each on
 
 **macOS / Linux:**
 ```bash
-git clone https://github.com/HemachandranD/bigboss.git /tmp/bigboss
-bash /tmp/bigboss/install.sh
+git clone https://github.com/HemachandranD/observent.git /tmp/observent
+bash /tmp/observent/install.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/HemachandranD/bigboss.git $env:TEMP\bigboss
-& "$env:TEMP\bigboss\install.ps1"
+git clone https://github.com/HemachandranD/observent.git $env:TEMP\observent
+& "$env:TEMP\observent\install.ps1"
 ```
 
 Both installers accept `--project-dir <path>` (where project-scoped rules are written, default `$PWD`) and `--dry-run` (preview without writing).
@@ -68,15 +68,15 @@ Both installers accept `--project-dir <path>` (where project-scoped rules are wr
 ### Claude Code (plugin)
 
 ```bash
-claude plugin install HemachandranD/bigboss
+claude plugin install HemachandranD/observent
 ```
 
-Adds three slash commands: `/bigboss`, `/bigboss-detect`, `/bigboss-validate`.
+Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`.
 
 ### Gemini CLI (extension)
 
 ```bash
-gemini extensions install https://github.com/HemachandranD/bigboss --auto-update
+gemini extensions install https://github.com/HemachandranD/observent --auto-update
 ```
 
 ### Cursor / Windsurf / Cline (project-scoped rules)
@@ -85,7 +85,7 @@ Run the installer from your project root — it copies the rule file for each de
 
 ```bash
 cd /your/agent/project
-bash /tmp/bigboss/install.sh
+bash /tmp/observent/install.sh
 ```
 
 Or copy manually:
@@ -93,28 +93,28 @@ Or copy manually:
 ```bash
 # Cursor
 mkdir -p .cursor/rules
-cp /tmp/bigboss/.cursor/rules/bigboss.mdc .cursor/rules/
+cp /tmp/observent/.cursor/rules/observent.mdc .cursor/rules/
 
 # Windsurf
 mkdir -p .windsurf/rules
-cp /tmp/bigboss/.windsurf/rules/bigboss.md .windsurf/rules/
+cp /tmp/observent/.windsurf/rules/observent.md .windsurf/rules/
 
 # Cline
 mkdir -p .clinerules
-cp /tmp/bigboss/.clinerules/bigboss.md .clinerules/
+cp /tmp/observent/.clinerules/observent.md .clinerules/
 ```
 
-Then set `BIGBOSS_HOME` to where the scripts live (default after `install.sh`: `~/.bigboss`):
+Then set `OBSERVENT_HOME` to where the scripts live (default after `install.sh`: `~/.observent`):
 
 ```bash
-export BIGBOSS_HOME="$HOME/.bigboss"   # add to ~/.bashrc or ~/.zshrc
+export OBSERVENT_HOME="$HOME/.observent"   # add to ~/.bashrc or ~/.zshrc
 ```
 
 ### Uninstall
 
 ```bash
-bash /tmp/bigboss/uninstall.sh          # macOS / Linux
-& "$env:TEMP\bigboss\uninstall.ps1"    # Windows
+bash /tmp/observent/uninstall.sh          # macOS / Linux
+& "$env:TEMP\observent\uninstall.ps1"    # Windows
 ```
 
 ---
@@ -124,18 +124,18 @@ bash /tmp/bigboss/uninstall.sh          # macOS / Linux
 ### Claude Code
 
 ```
-/bigboss
-/bigboss langgraph phoenix
-/bigboss crewai langfuse
-/bigboss autogen-agentchat signoz
-/bigboss openai-agents phoenix
-/bigboss anthropic-agents langfuse
-/bigboss llama-index signoz
-/bigboss smolagents langfuse
-/bigboss custom phoenix
+/observent
+/observent langgraph phoenix
+/observent crewai langfuse
+/observent autogen-agentchat signoz
+/observent openai-agents phoenix
+/observent anthropic-agents langfuse
+/observent llama-index signoz
+/observent smolagents langfuse
+/observent custom phoenix
 
-/bigboss-detect          # run detectors and report what's installed
-/bigboss-validate phoenix [--smoke-test]
+/observent-detect          # run detectors and report what's installed
+/observent-validate phoenix [--smoke-test]
 ```
 
 ### Gemini CLI / Cursor / Windsurf / Cline / Codex
@@ -146,11 +146,11 @@ Ask your agent to set up observability. For example:
 > "Wire up Langfuse observability for this CrewAI app"
 > "Set up SigNoz monitoring for my agent"
 
-The rule / context file is auto-loaded and tells the agent to run the bigboss workflow.
+The rule / context file is auto-loaded and tells the agent to run the observent workflow.
 
 ---
 
-The workflow bigboss follows:
+The workflow observent follows:
 
 1. Detect your framework and any pre-existing observability config.
 2. Show a diff preview of the changes it will make.
@@ -166,7 +166,7 @@ For e.g. `langgraph` + `phoenix`, you get:
 - A `pip install` command pinned to known-good minimum versions.
 - Span attributes following OpenInference + OTel GenAI semantic conventions out of the box.
 
-For `Custom`, it also writes a `bigboss_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`.
+For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`.
 
 ## Repository structure
 
@@ -175,10 +175,10 @@ For `Custom`, it also writes a `bigboss_otel.py` helper with typed setters: `wit
   plugin.json           # Claude Code plugin manifest
   marketplace.json      # Marketplace listing
 commands/
-  bigboss.toml          # /bigboss [framework] [backend]
-  bigboss-detect.toml   # /bigboss-detect
-  bigboss-validate.toml # /bigboss-validate <backend> [--smoke-test]
-skills/bigboss/
+  observent.toml          # /observent [framework] [backend]
+  observent-detect.toml   # /observent-detect
+  observent-validate.toml # /observent-validate <backend> [--smoke-test]
+skills/observent/
   SKILL.md              # Skill entry point (8-step workflow)
   reference.md          # 8×3 matrix, span attrs, context propagation
   examples.md           # 8 runnable end-to-end examples

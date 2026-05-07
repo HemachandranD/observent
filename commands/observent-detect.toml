@@ -1,6 +1,6 @@
 description = "Detect installed agent frameworks and observability backends in this project"
 prompt = """
-Run the bigboss framework and backend detector on this project.
+Run the observent framework and backend detector on this project.
 
 Execute both detection scripts:
   !`python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
@@ -10,5 +10,5 @@ Then report:
   - Which agent frameworks are installed or declared as dependencies.
   - Which observability backends are installed.
   - Whether any existing observability config was found (imports, env vars, config files).
-  - Recommended next step (run /bigboss [framework] [backend] to proceed).
+  - Recommended next step (run /observent [framework] [backend] to proceed).
 """

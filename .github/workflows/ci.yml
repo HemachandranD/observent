@@ -32,13 +32,13 @@ jobs:
         run: |
           import json
           p = json.load(open(".claude-plugin/plugin.json", encoding="utf-8"))
-          assert p.get("name") == "bigboss", f"plugin.json: name mismatch: {p.get('name')}"
+          assert p.get("name") == "observent", f"plugin.json: name mismatch: {p.get('name')}"
           assert "description" in p and "author" in p and "url" in p["author"]
           print("OK: .claude-plugin/plugin.json")
 
           m = json.load(open(".claude-plugin/marketplace.json", encoding="utf-8"))
           assert "$schema" in m, "marketplace.json: missing $schema"
-          assert m.get("name") == "bigboss", f"marketplace.json: name mismatch: {m.get('name')}"
+          assert m.get("name") == "observent", f"marketplace.json: name mismatch: {m.get('name')}"
           assert "plugins" in m and len(m["plugins"]) >= 1, "marketplace.json: no plugins listed"
           print("OK: .claude-plugin/marketplace.json")
 
@@ -63,9 +63,9 @@ jobs:
         run: |
           import importlib.util, sys
           for path in [
-              "skills/bigboss/scripts/detect_framework.py",
-              "skills/bigboss/scripts/validate_setup.py",
-              "skills/bigboss/scripts/existing_setup.py",
+              "skills/observent/scripts/detect_framework.py",
+              "skills/observent/scripts/validate_setup.py",
+              "skills/observent/scripts/existing_setup.py",
               "scripts/detect_providers.py",
           ]:
               spec = importlib.util.spec_from_file_location("m", path)
@@ -79,39 +79,39 @@ jobs:
         shell: python {0}
         run: |
           import yaml
-          text = open("skills/bigboss/SKILL.md", encoding="utf-8").read()
+          text = open("skills/observent/SKILL.md", encoding="utf-8").read()
           assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
           end = text.find("\n---\n", 4)
           assert end != -1, "SKILL.md frontmatter must close with ---"
           fm = yaml.safe_load(text[4:end])
-          assert fm.get("name") == "bigboss", f"name must be 'bigboss', got {fm.get('name')}"
+          assert fm.get("name") == "observent", f"name must be 'observent', got {fm.get('name')}"
           assert "description" in fm and len(fm["description"]) > 50
           assert len(fm["description"]) <= 1536, "description too long for Claude Code"
           print("OK: SKILL.md frontmatter")
 
       - name: Run detect_framework.py against this repo
-        run: python skills/bigboss/scripts/detect_framework.py
+        run: python skills/observent/scripts/detect_framework.py
 
       - name: Run existing_setup.py against this repo
-        run: python skills/bigboss/scripts/existing_setup.py
+        run: python skills/observent/scripts/existing_setup.py
 
       - name: Run detect_providers.py (smoke test)
         run: python scripts/detect_providers.py
 
       - name: validate_setup.py argparse smoke test
-        run: python skills/bigboss/scripts/validate_setup.py --help
+        run: python skills/observent/scripts/validate_setup.py --help
 
       - name: Installer dry-run (bash)
         if: runner.os == 'Linux'
-        run: bash install.sh --dry-run --project-dir /tmp/bigboss-test
+        run: bash install.sh --dry-run --project-dir /tmp/observent-test
 
       - name: Installer dry-run (PowerShell)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\install.ps1 -DryRun -ProjectDir "$env:RUNNER_TEMP\bigboss-test"
+        run: .\install.ps1 -DryRun -ProjectDir "$env:RUNNER_TEMP\observent-test"
 
       - name: Lint with ruff
-        run: ruff check skills/bigboss/scripts/ scripts/
+        run: ruff check skills/observent/scripts/ scripts/
 
       - name: Type-check with mypy
-        run: mypy --ignore-missing-imports --strict skills/bigboss/scripts/ scripts/
+        run: mypy --ignore-missing-imports --strict skills/observent/scripts/ scripts/

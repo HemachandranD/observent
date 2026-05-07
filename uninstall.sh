@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# bigboss uninstaller — removes BIGBOSS_HOME and project-scoped adapter files.
+# observent uninstaller — removes OBSERVENT_HOME and project-scoped adapter files.
 # Usage: bash uninstall.sh [--project-dir <path>] [--dry-run]
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$PWD}"
-BIGBOSS_HOME="${BIGBOSS_HOME:-$HOME/.bigboss}"
+OBSERVENT_HOME="${OBSERVENT_HOME:-$HOME/.observent}"
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -19,23 +19,23 @@ run() {
   if $DRY_RUN; then echo "[dry-run] $*"; else "$@"; fi
 }
 
-echo "bigboss uninstaller"
+echo "observent uninstaller"
 $DRY_RUN && echo "  Mode: dry-run"
 echo ""
 
-# Remove BIGBOSS_HOME
-if [[ -d "$BIGBOSS_HOME" ]]; then
-  run rm -rf "$BIGBOSS_HOME"
-  echo "✓ Removed $BIGBOSS_HOME"
+# Remove OBSERVENT_HOME
+if [[ -d "$OBSERVENT_HOME" ]]; then
+  run rm -rf "$OBSERVENT_HOME"
+  echo "✓ Removed $OBSERVENT_HOME"
 else
-  echo "  $BIGBOSS_HOME not found — skipping"
+  echo "  $OBSERVENT_HOME not found — skipping"
 fi
 
 # Remove project-scoped adapter files
 for f in \
-  ".cursor/rules/bigboss.mdc" \
-  ".windsurf/rules/bigboss.md" \
-  ".clinerules/bigboss.md"; do
+  ".cursor/rules/observent.mdc" \
+  ".windsurf/rules/observent.md" \
+  ".clinerules/observent.md"; do
   target="$PROJECT_DIR/$f"
   if [[ -f "$target" ]]; then
     run rm "$target"
@@ -43,20 +43,20 @@ for f in \
   fi
 done
 
-# Remove BIGBOSS_HOME export from shell profile.
+# Remove OBSERVENT_HOME export from shell profile.
 # Use `sed -i.bak` for GNU/BSD portability (macOS BSD sed needs a backup
 # extension; GNU sed accepts it too), then drop the .bak file.
 for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-  if grep -q "BIGBOSS_HOME" "$rc" 2>/dev/null; then
-    run sed -i.bak '/BIGBOSS_HOME.*bigboss/d' "$rc"
+  if grep -q "OBSERVENT_HOME" "$rc" 2>/dev/null; then
+    run sed -i.bak '/OBSERVENT_HOME.*observent/d' "$rc"
     run sed -i.bak '/^$/N;/^\n$/d' "$rc"   # remove trailing blank line left behind
     run rm -f "$rc.bak"
-    echo "✓ Removed BIGBOSS_HOME from $rc"
+    echo "✓ Removed OBSERVENT_HOME from $rc"
   fi
 done
 
 echo ""
-echo "bigboss uninstalled."
+echo "observent uninstalled."
 echo "Note: Claude Code plugin and Gemini extension must be removed via their own CLIs:"
-echo "  claude plugin remove bigboss"
-echo "  gemini extensions uninstall bigboss"
+echo "  claude plugin remove observent"
+echo "  gemini extensions uninstall observent"

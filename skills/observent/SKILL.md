@@ -1,11 +1,11 @@
 ---
-name: bigboss
+name: observent
 description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, or SigNoz) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-# bigboss — Multi-Agent Observability Setup
+# observent — Multi-Agent Observability Setup
 
 You are an expert in LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: detect the user's agent framework, wire up the chosen backend, and produce code that captures the **right** attributes (model, tokens, tool calls, agent identity) with **correct context propagation** across async, threads, and agent handoffs.
 
@@ -33,7 +33,7 @@ Parsing rules:
 1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `autogen-agentchat` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use that.
 2. Else if exactly one framework is detected, confirm it with the user in one short sentence.
 3. Else if multiple are detected, ask which one to instrument.
-4. If `autogen-v0.2` is detected (`pyautogen` / old `autogen`), inform the user that bigboss supports v0.4 (`autogen-agentchat`) only and offer the **Custom** path or migration help.
+4. If `autogen-v0.2` is detected (`pyautogen` / old `autogen`), inform the user that observent supports v0.4 (`autogen-agentchat`) only and offer the **Custom** path or migration help.
 5. If none detected, ask which framework they're using; if "none / writing from scratch", use the **Custom** path.
 
 ## Step 3 — Resolve backend
@@ -50,8 +50,8 @@ Ask the user to pick one. Do not recommend silently — show them the choice.
 
 If Step 1 found pre-existing observability config, ask the user **explicitly**:
 
-- **Extend** — keep their existing setup, add bigboss attributes/instrumentors on top
-- **Replace** — overwrite their existing setup with bigboss's recommended pattern
+- **Extend** — keep their existing setup, add observent attributes/instrumentors on top
+- **Replace** — overwrite their existing setup with observent's recommended pattern
 - **Abort** — exit without changes
 
 Never overwrite without asking, even when auto-invoked.

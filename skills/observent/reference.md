@@ -1,4 +1,4 @@
-# bigboss Reference
+# observent Reference
 
 Complete reference for frameworks, backends, integration mechanics, span attributes, and context propagation. SKILL.md references this document during code generation.
 
@@ -260,7 +260,7 @@ trace.set_tracer_provider(provider)
 
 ### Custom (no framework)
 
-- **Tracing model:** Manual OTel spans. The skill writes a `bigboss_otel.py` helper module into the user's project with typed setters: `set_llm_attrs(span, model, input_messages, output_messages, prompt_tokens, completion_tokens, ...)`, `set_tool_attrs(span, name, parameters, input_value, output_value)`, `set_agent_attrs(span, name, role)`.
+- **Tracing model:** Manual OTel spans. The skill writes an `observent_otel.py` helper module into the user's project with typed setters: `set_llm_attrs(span, model, input_messages, output_messages, prompt_tokens, completion_tokens, ...)`, `set_tool_attrs(span, name, parameters, input_value, output_value)`, `set_agent_attrs(span, name, role)`.
 - **Pattern:** wrap each agent step in `tracer.start_as_current_span("agent.step", attributes={"openinference.span.kind": "AGENT", ...})`.
 
 ---
@@ -493,7 +493,7 @@ All are installable from PyPI. They emit standard OpenInference + OTel GenAI att
 
 ### "Traces appear but token counts are missing"
 
-Token counts come from the LLM response. The instrumentor extracts them from the API response. If using a custom LLM wrapper, verify it surfaces `usage.input_tokens` / `usage.output_tokens`. For manual span emission (Custom path), set them explicitly using the helper functions in `bigboss_otel.py`.
+Token counts come from the LLM response. The instrumentor extracts them from the API response. If using a custom LLM wrapper, verify it surfaces `usage.input_tokens` / `usage.output_tokens`. For manual span emission (Custom path), set them explicitly using the helper functions in `observent_otel.py`.
 
 ### "Cost shows $0"
 

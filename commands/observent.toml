@@ -1,10 +1,10 @@
 description = "Wire up observability for a multi-agent Python app (Arize Phoenix / Langfuse / SigNoz)"
 prompt = """
-Run the bigboss observability setup for this project.
+Run the observent observability setup for this project.
 
 Arguments (optional): {{args}}
   - First arg: framework  (langgraph | crewai | autogen-agentchat | anthropic-agents | openai-agents | smolagents | llama-index | custom)
   - Second arg: backend   (phoenix | langfuse | signoz)
 
-Follow the full 8-step bigboss workflow: detect the framework, resolve the backend, show a diff preview, write the integration code, and validate the setup.
+Follow the full 8-step observent workflow: detect the framework, resolve the backend, show a diff preview, write the integration code, and validate the setup.
 """
