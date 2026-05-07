@@ -84,6 +84,19 @@ Update in this order:
 4. `skills/bigboss/reference.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/bigboss/examples.md` — add at least one example using the new backend.
 
+### Adding a new provider
+
+Update in this order:
+
+1. `scripts/detect_providers.py` — add a `_<provider>()` detector function and register it in `DETECTORS`.
+2. `install.sh` + `install.ps1` — add a detection block and install logic (copy adapter files, substitute `${BIGBOSS_HOME}`).
+3. Provider adapter files:
+   - For CLI tools with extension systems: add an extension manifest + context file (e.g., `gemini-extension.json` + `GEMINI.md`).
+   - For IDE rules: add a rule file under `.<provider>/rules/` (e.g., `.cursor/rules/bigboss.mdc`).
+   - Rule body must reference `${BIGBOSS_HOME}/scripts/` for script paths (substituted at install time).
+4. `README.md` — add a row to the Supported providers table and document the install command.
+5. CI passes (detect_providers.py smoke test, lint, type-check).
+
 ## Design Constraints
 
 - **OTLP HTTP, not gRPC** is the default exporter for all three backends. Reasons: works through corporate proxies, smaller dep tree, Phoenix Cloud only supports HTTP.

@@ -1,0 +1,6 @@
+{
+  "name": "bigboss",
+  "description": "Production-grade observability for multi-agent Python apps. Detects your framework and wires up Arize Phoenix, Langfuse, or SigNoz with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes.",
+  "version": "0.1.0",
+  "contextFileName": "GEMINI.md"
+}
