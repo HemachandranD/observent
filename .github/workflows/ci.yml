@@ -96,6 +96,15 @@ jobs:
       - name: Run detect_providers.py (smoke test)
         run: python scripts/detect_providers.py
 
+      - name: Installer dry-run (bash)
+        if: runner.os == 'Linux'
+        run: bash install.sh --dry-run --project-dir /tmp/bigboss-test
+
+      - name: Installer dry-run (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\install.ps1 -DryRun -ProjectDir "$env:RUNNER_TEMP\bigboss-test"
+
       - name: Lint with ruff
         run: ruff check skills/bigboss/scripts/ scripts/
 
