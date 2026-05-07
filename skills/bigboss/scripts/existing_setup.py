@@ -15,32 +15,56 @@ import sys
 from pathlib import Path
 from typing import Any
 
-IMPORT_PATTERNS: dict[str, list[re.Pattern[str]]] = {
-    "phoenix": [
-        re.compile(r"^\s*(?:from|import)\s+phoenix\b"),
-        re.compile(r"^\s*(?:from|import)\s+arize_phoenix\b"),
-        re.compile(r"\bphoenix\.otel\.register\b"),
-        re.compile(r"\bpx\.launch_app\b"),
-    ],
-    "langfuse": [
-        re.compile(r"^\s*(?:from|import)\s+langfuse\b"),
-        re.compile(r"\blangfuse\.langchain\b"),
-        re.compile(r"\blangfuse\.decorators\b"),
-        re.compile(r"\bCallbackHandler\b.*langfuse"),
-    ],
-    "signoz": [
-        re.compile(r"\bsignoz\b", re.IGNORECASE),
-        re.compile(r"signoz-access-token", re.IGNORECASE),
-    ],
-    "opentelemetry": [
-        re.compile(r"^\s*(?:from|import)\s+opentelemetry\b"),
-        re.compile(r"\bTracerProvider\(\)"),
-        re.compile(r"\bBatchSpanProcessor\("),
-        re.compile(r"\bOTLPSpanExporter\("),
-    ],
-    "openinference": [
-        re.compile(r"^\s*(?:from|import)\s+openinference\b"),
-    ],
+# Each entry has a `kind`: "backend" (Phoenix/Langfuse/SigNoz) or
+# "instrumentation" (OpenTelemetry SDK / OpenInference instrumentors).
+# Consumers should treat them differently — e.g., a project that uses the
+# OpenTelemetry SDK isn't necessarily wired to any specific backend.
+IMPORT_PATTERNS: dict[str, dict[str, Any]] = {
+    "phoenix": {
+        "kind": "backend",
+        "patterns": [
+            re.compile(r"^\s*(?:from|import)\s+phoenix\b"),
+            re.compile(r"^\s*(?:from|import)\s+arize_phoenix\b"),
+            re.compile(r"\bphoenix\.otel\.register\b"),
+            re.compile(r"\bpx\.launch_app\b"),
+        ],
+    },
+    "langfuse": {
+        "kind": "backend",
+        "patterns": [
+            re.compile(r"^\s*(?:from|import)\s+langfuse\b"),
+            re.compile(r"\blangfuse\.langchain\b"),
+            re.compile(r"\blangfuse\.decorators\b"),
+            re.compile(r"\bCallbackHandler\b.*langfuse"),
+        ],
+    },
+    "signoz": {
+        "kind": "backend",
+        # Restrict to high-signal patterns. A bare mention of "signoz" in a
+        # comment/README/dep-name is not enough to claim the project is wired
+        # up; require the auth header, a signoz.cloud endpoint, or an OTLP
+        # exporter pointed at a SigNoz host.
+        "patterns": [
+            re.compile(r"signoz-access-token", re.IGNORECASE),
+            re.compile(r"\bsignoz\.cloud\b", re.IGNORECASE),
+            re.compile(r"OTLPSpanExporter\([^)]*signoz", re.IGNORECASE | re.DOTALL),
+        ],
+    },
+    "opentelemetry": {
+        "kind": "instrumentation",
+        "patterns": [
+            re.compile(r"^\s*(?:from|import)\s+opentelemetry\b"),
+            re.compile(r"\bTracerProvider\(\)"),
+            re.compile(r"\bBatchSpanProcessor\("),
+            re.compile(r"\bOTLPSpanExporter\("),
+        ],
+    },
+    "openinference": {
+        "kind": "instrumentation",
+        "patterns": [
+            re.compile(r"^\s*(?:from|import)\s+openinference\b"),
+        ],
+    },
 }
 
 ENV_VAR_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -65,27 +89,28 @@ def _scan_file(path: Path, hits: dict[str, dict[str, list[str]]]) -> None:
     text = _read(path)
     if not text:
         return
-    for backend, patterns in IMPORT_PATTERNS.items():
-        for pat in patterns:
+    for name, spec in IMPORT_PATTERNS.items():
+        for pat in spec["patterns"]:
             if pat.search(text):
-                hits[backend]["imports"].append(str(path))
+                hits[name]["imports"].append(str(path))
                 break
-    for backend, pat in ENV_VAR_PATTERNS.items():
+    for name, pat in ENV_VAR_PATTERNS.items():
         if pat.search(text):
-            hits[backend]["env_vars"].append(str(path))
+            hits[name]["env_vars"].append(str(path))
     # Look for env files specifically
     if path.name.startswith(".env") or path.suffix == ".env":
-        for backend, pat in ENV_VAR_PATTERNS.items():
+        for name, pat in ENV_VAR_PATTERNS.items():
             if pat.search(text):
-                hits[backend]["env_files"].append(str(path))
+                hits[name]["env_files"].append(str(path))
 
 
 def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
     hits: dict[str, dict[str, list[str]]] = {
-        backend: {"imports": [], "env_vars": [], "env_files": []}
-        for backend in IMPORT_PATTERNS.keys()
+        name: {"imports": [], "env_vars": [], "env_files": []}
+        for name in IMPORT_PATTERNS.keys()
     }
     count = 0
+    truncated = False
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -94,15 +119,17 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
         if path.suffix not in SCAN_SUFFIXES and not path.name.startswith(".env"):
             continue
         if count >= max_files:
+            truncated = True
             break
         count += 1
         _scan_file(path, hits)
 
     detected = []
-    for backend, found in hits.items():
+    for name, found in hits.items():
         if any(found.values()):
             detected.append({
-                "backend": backend,
+                "name": name,
+                "kind": IMPORT_PATTERNS[name]["kind"],
                 "imports": sorted(set(found["imports"]))[:10],
                 "env_vars_in_files": sorted(set(found["env_vars"]))[:10],
                 "env_files": sorted(set(found["env_files"]))[:10],
@@ -111,6 +138,7 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
     return {
         "cwd": str(root),
         "files_scanned": count,
+        "files_truncated": truncated,
         "detected": detected,
     }
 

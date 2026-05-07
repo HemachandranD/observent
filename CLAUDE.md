@@ -97,6 +97,13 @@ Update in this order:
 4. `README.md` — add a row to the Supported providers table and document the install command.
 5. CI passes (detect_providers.py smoke test, lint, type-check).
 
+#### Which path placeholder to use
+
+- **Claude Code plugin** (`commands/*.toml`, `skills/bigboss/SKILL.md`): use `${CLAUDE_SKILL_DIR}`. Claude Code injects this at runtime; the files are loaded directly from the cloned plugin repo, not from `BIGBOSS_HOME`.
+- **All other adapters** (`GEMINI.md`, `.cursor/rules/*.mdc`, `.windsurf/rules/*.md`, `.clinerules/*.md`, `.codex/context.md`): use `${BIGBOSS_HOME}`. The installer literal-substitutes this at copy time so the rule files reference the absolute `~/.bigboss/scripts/` path on the user's machine.
+
+Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${BIGBOSS_HOME}` is only resolved by the installer for files it copies.
+
 ## Design Constraints
 
 - **OTLP HTTP, not gRPC** is the default exporter for all three backends. Reasons: works through corporate proxies, smaller dep tree, Phoenix Cloud only supports HTTP.

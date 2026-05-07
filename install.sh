@@ -48,21 +48,28 @@ INSTALLED=()
 # ── 3. Claude Code ─────────────────────────────────────────────────────────────
 if is_installed claude_code; then
   echo "  Detected: Claude Code"
-  if command -v claude &>/dev/null && claude plugin list 2>/dev/null | grep -q "bigboss"; then
+  if ! command -v claude &>/dev/null; then
+    echo "    ↳ ~/.claude found but 'claude' not on PATH — skipping plugin install"
+  elif claude plugin list 2>/dev/null | grep -q "bigboss"; then
     echo "    ↳ already installed — skipping"
+    INSTALLED+=("Claude Code")
   else
     run claude plugin install "$REPO_DIR"
     echo "    ✓ Claude Code plugin installed"
+    INSTALLED+=("Claude Code")
   fi
-  INSTALLED+=("Claude Code")
 fi
 
 # ── 4. Gemini CLI ──────────────────────────────────────────────────────────────
 if is_installed gemini; then
   echo "  Detected: Gemini CLI"
-  run gemini extensions install "$REPO_DIR"
-  echo "    ✓ Gemini extension installed"
-  INSTALLED+=("Gemini CLI")
+  if ! command -v gemini &>/dev/null; then
+    echo "    ↳ ~/.gemini found but 'gemini' not on PATH — skipping extension install"
+  else
+    run gemini extensions install "$REPO_DIR"
+    echo "    ✓ Gemini extension installed"
+    INSTALLED+=("Gemini CLI")
+  fi
 fi
 
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
@@ -78,11 +85,17 @@ fi
 # ── 6. Project-scoped adapters (Cursor / Windsurf / Cline) ────────────────────
 _install_rule() {
   local provider="$1" src="$2" dst_dir="$3" dst_file="$4"
+  local dst="$PROJECT_DIR/$dst_dir/$dst_file"
   run mkdir -p "$PROJECT_DIR/$dst_dir"
-  # Substitute ${BIGBOSS_HOME} with the actual path
-  run sed "s|\${BIGBOSS_HOME}|$BIGBOSS_HOME|g" \
-      "$REPO_DIR/$src" > "$PROJECT_DIR/$dst_dir/$dst_file"
-  echo "    ✓ $provider rule → $PROJECT_DIR/$dst_dir/$dst_file"
+  # Substitute ${BIGBOSS_HOME} with the actual path. Avoid wrapping the
+  # redirect in `run` — the outer shell would honor `>` even in dry-run mode
+  # and write the dry-run echo text into the destination file.
+  if $DRY_RUN; then
+    echo "[dry-run] sed 's|\${BIGBOSS_HOME}|$BIGBOSS_HOME|g' $REPO_DIR/$src > $dst"
+  else
+    sed "s|\${BIGBOSS_HOME}|$BIGBOSS_HOME|g" "$REPO_DIR/$src" > "$dst"
+  fi
+  echo "    ✓ $provider rule → $dst"
   INSTALLED+=("$provider")
 }
 

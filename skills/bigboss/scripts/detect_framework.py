@@ -93,21 +93,23 @@ def _gather_declared_deps(root: Path) -> set[str]:
     return deps
 
 
-def _gather_imports(root: Path, max_files: int = 200) -> set[str]:
+def _gather_imports(root: Path, max_files: int = 200) -> tuple[set[str], bool]:
     imports: set[str] = set()
     pattern = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)")
     count = 0
+    truncated = False
     for py in root.rglob("*.py"):
         if any(part.startswith(".") or part in {"venv", ".venv", "env", "__pycache__"} for part in py.parts):
             continue
         if count >= max_files:
+            truncated = True
             break
         count += 1
         for line in _read_text(py).splitlines():
             match = pattern.match(line)
             if match:
                 imports.add(match.group(1).split(".")[0])
-    return imports
+    return imports, truncated
 
 
 def _name_match(needle: str, haystack: set[str]) -> bool:
@@ -120,7 +122,7 @@ def _name_match(needle: str, haystack: set[str]) -> bool:
 
 def detect(root: Path) -> dict[str, Any]:
     declared = _gather_declared_deps(root)
-    imports = _gather_imports(root)
+    imports, imports_truncated = _gather_imports(root)
 
     frameworks_found: list[dict[str, Any]] = []
     for label, modules in FRAMEWORKS.items():
@@ -154,6 +156,7 @@ def detect(root: Path) -> dict[str, Any]:
         "frameworks": frameworks_found,
         "backends": backends_found,
         "instrumentors": instrumentors_found,
+        "imports_truncated": imports_truncated,
     }
 
 

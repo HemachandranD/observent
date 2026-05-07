@@ -98,6 +98,9 @@ jobs:
       - name: Run detect_providers.py (smoke test)
         run: python scripts/detect_providers.py
 
+      - name: validate_setup.py argparse smoke test
+        run: python skills/bigboss/scripts/validate_setup.py --help
+
       - name: Installer dry-run (bash)
         if: runner.os == 'Linux'
         run: bash install.sh --dry-run --project-dir /tmp/bigboss-test

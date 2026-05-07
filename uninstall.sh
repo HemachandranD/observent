@@ -43,11 +43,14 @@ for f in \
   fi
 done
 
-# Remove BIGBOSS_HOME export from shell profile
+# Remove BIGBOSS_HOME export from shell profile.
+# Use `sed -i.bak` for GNU/BSD portability (macOS BSD sed needs a backup
+# extension; GNU sed accepts it too), then drop the .bak file.
 for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
   if grep -q "BIGBOSS_HOME" "$rc" 2>/dev/null; then
-    run sed -i '/BIGBOSS_HOME.*bigboss/d' "$rc"
-    run sed -i '/^$/N;/^\n$/d' "$rc"   # remove trailing blank line left behind
+    run sed -i.bak '/BIGBOSS_HOME.*bigboss/d' "$rc"
+    run sed -i.bak '/^$/N;/^\n$/d' "$rc"   # remove trailing blank line left behind
+    run rm -f "$rc.bak"
     echo "✓ Removed BIGBOSS_HOME from $rc"
   fi
 done

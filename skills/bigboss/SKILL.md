@@ -1,6 +1,6 @@
 ---
 name: bigboss
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex) and wires up the chosen backend (Arize Phoenix, Langfuse, or SigNoz) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, or SigNoz) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -24,7 +24,7 @@ Then check for pre-existing observability setup:
 
 !`python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
 
-**Use both reports** to drive subsequent steps. If `existing_setup.py` reports any backend with non-empty `imports` or `env_vars_in_files`, treat the project as having existing observability and go to Step 4.
+**Use both reports** to drive subsequent steps. If `existing_setup.py` reports any entry with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files`, treat the project as having existing observability and go to Step 4. Entries with `kind: "instrumentation"` (OpenTelemetry SDK / OpenInference) alone don't count — they may belong to an unrelated tracing setup.
 
 ## Step 2 — Resolve framework
 

@@ -78,10 +78,16 @@ def _windsurf() -> ProviderInfo:
 
 
 def _cline() -> ProviderInfo:
+    ext_dirs = ("~/.vscode/extensions", "~/.vscode-insiders/extensions")
+    installed = any(_glob_any(d, "saoudrizwan.claude-dev-*") for d in ext_dirs)
+    config_dir = next(
+        (str(Path(d).expanduser()) for d in ext_dirs if _dir_exists(d)),
+        str(Path(ext_dirs[0]).expanduser()),
+    )
     return {
         "label": "Cline (VS Code extension)",
-        "installed": _glob_any("~/.vscode/extensions", "saoudrizwan.claude-dev-*"),
-        "config_dir": str(Path("~/.vscode/extensions").expanduser()),
+        "installed": installed,
+        "config_dir": config_dir,
         "install_cmd": "copy .clinerules/bigboss.md into <project>/.clinerules/",
     }
 

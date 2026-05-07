@@ -1,3 +1,7 @@
+---
+description: Sets up observability for multi-agent Python apps (Arize Phoenix / Langfuse / SigNoz). Apply when the user asks for tracing, monitoring, telemetry, or LLM observability, or mentions OpenTelemetry, OpenInference, span hierarchy, or agent handoffs.
+---
+
 # bigboss — Multi-Agent Observability Setup
 
 **Invoke when** the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their Python agent app; or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.

@@ -38,23 +38,31 @@ function Is-Installed([string]$Id) {
 # ── 3. Claude Code ─────────────────────────────────────────────────────────────
 if (Is-Installed "claude_code") {
     Write-Host "  Detected: Claude Code"
-    $alreadyInstalled = $false
-    try { $alreadyInstalled = (claude plugin list 2>$null) -match "bigboss" } catch {}
-    if ($alreadyInstalled) {
-        Write-Host "    ↳ already installed — skipping"
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Host "    ↳ ~/.claude found but 'claude' not on PATH — skipping plugin install"
     } else {
-        Invoke-Step { claude plugin install $RepoDir } "claude plugin install $RepoDir"
-        Write-Host "    ✓ Claude Code plugin installed"
+        $alreadyInstalled = $false
+        try { $alreadyInstalled = (claude plugin list 2>$null) -match "bigboss" } catch {}
+        if ($alreadyInstalled) {
+            Write-Host "    ↳ already installed — skipping"
+        } else {
+            Invoke-Step { claude plugin install $RepoDir } "claude plugin install $RepoDir"
+            Write-Host "    ✓ Claude Code plugin installed"
+        }
+        $Installed += "Claude Code"
     }
-    $Installed += "Claude Code"
 }
 
 # ── 4. Gemini CLI ──────────────────────────────────────────────────────────────
 if (Is-Installed "gemini") {
     Write-Host "  Detected: Gemini CLI"
-    Invoke-Step { gemini extensions install $RepoDir } "gemini extensions install $RepoDir"
-    Write-Host "    ✓ Gemini extension installed"
-    $Installed += "Gemini CLI"
+    if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) {
+        Write-Host "    ↳ ~/.gemini found but 'gemini' not on PATH — skipping extension install"
+    } else {
+        Invoke-Step { gemini extensions install $RepoDir } "gemini extensions install $RepoDir"
+        Write-Host "    ✓ Gemini extension installed"
+        $Installed += "Gemini CLI"
+    }
 }
 
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
