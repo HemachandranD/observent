@@ -1,0 +1,9 @@
+{
+  "name": "bigboss",
+  "description": "Production-grade observability for multi-agent Python apps. Detects your framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex) and wires up Arize Phoenix, Langfuse, or SigNoz with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Hemachandran Dhinakaran",
+    "url": "https://github.com/HemachandranD"
+  }
+}

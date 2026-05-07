@@ -1,0 +1,13 @@
+description = "Validate observability setup for a backend (phoenix | langfuse | signoz | all)"
+prompt = """
+Run the bigboss validation script for the specified backend.
+
+Arguments: {{args}}
+  - Backend: phoenix | langfuse | signoz | all
+  - Optional flag: --smoke-test  (emits a synthetic LLM span to confirm end-to-end ingestion)
+
+Execute:
+  !`python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" {{args}}`
+
+Surface the script output verbatim. If validation fails, explain the likely cause (missing env var, unreachable endpoint, missing package) and suggest the fix. If it passes and the user wants a live trace, offer to rerun with --smoke-test.
+"""
