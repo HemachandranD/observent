@@ -2,7 +2,7 @@
 
 Eight runnable end-to-end examples — one per supported framework, with the three backends rotated to demonstrate all of them. Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
-> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz examples (2, 3, 4, 6, 7) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; both backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path with `OBSERVENT_CONVENTION=otel-genai`. The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz examples (2, 3, 4, 6, 7) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; both backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
 
 ---
 
@@ -459,14 +459,13 @@ python llama_signoz.py
 
 ## 8. Custom multi-agent loop + Arize Phoenix (manual span hierarchy)
 
-When you don't use a framework, the skill writes an `observent_otel.py` helper module to your project. The helper is **convention-aware**: it accepts the convention resolved in Step 3 (`oi`, `otel-genai`, or `both`) and emits the matching keys. This example uses Phoenix → `oi`. For Langfuse / SigNoz set `OBSERVENT_CONVENTION=otel-genai` at startup; for fan-out across Phoenix + (Langfuse or SigNoz) use `both`.
+When you don't use a framework, the skill writes an `observent_otel.py` helper module to your project. The helper is **convention-aware**: the convention resolved in Step 3 (`oi`, `otel-genai`, or `both`) is **baked in as a literal at generation time** — no env var, no runtime override. The example below shows what gets written for Phoenix-only (`oi`); for Langfuse/SigNoz the literal is `"otel-genai"`, and for Phoenix + (Langfuse or SigNoz) fan-out it's `"both"`.
 
 ```python
 # observent_otel.py — generated helper (kept in your repo)
 """observent-generated OpenTelemetry helpers for multi-agent apps."""
 from __future__ import annotations
 import json
-import os
 from contextlib import contextmanager
 from typing import Any
 
@@ -475,9 +474,9 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-# Resolved by SKILL.md Step 3 from the chosen backend set; the user-facing
-# call sites stay convention-agnostic.
-_CONVENTION = os.getenv("OBSERVENT_CONVENTION", "oi")  # "oi" | "otel-genai" | "both"
+# Resolved by the skill in Step 3 from your chosen backend set and written
+# here as a literal. To change it, re-run /observent with a different backend(s).
+_CONVENTION = "oi"  # "oi" | "otel-genai" | "both"
 
 
 def init_tracing(*, service_name: str, exporter) -> trace.TracerProvider:

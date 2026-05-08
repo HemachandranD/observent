@@ -12,7 +12,7 @@ Generic LLM tracing isn't enough for multi-agent apps. You need:
 - **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, AutoGen) as first-class spans.
 - **Identity attributes** — `agent.name`, `agent.role`, `agent.framework` on every span for filtering.
 - **Session grouping** — multi-turn conversations grouped under one `session.id`.
-- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per OpenInference and OpenTelemetry GenAI conventions so cost columns aren't $0.
+- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz; both when fanning out across them) so cost columns aren't $0.
 - **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
 
 observent generates code that does all of this correctly the first time.
@@ -134,9 +134,16 @@ bash /tmp/observent/uninstall.sh          # macOS / Linux
 /observent smolagents langfuse
 /observent custom phoenix
 
-/observent-detect          # run detectors and report what's installed
-/observent-validate phoenix [--smoke-test]
+# Multi-backend fan-out — second arg accepts a comma-separated list:
+/observent langgraph phoenix,signoz
+/observent crewai phoenix,langfuse,signoz
+
+/observent-detect                                # run detectors and report what's installed
+/observent-validate phoenix [--smoke-test]       # single backend
+/observent-validate phoenix,signoz --smoke-test  # multi-backend
 ```
+
+The convention emitted by generated code is **mechanically resolved from the chosen backend set** — Phoenix → OpenInference; Langfuse / SigNoz → OpenTelemetry GenAI; mixed (Phoenix + at least one of Langfuse / SigNoz) → both. There's no runtime override; to switch conventions, re-run `/observent` with a different backend(s).
 
 ### Gemini CLI / Cursor / Windsurf / Cline / Codex
 
@@ -164,9 +171,11 @@ For e.g. `langgraph` + `phoenix`, you get:
 - A few lines added to your entry point that initialise Phoenix and register the LangChain instrumentor.
 - An `.env.example` with `PHOENIX_PROJECT_NAME` (and `PHOENIX_API_KEY` for cloud).
 - A `pip install` command pinned to known-good minimum versions.
-- Span attributes following OpenInference + OTel GenAI semantic conventions out of the box.
+- Span attributes following the convention resolved from your backend(s) — OpenInference for Phoenix, OTel-GenAI for Langfuse / SigNoz, both when fanning out across them.
 
-For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`.
+For multi-backend fan-out (e.g. `phoenix,signoz`), you get a single `TracerProvider` with one `BatchSpanProcessor` per backend — each exporter has its own endpoint and headers, and a failure in one doesn't affect the others.
+
+For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`. The resolved convention is written into the helper as a module-level literal (`_CONVENTION = "oi"` / `"otel-genai"` / `"both"`) at generation time — no env var, no runtime override.
 
 ## Repository structure
 

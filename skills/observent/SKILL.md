@@ -116,7 +116,7 @@ At minimum, every generated template covers:
 - TOOL spans: name, description, parameters, input.value, output.value.
 - AGENT spans: kind, name, role, framework, input/output.
 
-For frameworks with native instrumentors (most cases) these are populated automatically. For the **Custom** path, generate calls to the helper functions `set_llm_attrs()`, `set_tool_attrs()`, `set_agent_attrs()` defined in the user's new `observability.py` — these helpers branch on the resolved convention internally so the user's call sites stay convention-agnostic.
+For frameworks with native instrumentors (most cases) these are populated automatically. For the **Custom** path, generate calls to the helper functions `set_llm_attrs()`, `set_tool_attrs()`, `set_agent_attrs()` defined in the user's new `observent_otel.py`. The helper branches on a module-level literal `_CONVENTION = "<oi|otel-genai|both>"` — **you write the resolved convention from Step 3 as a literal at generation time**. Do **not** make the helper read an env var; convention is a generation-time decision, not a runtime one. The user's call sites stay convention-agnostic; to switch conventions they re-run `/observent` with a different backend set.
 
 ### Multi-backend fan-out template
 
