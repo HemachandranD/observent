@@ -4,31 +4,32 @@ Complete reference for frameworks, backends, integration mechanics, span attribu
 
 ---
 
-## 8 × 3 Compatibility Matrix
+## 8 × 4 Compatibility Matrix
 
-| Framework | Arize Phoenix | Langfuse | SigNoz |
-|---|---|---|---|
-| LangGraph | OI: `LangChainInstrumentor` | LangChain callback (`langfuse.langchain.CallbackHandler`) | OTLP + OI: `LangChainInstrumentor` |
-| CrewAI | OI: `CrewAIInstrumentor` (+ LangChain) | LangChain callback (CrewAI inherits) | OTLP + OI: `CrewAIInstrumentor` |
-| AutoGen v0.4 | OI: `OpenAIInstrumentor` + `autogen-ext` OTel | OTLP exporter + `OpenAIInstrumentor` | OTLP + `OpenAIInstrumentor` |
-| Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` |
-| OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend |
-| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` |
-| LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` |
-| Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter |
+| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM |
+|---|---|---|---|---|
+| LangGraph | OI: `LangChainInstrumentor` | LangChain callback (`langfuse.langchain.CallbackHandler`) | OTLP + OI: `LangChainInstrumentor` | Native agent + OI: `LangChainInstrumentor` |
+| CrewAI | OI: `CrewAIInstrumentor` (+ LangChain) | LangChain callback (CrewAI inherits) | OTLP + OI: `CrewAIInstrumentor` | Native agent + OI: `CrewAIInstrumentor` |
+| AutoGen v0.4 | OI: `OpenAIInstrumentor` + `autogen-ext` OTel | OTLP exporter + `OpenAIInstrumentor` | OTLP + `OpenAIInstrumentor` | Native agent + `OpenAIInstrumentor` |
+| Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` | Native agent + OI: `AnthropicInstrumentor` |
+| OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend | Native APM agent + OpenAI Agents SDK trace processor (OTel bridge) |
+| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` | Native agent + OI: `SmolagentsInstrumentor` |
+| LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` | Native agent + OI: `LlamaIndexInstrumentor` |
+| Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter | Manual spans + `elasticapm.Client` (OTel bridge) |
 
-**OI** = OpenInference instrumentor (`openinference-instrumentation-*`). For Phoenix and SigNoz, the OI instrumentor is the same — only the exporter destination differs.
+**OI** = OpenInference instrumentor (`openinference-instrumentation-*`). For Phoenix and SigNoz, the OI instrumentor is the same — only the exporter destination differs. For Elastic APM, the OI instrumentor still emits OTel spans; the `elasticapm.Client` agent picks them up via its OTel bridge (no separate exporter needed) and ingests them alongside auto-instrumented transaction spans.
 
 ---
 
 ## Verified Versions
 
-Last verified: 2026-05-07 against Python 3.12.
+Last verified: 2026-05-08 against Python 3.12.
 
 | Package | Minimum version |
 |---|---|
 | arize-phoenix | >=5.0 |
 | langfuse | >=3.0 |
+| elastic-apm | >=6.20 |
 | opentelemetry-sdk | >=1.25 |
 | opentelemetry-exporter-otlp-proto-http | >=1.25 |
 | langgraph | >=0.2 |
@@ -188,6 +189,60 @@ provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 ```
 
+### Elastic APM
+
+- **Type:** Open source (Apache 2.0). APM Server is part of the Elastic Stack. Self-host via Docker / Kubernetes; cloud at `elastic.co` with multi-region deployments.
+- **Integration mechanism:** **Native `elastic-apm` Python agent** (the default observent generates). The agent posts to APM Server's intake endpoint and includes a built-in OTel bridge that picks up spans from the global OTel SDK — so OpenInference framework instrumentors keep working unchanged. A pure-OTLP path is also supported and documented as the secondary alternative.
+- **Endpoints:**
+  - Self-host APM Server: `http://localhost:8200` (agent default; intake at `/intake/v2/events`, OTLP at `/v1/traces`)
+  - Self-host Kibana UI: `http://localhost:5601/app/apm`
+  - Cloud APM Server: `https://<deployment>.apm.<region>.cloud.es.io:443`
+  - Cloud Kibana UI: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
+- **Auth:** Self-host — none unless a secret token is configured. Cloud — `Authorization: Bearer <ELASTIC_APM_SECRET_TOKEN>` or `Authorization: ApiKey <ELASTIC_APM_API_KEY>` (the agent reads either from env vars).
+- **Required env vars:** `ELASTIC_APM_SERVER_URL` (defaults to `http://localhost:8200`). Cloud also needs `ELASTIC_APM_SECRET_TOKEN` or `ELASTIC_APM_API_KEY`. Optional: `ELASTIC_APM_SERVICE_NAME`, `ELASTIC_APM_ENVIRONMENT`.
+- **Install:** `pip install 'elastic-apm>=6.20'` + relevant `openinference-instrumentation-*` packages.
+
+**Canonical setup (native agent — primary):**
+```python
+import os
+import elasticapm
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+# 1. Native APM agent — picks up env vars and auto-instruments common frameworks.
+elasticapm.Client(
+    service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "my-agent-app"),
+)
+elasticapm.instrument()  # Flask / Django / FastAPI / asyncio / urllib3 / requests / ...
+
+# 2. LLM instrumentor — emits OTel spans; the agent's OTel bridge ingests them.
+LangChainInstrumentor().instrument()
+```
+
+**Alternative (pure OTLP — secondary):**
+```python
+import os
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+headers: dict[str, str] = {}
+if token := os.getenv("ELASTIC_APM_SECRET_TOKEN"):
+    headers["Authorization"] = f"Bearer {token}"
+elif api_key := os.getenv("ELASTIC_APM_API_KEY"):
+    headers["Authorization"] = f"ApiKey {api_key}"
+
+server = os.getenv("ELASTIC_APM_SERVER_URL", "http://localhost:8200").rstrip("/")
+exporter = OTLPSpanExporter(endpoint=f"{server}/v1/traces", headers=headers)
+
+provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "my-agent-app")}))
+provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+```
+
+Use the OTLP path only when you have a strong reason to avoid the `elastic-apm` dependency — the native agent gives you transactions + auto-instrumented infra metrics for free, which is the main reason teams pick Elastic APM in the first place.
+
 ---
 
 ## Per-Framework Reference
@@ -274,10 +329,10 @@ The convention emitted by generated code is fixed by the backend set chosen in `
 | Backend set | Convention | Reference doc |
 |---|---|---|
 | `{phoenix}` | **OI only** | `openinference.md` |
-| `{langfuse}`, `{signoz}`, or `{langfuse, signoz}` | **OTel-GenAI only** | `otel_genai.md` |
-| any set containing Phoenix **and** (Langfuse or SigNoz) | **Both** | `openinference.md` + `otel_genai.md` |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm}` (no Phoenix) | **OTel-GenAI only** | `otel_genai.md` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm}` | **Both** | `openinference.md` + `otel_genai.md` |
 
-Rationale: Phoenix is OpenInference-native; Langfuse and SigNoz consume OTel-GenAI (SigNoz treats OI keys as opaque OTLP attributes — no LLM-specific UI). Dual-emission is reserved for the one fan-out case where both communities are present on the same provider.
+Rationale: Phoenix is OpenInference-native; Langfuse, SigNoz, and Elastic APM consume OTel-GenAI (SigNoz / Elastic treat OI keys as opaque attributes — no LLM-specific UI affordances on those backends). Dual-emission is reserved for fan-out cases where both communities are present on the same provider.
 
 ### Per-kind summary (quick scan)
 
@@ -452,11 +507,17 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
 )))
 
 trace.set_tracer_provider(provider)
+
+# Elastic APM — native agent. Picks up the same OTel spans via its bridge,
+# no BatchSpanProcessor entry needed. Auto-instruments Flask/Django/FastAPI/etc.
+import elasticapm
+elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "fanout-app"))
+elasticapm.instrument()
 ```
 
-Each processor exports independently. If one backend is unreachable, the others still receive spans.
+Each processor / agent exports independently. If one backend is unreachable, the others still receive spans.
 
-**Convention for fan-out:** when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz, the convention resolves to `both` (see § Mandatory Span Attributes) — every span must carry OI **and** OTel-GenAI keys so each backend's UI lights up. For Phoenix-less fan-out (e.g. `langfuse,signoz`), `otel-genai` alone is sufficient.
+**Convention for fan-out:** when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz / Elastic APM, the convention resolves to `both` (see § Mandatory Span Attributes) — every span must carry OI **and** OTel-GenAI keys so each backend's UI lights up. For Phoenix-less fan-out (e.g. `langfuse,signoz` or `signoz,elastic-apm`), `otel-genai` alone is sufficient.
 
 ---
 
@@ -509,6 +570,13 @@ Context propagation issue. Check:
 - **Phoenix Cloud:** `PHOENIX_API_KEY` set.
 - **Langfuse:** Public/secret keys not swapped; `LANGFUSE_HOST` matches the workspace where the keys were issued.
 - **SigNoz Cloud:** `SIGNOZ_INGESTION_KEY` set; header name (`signoz-access-token`) matches current docs.
+- **Elastic APM:** if your deployment uses an API key, set `ELASTIC_APM_API_KEY` (the agent sends `Authorization: ApiKey ...`); if it uses a secret token, set `ELASTIC_APM_SECRET_TOKEN` (the agent sends `Authorization: Bearer ...`). Don't set both. `ELASTIC_APM_SERVER_URL` should NOT have a trailing slash.
+
+### "Elastic APM agent silent / no transactions in Kibana"
+
+- The native agent only flushes on shutdown by default. Make sure your app calls `client.close()` or relies on `atexit`.
+- Confirm the APM Server URL is reachable: `curl $ELASTIC_APM_SERVER_URL` should return a small JSON manifest, not 404.
+- If you're using the OTLP path instead of the native agent, the endpoint is `<server>/v1/traces` (not `/intake/v2/events`).
 
 ### "OpenAI Agents SDK shows raw HTTP calls instead of agent spans"
 

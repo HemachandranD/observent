@@ -5,6 +5,7 @@ Usage:
   python validate_setup.py phoenix [--smoke-test]
   python validate_setup.py langfuse [--smoke-test]
   python validate_setup.py signoz [--smoke-test]
+  python validate_setup.py elastic-apm [--smoke-test]
   python validate_setup.py phoenix,signoz [--smoke-test]   # multi-backend fan-out
   python validate_setup.py all
 
@@ -13,7 +14,8 @@ Per backend:
   - Verifies required Python packages installed
   - Probes the configured endpoint for reachability
   - With --smoke-test: emits one synthetic LLM span (carrying the convention
-    that backend prefers — OI for Phoenix, OTel-GenAI for Langfuse/SigNoz)
+    that backend prefers — OI for Phoenix, OTel-GenAI for Langfuse / SigNoz /
+    Elastic APM)
 
 Exit code: 0 on pass, 1 on any failure.
 """
@@ -31,11 +33,12 @@ from urllib.parse import urlparse
 
 
 # Per-backend convention preference. See references/matrix.md § Convention resolution.
-# Phoenix is OpenInference-native; Langfuse and SigNoz consume OTel-GenAI.
+# Phoenix is OpenInference-native; Langfuse / SigNoz / Elastic APM consume OTel-GenAI.
 BACKEND_CONVENTION: dict[str, str] = {
     "phoenix": "oi",
     "langfuse": "otel-genai",
     "signoz": "otel-genai",
+    "elastic-apm": "otel-genai",
 }
 
 
@@ -212,6 +215,89 @@ def check_signoz(smoke: bool) -> Result:
     return r
 
 
+def check_elastic_apm(smoke: bool) -> Result:
+    r = Result("elastic-apm")
+    if not _is_installed("elasticapm"):
+        r.fail("elastic-apm not installed (pip install 'elastic-apm>=6.20')")
+    else:
+        r.ok("elastic-apm installed")
+
+    server_url = os.environ.get("ELASTIC_APM_SERVER_URL", "http://localhost:8200")
+    r.info(f"ELASTIC_APM_SERVER_URL = {server_url}")
+
+    secret_token = os.environ.get("ELASTIC_APM_SECRET_TOKEN")
+    api_key = os.environ.get("ELASTIC_APM_API_KEY")
+    if secret_token:
+        r.ok("ELASTIC_APM_SECRET_TOKEN set (Bearer auth)")
+    elif api_key:
+        r.ok("ELASTIC_APM_API_KEY set (ApiKey auth)")
+    else:
+        r.info("No auth set — assuming self-host without secret token")
+
+    _probe_http(r, server_url.rstrip("/"), method="GET")
+
+    if smoke and r.passed:
+        _emit_elastic_apm_smoke(
+            r,
+            server_url=server_url,
+            secret_token=secret_token,
+            api_key=api_key,
+        )
+    return r
+
+
+def _emit_elastic_apm_smoke(
+    r: Result,
+    *,
+    server_url: str,
+    secret_token: str | None,
+    api_key: str | None,
+) -> None:
+    """Emit one synthetic transaction via the native elasticapm.Client.
+
+    Uses the native agent (the slash-command default) rather than OTLP, so the
+    smoke test exercises the same code path the generated app will use. The
+    transaction carries gen_ai.* attributes — Elastic's OTel bridge promotes
+    them so they appear consistently in the Kibana APM UI.
+    """
+    if not _is_installed("elasticapm"):
+        r.warn("Skipping smoke test: elastic-apm not installed")
+        return
+    try:
+        import elasticapm  # type: ignore[import-not-found,unused-ignore]
+    except ImportError as e:
+        r.warn(f"Skipping smoke test: {e}")
+        return
+
+    client_kwargs: dict[str, str] = {
+        "service_name": "observent-smoke-test",
+        "server_url": server_url,
+    }
+    if secret_token:
+        client_kwargs["secret_token"] = secret_token
+    if api_key:
+        client_kwargs["api_key"] = api_key
+
+    try:
+        client = elasticapm.Client(**client_kwargs)
+        client.begin_transaction("smoke")  # type: ignore[no-untyped-call,unused-ignore]
+        elasticapm.label(  # type: ignore[no-untyped-call,unused-ignore]
+            gen_ai_operation_name="chat",
+            gen_ai_provider_name="anthropic",
+            gen_ai_request_model="claude-sonnet-4-6",
+            gen_ai_usage_input_tokens=4,
+            gen_ai_usage_output_tokens=2,
+        )
+        client.end_transaction("observent.smoke", "success")  # type: ignore[no-untyped-call,unused-ignore]
+        client.close()  # type: ignore[no-untyped-call,unused-ignore]
+    except Exception as e:  # noqa: BLE001
+        r.fail(f"Elastic APM client init / transaction failed: {e}")
+        return
+
+    r.ok(f"Synthetic transaction (otel-genai via native agent) sent to {server_url}")
+    r.info("Verify the transaction appears in Kibana APM (Services → observent-smoke-test) within ~10s.")
+
+
 def _phoenix_headers(api_key: str | None) -> dict[str, str]:
     if api_key:
         return {"Authorization": f"Bearer {api_key}"}
@@ -293,6 +379,7 @@ CHECKS: dict[str, Callable[[bool], Result]] = {
     "phoenix": check_phoenix,
     "langfuse": check_langfuse,
     "signoz": check_signoz,
+    "elastic-apm": check_elastic_apm,
 }
 
 
@@ -324,10 +411,16 @@ def main() -> int:
     parser.add_argument(
         "backend",
         type=_parse_backends,
-        help="Backend or comma-separated list (phoenix, langfuse, signoz, all). "
-        'e.g. "phoenix" or "phoenix,signoz".',
+        help="Backend or comma-separated list (phoenix, langfuse, signoz, elastic-apm, all). "
+        'e.g. "phoenix" or "phoenix,elastic-apm".',
     )
-    parser.add_argument("--smoke-test", action="store_true", help="Emit a synthetic LLM span")
+    parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Emit one synthetic span per backend (LLM span via OTLP for "
+        "phoenix/langfuse/signoz; transaction via native elasticapm.Client "
+        "for elastic-apm).",
+    )
     args = parser.parse_args()
 
     backends: list[str] = args.backend

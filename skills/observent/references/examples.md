@@ -639,14 +639,79 @@ if __name__ == "__main__":
 
 ---
 
-## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz)
+## 9. AutoGen v0.4 + Elastic APM (native agent — transactions + LLM spans)
 
-Single `TracerProvider`, one `BatchSpanProcessor` per backend. Because the set contains Phoenix **and** (Langfuse, SigNoz), the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys so each backend's UI lights up. See `openinference.md` and `otel_genai.md` for canonical key lists.
+The Elastic APM Python agent gets you transaction tracing and infrastructure / runtime metrics out of the box, and its built-in OTel bridge picks up spans from `OpenAIInstrumentor` so the LLM calls show up in the same Kibana service map. This example uses the **native agent** (the slash-command default); see `matrix.md` § Elastic APM for the OTLP-only variant.
+
+```python
+# autogen_elastic.py
+import asyncio
+import os
+import elasticapm
+from openinference.instrumentation.openai import OpenAIInstrumentor
+
+from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_agentchat.conditions import MaxMessageTermination
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+# --- Observability: native Elastic APM agent ---
+# Reads ELASTIC_APM_SERVER_URL / SECRET_TOKEN / API_KEY from the environment.
+elasticapm.Client(
+    service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "autogen-demo"),
+    environment=os.getenv("ELASTIC_APM_ENVIRONMENT", "dev"),
+)
+elasticapm.instrument()  # auto-instruments asyncio / urllib3 / requests / httpx / ...
+
+# OI instrumentor still emits OTel spans; the agent's bridge ingests them
+# alongside the auto-instrumented transaction spans.
+OpenAIInstrumentor().instrument()
+
+
+async def main() -> None:
+    model_client = OpenAIChatCompletionClient(model="gpt-4o")
+    assistant = AssistantAgent("assistant", model_client=model_client,
+                               system_message="You are a concise expert.")
+    critic = AssistantAgent("critic", model_client=model_client,
+                            system_message="Critique the assistant's answer in 1 sentence.")
+    team = RoundRobinGroupChat([assistant, critic],
+                               termination_condition=MaxMessageTermination(4))
+    result = await team.run(task="Explain how LLM caching works.")
+    print(result.messages[-1].content)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+```bash
+# Start Elastic APM Server + Kibana via docker-compose (Elastic Stack quickstart),
+# or use Elastic Cloud and set ELASTIC_APM_SERVER_URL + ELASTIC_APM_SECRET_TOKEN.
+
+pip install 'elastic-apm>=6.20' \
+            'autogen-agentchat>=0.4' 'autogen-ext[openai]' \
+            'openinference-instrumentation-openai>=0.1'
+export OPENAI_API_KEY=sk-...
+export ELASTIC_APM_SERVER_URL=http://localhost:8200
+# Cloud only:
+# export ELASTIC_APM_SECRET_TOKEN=...
+python autogen_elastic.py
+# Kibana APM UI: http://localhost:5601/app/apm → Services → autogen-demo
+```
+
+*Last verified: 2026-05-08 with Python 3.12.*
+
+---
+
+## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM)
+
+Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all four destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
 
 ```python
 # fanout.py
 import os
 import base64
+import elasticapm
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
@@ -679,9 +744,14 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
 )))
 
 trace.set_tracer_provider(provider)
+
+# Elastic APM (native agent — coexists with the TracerProvider above; bridges OTel spans).
+elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "fanout-demo"))
+elasticapm.instrument()
+
 tracer = trace.get_tracer("fanout-demo")
 
-# Every span must carry BOTH conventions when fanning out across Phoenix + (Langfuse|SigNoz).
+# Every span must carry BOTH conventions when fanning out across Phoenix + (Langfuse|SigNoz|Elastic APM).
 with tracer.start_as_current_span("smoke-llm") as span:
     # OpenInference
     span.set_attribute("openinference.span.kind", "LLM")
@@ -698,10 +768,10 @@ with tracer.start_as_current_span("smoke-llm") as span:
     span.set_attribute("gen_ai.usage.output_tokens", 8)
 
 provider.shutdown()
-# Spans now in all three backends. Failure in one doesn't affect the others.
+# Spans now in all four backends. Failure in one doesn't affect the others.
 ```
 
-For Phoenix-less fan-out (`langfuse,signoz`), drop the OI block — `otel-genai` alone is sufficient.
+For Phoenix-less fan-out (e.g. `langfuse,signoz` or `signoz,elastic-apm`), drop the OI block — `otel-genai` alone is sufficient.
 
 *Last verified: 2026-05-08 with Python 3.12.*
 

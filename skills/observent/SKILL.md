@@ -1,6 +1,6 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, or SigNoz) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, or Elastic APM) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: detect the user's agent framework, wire up the chosen backend, and produce code that captures the **right** attributes (model, tokens, tool calls, agent identity) with **correct context propagation** across async, threads, and agent handoffs.
 
-**Backends supported (exactly 3):** Arize Phoenix · Langfuse · SigNoz.
+**Backends supported (exactly 4):** Arize Phoenix · Langfuse · SigNoz · Elastic APM.
 **Frameworks supported (8):** LangGraph · CrewAI · AutoGen v0.4 (`autogen-agentchat`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom.
 
 ---
@@ -38,13 +38,14 @@ Parsing rules:
 
 ## Step 3 — Resolve backend(s) and convention
 
-`$2` accepts **one or more** backends, comma-separated (e.g. `phoenix` or `phoenix,signoz`). If `$2` was passed, parse it into a deduplicated set. Otherwise present these three options with one-line trade-offs and ask the user to pick **one or more**:
+`$2` accepts **one or more** backends, comma-separated (e.g. `phoenix` or `phoenix,elastic-apm`). If `$2` was passed, parse it into a deduplicated set. Otherwise present these four options with one-line trade-offs and ask the user to pick **one or more**:
 
 - **Arize Phoenix** — local-first, no account needed (`px.launch_app()`), OpenTelemetry-native, best dev-loop UX.
 - **Langfuse** — open-source self-hostable; best token cost tracking, prompt versioning, eval datasets.
-- **SigNoz** — full-stack APM (traces + metrics + logs); best when you want LLM observability alongside infrastructure metrics.
+- **SigNoz** — full-stack APM (traces + metrics + logs); best when you want LLM observability alongside infrastructure metrics in a self-hostable OTel stack.
+- **Elastic APM** — Elastic Stack APM Server with the native `elastic-apm` agent; best when you also need transaction tracing and infrastructure metrics in Kibana alongside LLM tracing.
 
-When the user picks multiple, all backends receive the same spans via independent `BatchSpanProcessor`s — see Step 6 (Multi-backend fan-out template) and `references/matrix.md` § Multi-Backend Fan-Out.
+When the user picks multiple, all backends receive the same spans via independent processors / agents — see Step 6 (Multi-backend fan-out template) and `references/matrix.md` § Multi-Backend Fan-Out.
 
 ### Resolve the semantic convention
 
@@ -53,10 +54,10 @@ Once the backend set is fixed, derive the convention mechanically:
 | Backend set | Convention emitted | Why |
 |---|---|---|
 | `{phoenix}` | **OI only** (`references/openinference.md`) | Phoenix UI is OpenInference-native |
-| `{langfuse}`, `{signoz}`, or `{langfuse, signoz}` | **OTel-GenAI only** (`references/otel_genai.md`) | both backends prefer OTel-GenAI; SigNoz treats OI as opaque |
-| any set containing Phoenix **and** (Langfuse or SigNoz) | **Both** | the only case where dual emission is required |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm}` (no Phoenix) | **OTel-GenAI only** (`references/otel_genai.md`) | all three prefer OTel-GenAI; SigNoz / Elastic APM treat OI as opaque |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm}` | **Both** | the only case where dual emission is required |
 
-State the resolved convention in one short sentence to the user before moving on (e.g. "Resolved: phoenix,signoz → emitting both OI and OTel-GenAI attributes").
+State the resolved convention in one short sentence to the user before moving on (e.g. "Resolved: phoenix,elastic-apm → emitting both OI and OTel-GenAI attributes").
 
 ## Step 4 — Existing-setup handling
 
@@ -118,9 +119,21 @@ At minimum, every generated template covers:
 
 For frameworks with native instrumentors (most cases) these are populated automatically. For the **Custom** path, generate calls to the helper functions `set_llm_attrs()`, `set_tool_attrs()`, `set_agent_attrs()` defined in the user's new `observent_otel.py`. The helper branches on a module-level literal `_CONVENTION = "<oi|otel-genai|both>"` — **you write the resolved convention from Step 3 as a literal at generation time**. Do **not** make the helper read an env var; convention is a generation-time decision, not a runtime one. The user's call sites stay convention-agnostic; to switch conventions they re-run `/observent` with a different backend set.
 
+### Elastic APM is special — native agent, not OTLP
+
+For `elastic-apm` the **default generated path is the native `elastic-apm` Python agent** (not an `OTLPSpanExporter`). Three lines:
+
+```python
+import elasticapm
+elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "my-agent-app"))  # reads ELASTIC_APM_SERVER_URL / SECRET_TOKEN / API_KEY
+elasticapm.instrument()  # auto-instruments Flask / Django / FastAPI / asyncio etc.
+```
+
+The agent's built-in OTel bridge picks up spans from the global OTel SDK, so the OpenInference framework instrumentor (`LangChainInstrumentor`, etc.) keeps emitting LLM spans and Elastic ingests them alongside the auto-instrumented transactions. This is the same precedent set by Langfuse's `CallbackHandler` / `@observe` decorator — native SDK, not OTLP. The pure-OTLP variant (`OTLPSpanExporter` to `:8200/v1/traces`) is documented in `references/matrix.md` as a secondary path for users who don't want the `elastic-apm` dependency.
+
 ### Multi-backend fan-out template
 
-When Step 3 resolved more than one backend, generate **one** `TracerProvider` with **one `BatchSpanProcessor` per backend**. Each exporter has its own endpoint and headers; failures in one don't affect the others. Use this exact shape (omit unused branches):
+When Step 3 resolved more than one backend, generate **one** `TracerProvider` with **one `BatchSpanProcessor` per OTLP backend** (Phoenix, Langfuse, SigNoz) and, if `elastic-apm` is in the set, **also** instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to it — the agent attaches to the same global tracer provider via its OTel bridge. Failures in any one path don't affect the others. Use this exact shape (omit unused branches):
 
 ```python
 import os, base64
@@ -154,19 +167,25 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
 )))
 
 trace.set_tracer_provider(provider)
+
+# Elastic APM (native agent — coexists with the TracerProvider above)
+import elasticapm
+elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "my-agent-app"))
+elasticapm.instrument()
 ```
 
-Single-backend setups use the corresponding canonical setup snippet from `references/matrix.md` (Per-Backend Reference) — no `BatchSpanProcessor` chaining needed.
+Single-backend setups use the corresponding canonical setup snippet from `references/matrix.md` (Per-Backend Reference) — no fan-out chaining needed.
 
 ### Endpoints — pick the right one
 
-| Backend | Self-host OTLP | Cloud OTLP |
+| Backend | Self-host | Cloud |
 |---|---|---|
-| Phoenix | `http://localhost:6006/v1/traces` | `https://app.phoenix.arize.com/v1/traces` (Bearer `PHOENIX_API_KEY`) |
-| Langfuse | `http://localhost:3000/api/public/otel/v1/traces` | `https://us.cloud.langfuse.com/...` or `https://cloud.langfuse.com/...` (Basic auth from public+secret keys) |
-| SigNoz | `http://localhost:4318/v1/traces` | `https://ingest.{us,eu,in}.signoz.cloud:443/v1/traces` (header `signoz-access-token`) |
+| Phoenix | OTLP `http://localhost:6006/v1/traces` | OTLP `https://app.phoenix.arize.com/v1/traces` (Bearer `PHOENIX_API_KEY`) |
+| Langfuse | OTLP `http://localhost:3000/api/public/otel/v1/traces` | OTLP `https://us.cloud.langfuse.com/...` or `https://cloud.langfuse.com/...` (Basic auth from public+secret keys) |
+| SigNoz | OTLP `http://localhost:4318/v1/traces` | OTLP `https://ingest.{us,eu,in}.signoz.cloud:443/v1/traces` (header `signoz-access-token`) |
+| Elastic APM | APM Server `http://localhost:8200` (agent default) | `https://<deployment>.apm.<region>.cloud.es.io:443` (Bearer `ELASTIC_APM_SECRET_TOKEN` or ApiKey `ELASTIC_APM_API_KEY`) |
 
-Default to self-host endpoints unless the user supplies cloud env vars (`PHOENIX_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `SIGNOZ_INGESTION_KEY`).
+Default to self-host endpoints unless the user supplies cloud env vars (`PHOENIX_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `SIGNOZ_INGESTION_KEY`, `ELASTIC_APM_SECRET_TOKEN` or `ELASTIC_APM_API_KEY`).
 
 ## Step 7 — Validate
 
@@ -174,9 +193,9 @@ After files are written, run the validator with the comma-separated backend list
 
 !`python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" <backend-list>`
 
-Examples: `phoenix`, `phoenix,signoz`, `phoenix,langfuse,signoz`, `all`.
+Examples: `phoenix`, `phoenix,signoz`, `phoenix,elastic-apm`, `phoenix,langfuse,signoz,elastic-apm`, `all`.
 
-If env vars are set and the user wants a live trace, run with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz) — so the test mirrors what the generated app will emit at runtime.
+If env vars are set and the user wants a live trace, run with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM). Phoenix / Langfuse / SigNoz use an `OTLPSpanExporter`; Elastic APM uses the native `elasticapm.Client` so the smoke test exercises the same agent path the generated app will use.
 
 Surface the script output verbatim. If it failed, suggest the likely cause (missing env var, unreachable endpoint, package not installed).
 
@@ -194,6 +213,8 @@ Report back:
   - Langfuse cloud: `https://cloud.langfuse.com` or `https://us.cloud.langfuse.com`
   - SigNoz self-host: `http://localhost:3301`
   - SigNoz cloud: `https://<tenant>.{us,eu,in}.signoz.cloud`
+  - Elastic APM self-host (Kibana): `http://localhost:5601/app/apm`
+  - Elastic APM cloud (Kibana): `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
 - One-line "next step" — set the env vars, run their app, refresh each UI.
 
 ---
