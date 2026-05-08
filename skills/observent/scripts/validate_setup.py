@@ -5,13 +5,15 @@ Usage:
   python validate_setup.py phoenix [--smoke-test]
   python validate_setup.py langfuse [--smoke-test]
   python validate_setup.py signoz [--smoke-test]
+  python validate_setup.py phoenix,signoz [--smoke-test]   # multi-backend fan-out
   python validate_setup.py all
 
 Per backend:
   - Verifies required env vars
   - Verifies required Python packages installed
   - Probes the configured endpoint for reachability
-  - With --smoke-test: emits one synthetic LLM span and reports back
+  - With --smoke-test: emits one synthetic LLM span (carrying the convention
+    that backend prefers — OI for Phoenix, OTel-GenAI for Langfuse/SigNoz)
 
 Exit code: 0 on pass, 1 on any failure.
 """
@@ -26,6 +28,15 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse
+
+
+# Per-backend convention preference. See references/matrix.md § Convention resolution.
+# Phoenix is OpenInference-native; Langfuse and SigNoz consume OTel-GenAI.
+BACKEND_CONVENTION: dict[str, str] = {
+    "phoenix": "oi",
+    "langfuse": "otel-genai",
+    "signoz": "otel-genai",
+}
 
 
 @dataclass
@@ -119,7 +130,12 @@ def check_phoenix(smoke: bool) -> Result:
         _probe_tcp(r, host, port)
 
     if smoke and r.passed:
-        _emit_smoke_span(r, endpoint=f"{endpoint.rstrip('/')}/v1/traces", headers=_phoenix_headers(api_key))
+        _emit_smoke_span(
+            r,
+            endpoint=f"{endpoint.rstrip('/')}/v1/traces",
+            headers=_phoenix_headers(api_key),
+            convention=BACKEND_CONVENTION["phoenix"],
+        )
     return r
 
 
@@ -134,7 +150,7 @@ def check_langfuse(smoke: bool) -> Result:
 
     if pk and sk and _is_installed("langfuse"):
         try:
-            from langfuse import Langfuse  # type: ignore[import-not-found]
+            from langfuse import Langfuse  # type: ignore[import-not-found,unused-ignore]
 
             client = Langfuse(public_key=pk, secret_key=sk, host=host)
             if hasattr(client, "auth_check"):
@@ -156,6 +172,7 @@ def check_langfuse(smoke: bool) -> Result:
             r,
             endpoint=f"{host.rstrip('/')}/api/public/otel/v1/traces",
             headers={"Authorization": f"Basic {auth}"},
+            convention=BACKEND_CONVENTION["langfuse"],
         )
     return r
 
@@ -186,7 +203,12 @@ def check_signoz(smoke: bool) -> Result:
         key = os.environ.get("SIGNOZ_INGESTION_KEY")
         if key:
             headers["signoz-access-token"] = key
-        _emit_smoke_span(r, endpoint=endpoint, headers=headers)
+        _emit_smoke_span(
+            r,
+            endpoint=endpoint,
+            headers=headers,
+            convention=BACKEND_CONVENTION["signoz"],
+        )
     return r
 
 
@@ -196,8 +218,45 @@ def _phoenix_headers(api_key: str | None) -> dict[str, str]:
     return {}
 
 
-def _emit_smoke_span(r: Result, *, endpoint: str, headers: dict[str, str]) -> None:
-    """Emit one synthetic LLM span via OTLP HTTP and report ingestion."""
+def _set_oi_attrs(span) -> None:  # type: ignore[no-untyped-def]
+    """OpenInference attribute keys (Phoenix-native)."""
+    span.set_attribute("openinference.span.kind", "LLM")
+    span.set_attribute("llm.model_name", "claude-sonnet-4-6")
+    span.set_attribute("llm.provider", "anthropic")
+    span.set_attribute("input.value", '{"prompt": "smoke test"}')
+    span.set_attribute("input.mime_type", "application/json")
+    span.set_attribute("output.value", '{"completion": "ok"}')
+    span.set_attribute("output.mime_type", "application/json")
+    span.set_attribute("llm.token_count.prompt", 4)
+    span.set_attribute("llm.token_count.completion", 2)
+    span.set_attribute("llm.token_count.total", 6)
+
+
+def _set_otel_genai_attrs(span) -> None:  # type: ignore[no-untyped-def]
+    """OTel-GenAI attribute keys (Langfuse / SigNoz)."""
+    span.set_attribute("gen_ai.operation.name", "chat")
+    span.set_attribute("gen_ai.provider.name", "anthropic")
+    span.set_attribute("gen_ai.request.model", "claude-sonnet-4-6")
+    span.set_attribute("gen_ai.response.model", "claude-sonnet-4-6")
+    span.set_attribute("gen_ai.usage.input_tokens", 4)
+    span.set_attribute("gen_ai.usage.output_tokens", 2)
+    span.set_attribute("gen_ai.response.finish_reasons", ["stop"])
+
+
+def _emit_smoke_span(
+    r: Result,
+    *,
+    endpoint: str,
+    headers: dict[str, str],
+    convention: str,
+) -> None:
+    """Emit one synthetic LLM span via OTLP HTTP and report ingestion.
+
+    The span carries attribute keys matching the backend's preferred convention:
+      - "oi"        -> OpenInference keys (openinference.span.kind, llm.token_count.*, ...)
+      - "otel-genai" -> OTel-GenAI keys (gen_ai.operation.name, gen_ai.usage.*, ...)
+      - "both"      -> union (only used when explicitly requested)
+    """
     if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
         r.warn("Skipping smoke test: opentelemetry-exporter-otlp-proto-http not installed")
         return
@@ -220,23 +279,13 @@ def _emit_smoke_span(r: Result, *, endpoint: str, headers: dict[str, str]) -> No
     tracer = provider.get_tracer("observent.smoke_test")
 
     with tracer.start_as_current_span("smoke-test-llm-call") as span:
-        span.set_attribute("openinference.span.kind", "LLM")
-        span.set_attribute("llm.model_name", "claude-sonnet-4-6")
-        span.set_attribute("llm.provider", "anthropic")
-        span.set_attribute("gen_ai.system", "anthropic")
-        span.set_attribute("gen_ai.request.model", "claude-sonnet-4-6")
-        span.set_attribute("input.value", '{"prompt": "smoke test"}')
-        span.set_attribute("input.mime_type", "application/json")
-        span.set_attribute("output.value", '{"completion": "ok"}')
-        span.set_attribute("output.mime_type", "application/json")
-        span.set_attribute("llm.token_count.prompt", 4)
-        span.set_attribute("llm.token_count.completion", 2)
-        span.set_attribute("llm.token_count.total", 6)
-        span.set_attribute("gen_ai.usage.input_tokens", 4)
-        span.set_attribute("gen_ai.usage.output_tokens", 2)
+        if convention in ("oi", "both"):
+            _set_oi_attrs(span)
+        if convention in ("otel-genai", "both"):
+            _set_otel_genai_attrs(span)
 
     provider.shutdown()
-    r.ok(f"Synthetic LLM span exported to {endpoint}")
+    r.ok(f"Synthetic LLM span ({convention}) exported to {endpoint}")
     r.info("Verify the span appears in your backend UI within ~10s.")
 
 
@@ -247,13 +296,41 @@ CHECKS: dict[str, Callable[[bool], Result]] = {
 }
 
 
+def _parse_backends(value: str) -> list[str]:
+    """Parse comma-separated backend list. Dedupes, preserves order, validates."""
+    valid = {*CHECKS.keys(), "all"}
+    tokens = [t.strip() for t in value.split(",") if t.strip()]
+    if not tokens:
+        raise argparse.ArgumentTypeError("backend argument cannot be empty")
+    unknown = [t for t in tokens if t not in valid]
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown backend(s): {', '.join(unknown)} "
+            f"(valid: {', '.join(sorted(valid))})"
+        )
+    if "all" in tokens:
+        return list(CHECKS.keys())
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for t in tokens:
+        if t not in seen:
+            seen.add(t)
+            deduped.append(t)
+    return deduped
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate observent observability setup.")
-    parser.add_argument("backend", choices=[*CHECKS.keys(), "all"])
+    parser.add_argument(
+        "backend",
+        type=_parse_backends,
+        help="Backend or comma-separated list (phoenix, langfuse, signoz, all). "
+        'e.g. "phoenix" or "phoenix,signoz".',
+    )
     parser.add_argument("--smoke-test", action="store_true", help="Emit a synthetic LLM span")
     args = parser.parse_args()
 
-    backends = list(CHECKS.keys()) if args.backend == "all" else [args.backend]
+    backends: list[str] = args.backend
     overall_pass = True
     for backend in backends:
         print(f"\n=== {backend} ===")

@@ -2,6 +2,8 @@
 
 Eight runnable end-to-end examples — one per supported framework, with the three backends rotated to demonstrate all of them. Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz examples (2, 3, 4, 6, 7) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; both backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path with `OBSERVENT_CONVENTION=otel-genai`. The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+
 ---
 
 ## 1. LangGraph + Arize Phoenix (local, zero account)
@@ -52,7 +54,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 python main.py
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -118,7 +120,7 @@ python crew_main.py
 # Visit https://cloud.langfuse.com to see Crew → Agent → Task → LLM hierarchy
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -196,7 +198,7 @@ python autogen_signoz.py
 # UI: http://localhost:3301
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -285,7 +287,7 @@ export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-...
 python anthropic_langfuse.py
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -339,7 +341,7 @@ export OPENAI_API_KEY=sk-...
 python openai_agents_phoenix.py
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -393,7 +395,7 @@ export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-... LANGFUSE_HOST
 python smolagents_langfuse.py
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -451,13 +453,13 @@ export ANTHROPIC_API_KEY=sk-ant-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/tra
 python llama_signoz.py
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
 ## 8. Custom multi-agent loop + Arize Phoenix (manual span hierarchy)
 
-When you don't use a framework, the skill writes an `observent_otel.py` helper module to your project. This example shows what that looks like and how to consume it.
+When you don't use a framework, the skill writes an `observent_otel.py` helper module to your project. The helper is **convention-aware**: it accepts the convention resolved in Step 3 (`oi`, `otel-genai`, or `both`) and emits the matching keys. This example uses Phoenix → `oi`. For Langfuse / SigNoz set `OBSERVENT_CONVENTION=otel-genai` at startup; for fan-out across Phoenix + (Langfuse or SigNoz) use `both`.
 
 ```python
 # observent_otel.py — generated helper (kept in your repo)
@@ -473,6 +475,10 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+# Resolved by SKILL.md Step 3 from the chosen backend set; the user-facing
+# call sites stay convention-agnostic.
+_CONVENTION = os.getenv("OBSERVENT_CONVENTION", "oi")  # "oi" | "otel-genai" | "both"
+
 
 def init_tracing(*, service_name: str, exporter) -> trace.TracerProvider:
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
@@ -487,14 +493,27 @@ def _set(span, key: str, value: Any) -> None:
     span.set_attribute(key, value if isinstance(value, (str, int, float, bool)) else json.dumps(value))
 
 
+def _emit_oi() -> bool:
+    return _CONVENTION in ("oi", "both")
+
+
+def _emit_otel() -> bool:
+    return _CONVENTION in ("otel-genai", "both")
+
+
 @contextmanager
 def with_agent_span(name: str, role: str = "", framework: str = "custom"):
     tracer = trace.get_tracer("observent")
     with tracer.start_as_current_span(f"agent.{name}") as span:
-        _set(span, "openinference.span.kind", "AGENT")
-        _set(span, "agent.name", name)
-        _set(span, "agent.role", role)
-        _set(span, "agent.framework", framework)
+        if _emit_oi():
+            _set(span, "openinference.span.kind", "AGENT")
+            _set(span, "agent.name", name)
+            _set(span, "agent.role", role)
+            _set(span, "agent.framework", framework)
+        if _emit_otel():
+            _set(span, "gen_ai.operation.name", "invoke_agent")
+            _set(span, "gen_ai.agent.name", name)
+            _set(span, "gen_ai.agent.description", role)
         yield span
 
 
@@ -503,43 +522,61 @@ def set_llm_attrs(span, *, model: str, provider: str, input_messages, output_mes
                   cache_read_tokens: int = 0, cache_write_tokens: int = 0,
                   invocation_parameters: dict | None = None,
                   finish_reasons: list[str] | None = None) -> None:
-    _set(span, "openinference.span.kind", "LLM")
-    _set(span, "llm.model_name", model)
-    _set(span, "gen_ai.request.model", model)
-    _set(span, "llm.provider", provider)
-    _set(span, "gen_ai.system", provider)
-    _set(span, "llm.input_messages", input_messages)
-    _set(span, "llm.output_messages", output_messages)
-    _set(span, "input.value", input_messages)
-    _set(span, "input.mime_type", "application/json")
-    _set(span, "output.value", output_messages)
-    _set(span, "output.mime_type", "application/json")
-    _set(span, "llm.token_count.prompt", prompt_tokens)
-    _set(span, "llm.token_count.completion", completion_tokens)
-    _set(span, "llm.token_count.total", prompt_tokens + completion_tokens)
-    _set(span, "gen_ai.usage.input_tokens", prompt_tokens)
-    _set(span, "gen_ai.usage.output_tokens", completion_tokens)
-    if cache_read_tokens:
-        _set(span, "llm.token_count.prompt_details.cache_read", cache_read_tokens)
-    if cache_write_tokens:
-        _set(span, "llm.token_count.prompt_details.cache_write", cache_write_tokens)
-    if invocation_parameters:
-        _set(span, "llm.invocation_parameters", invocation_parameters)
-    if finish_reasons:
-        _set(span, "llm.finish_reasons", finish_reasons)
+    if _emit_oi():
+        _set(span, "openinference.span.kind", "LLM")
+        _set(span, "llm.model_name", model)
+        _set(span, "llm.provider", provider)
+        _set(span, "llm.input_messages", input_messages)
+        _set(span, "llm.output_messages", output_messages)
+        _set(span, "input.value", input_messages)
+        _set(span, "input.mime_type", "application/json")
+        _set(span, "output.value", output_messages)
+        _set(span, "output.mime_type", "application/json")
+        _set(span, "llm.token_count.prompt", prompt_tokens)
+        _set(span, "llm.token_count.completion", completion_tokens)
+        _set(span, "llm.token_count.total", prompt_tokens + completion_tokens)
+        if cache_read_tokens:
+            _set(span, "llm.token_count.prompt_details.cache_read", cache_read_tokens)
+        if cache_write_tokens:
+            _set(span, "llm.token_count.prompt_details.cache_write", cache_write_tokens)
+        if invocation_parameters:
+            _set(span, "llm.invocation_parameters", invocation_parameters)
+        if finish_reasons:
+            _set(span, "llm.finish_reasons", finish_reasons)
+    if _emit_otel():
+        _set(span, "gen_ai.operation.name", "chat")
+        _set(span, "gen_ai.provider.name", provider)
+        _set(span, "gen_ai.request.model", model)
+        _set(span, "gen_ai.response.model", model)
+        _set(span, "gen_ai.usage.input_tokens", prompt_tokens)
+        _set(span, "gen_ai.usage.output_tokens", completion_tokens)
+        if cache_read_tokens:
+            _set(span, "gen_ai.usage.cache_read.input_tokens", cache_read_tokens)
+        if cache_write_tokens:
+            _set(span, "gen_ai.usage.cache_creation.input_tokens", cache_write_tokens)
+        if invocation_parameters:
+            for k, v in invocation_parameters.items():
+                _set(span, f"gen_ai.request.{k}", v)
+        if finish_reasons:
+            _set(span, "gen_ai.response.finish_reasons", finish_reasons)
 
 
 def set_tool_attrs(span, *, name: str, description: str = "", parameters: dict | None = None,
                    input_value: Any = None, output_value: Any = None) -> None:
-    _set(span, "openinference.span.kind", "TOOL")
-    _set(span, "tool.name", name)
-    _set(span, "tool.description", description)
-    if parameters is not None:
-        _set(span, "tool.parameters", parameters)
-    if input_value is not None:
-        _set(span, "input.value", input_value)
-    if output_value is not None:
-        _set(span, "output.value", output_value)
+    if _emit_oi():
+        _set(span, "openinference.span.kind", "TOOL")
+        _set(span, "tool.name", name)
+        _set(span, "tool.description", description)
+        if parameters is not None:
+            _set(span, "tool.parameters", parameters)
+        if input_value is not None:
+            _set(span, "input.value", input_value)
+        if output_value is not None:
+            _set(span, "output.value", output_value)
+    if _emit_otel():
+        _set(span, "gen_ai.operation.name", "execute_tool")
+        if parameters is not None:
+            _set(span, "gen_ai.tool.definitions", {"name": name, "description": description, "parameters": parameters})
 ```
 
 ```python
@@ -599,11 +636,13 @@ if __name__ == "__main__":
     tracer_provider.shutdown()
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
-## Multi-Backend Fan-Out (Phoenix + SigNoz)
+## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz)
+
+Single `TracerProvider`, one `BatchSpanProcessor` per backend. Because the set contains Phoenix **and** (Langfuse, SigNoz), the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys so each backend's UI lights up. See `openinference.md` and `otel_genai.md` for canonical key lists.
 
 ```python
 # fanout.py
@@ -617,21 +656,55 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 provider = TracerProvider(resource=Resource.create({"service.name": "fanout-demo"}))
 
-# Phoenix (local)
-provider.add_span_processor(BatchSpanProcessor(
-    OTLPSpanExporter(endpoint="http://localhost:6006/v1/traces")
-))
+# Phoenix
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
+    headers={"Authorization": f"Bearer {os.environ['PHOENIX_API_KEY']}"} if os.getenv("PHOENIX_API_KEY") else {},
+)))
 
-# SigNoz (local)
-provider.add_span_processor(BatchSpanProcessor(
-    OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")
-))
+# Langfuse
+_lf_host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip("/")
+_lf_auth = base64.b64encode(
+    f"{os.environ['LANGFUSE_PUBLIC_KEY']}:{os.environ['LANGFUSE_SECRET_KEY']}".encode()
+).decode()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=f"{_lf_host}/api/public/otel/v1/traces",
+    headers={"Authorization": f"Basic {_lf_auth}"},
+)))
+
+# SigNoz
+_sn_headers = {"signoz-access-token": os.environ["SIGNOZ_INGESTION_KEY"]} if os.getenv("SIGNOZ_INGESTION_KEY") else {}
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("SIGNOZ_ENDPOINT", "http://localhost:4318/v1/traces"),
+    headers=_sn_headers,
+)))
 
 trace.set_tracer_provider(provider)
-# All spans now go to BOTH backends. Failure in one doesn't affect the other.
+tracer = trace.get_tracer("fanout-demo")
+
+# Every span must carry BOTH conventions when fanning out across Phoenix + (Langfuse|SigNoz).
+with tracer.start_as_current_span("smoke-llm") as span:
+    # OpenInference
+    span.set_attribute("openinference.span.kind", "LLM")
+    span.set_attribute("llm.model_name", "claude-sonnet-4-6")
+    span.set_attribute("llm.provider", "anthropic")
+    span.set_attribute("llm.token_count.prompt", 12)
+    span.set_attribute("llm.token_count.completion", 8)
+    span.set_attribute("llm.token_count.total", 20)
+    # OTel-GenAI
+    span.set_attribute("gen_ai.operation.name", "chat")
+    span.set_attribute("gen_ai.provider.name", "anthropic")
+    span.set_attribute("gen_ai.request.model", "claude-sonnet-4-6")
+    span.set_attribute("gen_ai.usage.input_tokens", 12)
+    span.set_attribute("gen_ai.usage.output_tokens", 8)
+
+provider.shutdown()
+# Spans now in all three backends. Failure in one doesn't affect the others.
 ```
 
-*Last verified: 2026-05-07 with Python 3.12.*
+For Phoenix-less fan-out (`langfuse,signoz`), drop the OI block — `otel-genai` alone is sufficient.
+
+*Last verified: 2026-05-08 with Python 3.12.*
 
 ---
 
@@ -652,7 +725,10 @@ trace.set_tracer_provider(provider)
 Or just run:
 
 ```bash
+# single backend
 python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" <backend> --smoke-test
+# multi-backend fan-out (comma-separated)
+python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" phoenix,signoz --smoke-test
 ```
 
 ---

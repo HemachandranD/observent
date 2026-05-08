@@ -175,13 +175,16 @@ For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `
   plugin.json           # Claude Code plugin manifest
   marketplace.json      # Marketplace listing
 commands/
-  observent.toml          # /observent [framework] [backend]
+  observent.toml          # /observent [framework] [backend|backend,...]
   observent-detect.toml   # /observent-detect
-  observent-validate.toml # /observent-validate <backend> [--smoke-test]
+  observent-validate.toml # /observent-validate <backend|backend,...> [--smoke-test]
 skills/observent/
   SKILL.md              # Skill entry point (8-step workflow)
-  reference.md          # 8×3 matrix, span attrs, context propagation
-  examples.md           # 8 runnable end-to-end examples
+  references/
+    matrix.md           # 8×3 matrix, span attrs, context propagation
+    openinference.md    # Canonical OpenInference attribute reference
+    otel_genai.md       # Canonical OTel-GenAI attribute reference
+    examples.md         # 8 runnable end-to-end examples
   scripts/
     detect_framework.py # Detects installed frameworks/backends
     validate_setup.py   # Per-backend config + connectivity check

@@ -23,10 +23,10 @@ Scripts are in `${OBSERVENT_HOME}/scripts/` (default: `~/.observent/scripts/`).
    ```
 2. Resolve framework and backend — confirm with the user if ambiguous.
 3. **Always show a diff preview** of all changes before writing any files.
-4. Generate code using the integration matrix in `${OBSERVENT_HOME}/reference.md`.
+4. Generate code using the integration matrix in `${OBSERVENT_HOME}/references/matrix.md`.
 5. After writing, validate:
    ```bash
    python "${OBSERVENT_HOME}/scripts/validate_setup.py" <backend>
    ```
 
-Full workflow: `${OBSERVENT_HOME}/SKILL.md` — Integration matrix + span attributes: `${OBSERVENT_HOME}/reference.md`
+Full workflow: `${OBSERVENT_HOME}/SKILL.md` — Integration matrix + span attributes: `${OBSERVENT_HOME}/references/matrix.md`

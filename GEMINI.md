@@ -45,7 +45,7 @@ End with: *"Apply these changes? (yes / preview \<file\> / abort)"* — wait for
 
 ### Step 6 — Generate
 
-Use the integration matrix in `$OBSERVENT_HOME/reference.md`. Every generated file must include:
+Use the integration matrix in `$OBSERVENT_HOME/references/matrix.md`. Every generated file must include:
 - Backend init from env vars (never hard-coded keys).
 - Framework instrumentor or native trace processor.
 - `openinference.span.kind`, `agent.name`, `agent.role`, `agent.framework` on every agent span.
@@ -72,4 +72,4 @@ Report: framework + backend chosen, files created/modified, `pip install` comman
 ---
 
 Full workflow details and examples: `$OBSERVENT_HOME/SKILL.md`
-Integration matrix, span attributes, context propagation patterns: `$OBSERVENT_HOME/reference.md`
+Integration matrix, span attributes, context propagation patterns: `$OBSERVENT_HOME/references/matrix.md`

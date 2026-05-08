@@ -1,6 +1,6 @@
 # observent Reference
 
-Complete reference for frameworks, backends, integration mechanics, span attributes, and context propagation. SKILL.md references this document during code generation.
+Complete reference for frameworks, backends, integration mechanics, span attributes, and context propagation. `../SKILL.md` references this document during code generation.
 
 ---
 
@@ -13,7 +13,7 @@ Complete reference for frameworks, backends, integration mechanics, span attribu
 | AutoGen v0.4 | OI: `OpenAIInstrumentor` + `autogen-ext` OTel | OTLP exporter + `OpenAIInstrumentor` | OTLP + `OpenAIInstrumentor` |
 | Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` |
 | OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend |
-| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (Langfuse consumes OTel) | OTLP + OI: `SmolagentsInstrumentor` |
+| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` |
 | LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` |
 | Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter |
 
@@ -267,71 +267,39 @@ trace.set_tracer_provider(provider)
 
 ## Mandatory Span Attributes
 
-The skill emits attributes following both **OpenInference** semantic conventions (Phoenix-native, also consumed by Langfuse) and the newer **OpenTelemetry GenAI** semantic conventions (consumed by all three backends). For maximum compatibility, both are emitted where they overlap.
+### Convention resolution
 
-### LLM spans
+The convention emitted by generated code is fixed by the backend set chosen in `../SKILL.md` Step 3 — **no override**:
 
-| Attribute (OpenInference) | Attribute (OTel GenAI) | Notes |
+| Backend set | Convention | Reference doc |
 |---|---|---|
-| `openinference.span.kind = "LLM"` | — | OI span kind |
-| `llm.model_name` | `gen_ai.request.model` | Resolved model id |
-| `llm.provider` | `gen_ai.system` | `openai` / `anthropic` / etc. |
-| `llm.invocation_parameters` (JSON) | `gen_ai.request.temperature`, `.max_tokens`, ... | temp, max_tokens, top_p, stop |
-| `llm.input_messages` (array) | `gen_ai.prompt` | Each message: `role`, `content`, optional `tool_calls` |
-| `llm.output_messages` (array) | `gen_ai.completion` | Each message: `role`, `content` |
-| `input.value` (JSON string) | — | At-a-glance input |
-| `output.value` (JSON string) | — | At-a-glance output |
-| `input.mime_type = "application/json"` | — | |
-| `output.mime_type = "application/json"` | — | |
-| `llm.token_count.prompt` | `gen_ai.usage.input_tokens` | int |
-| `llm.token_count.completion` | `gen_ai.usage.output_tokens` | int |
-| `llm.token_count.total` | — | sum |
-| `llm.token_count.prompt_details.cache_read` | — | Anthropic prompt caching |
-| `llm.token_count.prompt_details.cache_write` | — | Anthropic prompt caching |
-| `llm.tools` (array of tool schemas) | — | When tools are passed in the request |
-| `llm.function_call` / `message.tool_calls` | `gen_ai.response.tool_calls` | Tool the model chose |
-| `llm.finish_reasons` (array) | `gen_ai.response.finish_reasons` | `stop`, `tool_use`, `length`, etc. |
+| `{phoenix}` | **OI only** | `openinference.md` |
+| `{langfuse}`, `{signoz}`, or `{langfuse, signoz}` | **OTel-GenAI only** | `otel_genai.md` |
+| any set containing Phoenix **and** (Langfuse or SigNoz) | **Both** | `openinference.md` + `otel_genai.md` |
 
-### TOOL spans
+Rationale: Phoenix is OpenInference-native; Langfuse and SigNoz consume OTel-GenAI (SigNoz treats OI keys as opaque OTLP attributes — no LLM-specific UI). Dual-emission is reserved for the one fan-out case where both communities are present on the same provider.
 
-- `openinference.span.kind = "TOOL"`
-- `tool.name`
-- `tool.description`
-- `tool.parameters` (JSON schema)
-- `input.value` (JSON of actual call args)
-- `output.value` (JSON of return value)
+### Per-kind summary (quick scan)
 
-### AGENT spans
+For complete attribute lists with types and flattening rules, read `openinference.md` (OI) and `otel_genai.md` (OTel-GenAI). The table below gives you the equivalents at a glance — pick the column that matches the resolved convention.
 
-- `openinference.span.kind = "AGENT"`
-- `agent.name` *(required — used for UI grouping)*
-- `agent.role`
-- `agent.framework` — `langgraph` | `crewai` | `autogen-agentchat` | `anthropic-agents` | `openai-agents` | `smolagents` | `llama-index` | `custom`
-- `input.value` — task or message that triggered the agent
-- `output.value` — final agent output
+| Span kind | OI keys | OTel-GenAI keys |
+|---|---|---|
+| LLM | `openinference.span.kind="LLM"`, `llm.model_name`, `llm.provider`, `llm.invocation_parameters`, `llm.input_messages.<i>.message.*`, `llm.output_messages.<i>.message.*`, `llm.token_count.{prompt,completion,total,prompt_details.cache_read,prompt_details.cache_write}`, `llm.tools`, `llm.finish_reasons` | `gen_ai.operation.name="chat"`, `gen_ai.request.model`, `gen_ai.provider.name`, `gen_ai.request.{temperature,max_tokens,top_p,stop_sequences}`, `gen_ai.usage.{input_tokens,output_tokens,cache_creation.input_tokens,cache_read.input_tokens}`, `gen_ai.response.{model,finish_reasons,id}`, opt-in: `gen_ai.input.messages`, `gen_ai.output.messages` |
+| TOOL | `openinference.span.kind="TOOL"`, `tool.name`, `tool.description`, `tool.parameters` | `gen_ai.operation.name="execute_tool"`, opt-in: `gen_ai.tool.definitions` |
+| AGENT | `openinference.span.kind="AGENT"`, `agent.name`, `agent.role`, `agent.framework` | `gen_ai.operation.name="invoke_agent"`, `gen_ai.agent.{id,name,version,description}` |
+| CHAIN | `openinference.span.kind="CHAIN"` | `gen_ai.operation.name="invoke_workflow"` |
+| RETRIEVER | `openinference.span.kind="RETRIEVER"`, `retrieval.documents.<i>.document.{id,content,score,metadata}` | `gen_ai.operation.name="retrieval"`, `gen_ai.data_source.id`, opt-in: `gen_ai.retrieval.documents`, `gen_ai.retrieval.query.text` |
 
-### CHAIN spans (workflow / graph nodes)
+Generic `input.value` / `input.mime_type` / `output.value` / `output.mime_type` are OI-only and useful on every span kind for at-a-glance UI inspection. OTel-GenAI uses structured opt-in content attributes instead.
 
-- `openinference.span.kind = "CHAIN"`
-- `input.value`, `output.value`
+### Cross-cutting (Baggage)
 
-### RETRIEVER spans (RAG)
-
-- `openinference.span.kind = "RETRIEVER"`
-- `retrieval.documents` — array of `{document.id, document.content, document.score, document.metadata}`
-- `input.value` — query text
-- `embedding.model_name` (when embeddings are used)
-
-### Cross-cutting (every span via Baggage)
-
-- `session.id` — groups traces in the UI per conversation/user session
-- `user.id`
-- `tenant.id`
-- `app.version`
+`session.id`, `user.id`, `tenant.id`, `app.version` set once at the entry point and promoted to span attributes via `BaggageSpanProcessor`. These keys are convention-neutral.
 
 ### Cost computation
 
-Token counts are captured but **dollar cost** is computed at ingestion time by the backends from a model→price table. Verify `llm.model_name` (or `gen_ai.request.model`) is set to a model the backend recognizes — otherwise cost columns show `$0` in the UI. Self-hosted Langfuse and SigNoz allow custom model price configs.
+Token counts are captured but **dollar cost** is computed at ingestion time by the backends from a model→price table. Verify the model attribute (`llm.model_name` for OI, `gen_ai.request.model` for OTel-GenAI) is set to a name the backend recognizes — otherwise cost columns show `$0` in the UI. Self-hosted Langfuse and SigNoz allow custom model price configs.
 
 ---
 
@@ -450,16 +418,45 @@ provider.add_span_processor(BaggageSpanProcessor(ALLOW_ALL_BAGGAGE_KEYS))
 
 ## Multi-Backend Fan-Out
 
-Send the same spans to multiple backends simultaneously:
+Send the same spans to multiple backends simultaneously by attaching one `BatchSpanProcessor` per backend to a single `TracerProvider`:
 
 ```python
-provider = TracerProvider()
-provider.add_span_processor(BatchSpanProcessor(phoenix_exporter))
-provider.add_span_processor(BatchSpanProcessor(signoz_exporter))
+import os, base64
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+provider = TracerProvider(resource=Resource.create({"service.name": "fanout-app"}))
+
+# Phoenix
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
+    headers={"Authorization": f"Bearer {os.environ['PHOENIX_API_KEY']}"} if os.getenv("PHOENIX_API_KEY") else {},
+)))
+
+# Langfuse
+_lf_host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip("/")
+_lf_auth = base64.b64encode(f"{os.environ['LANGFUSE_PUBLIC_KEY']}:{os.environ['LANGFUSE_SECRET_KEY']}".encode()).decode()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=f"{_lf_host}/api/public/otel/v1/traces",
+    headers={"Authorization": f"Basic {_lf_auth}"},
+)))
+
+# SigNoz
+_sn_headers = {"signoz-access-token": os.environ["SIGNOZ_INGESTION_KEY"]} if os.getenv("SIGNOZ_INGESTION_KEY") else {}
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("SIGNOZ_ENDPOINT", "http://localhost:4318/v1/traces"),
+    headers=_sn_headers,
+)))
+
 trace.set_tracer_provider(provider)
 ```
 
 Each processor exports independently. If one backend is unreachable, the others still receive spans.
+
+**Convention for fan-out:** when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz, the convention resolves to `both` (see § Mandatory Span Attributes) — every span must carry OI **and** OTel-GenAI keys so each backend's UI lights up. For Phoenix-less fan-out (e.g. `langfuse,signoz`), `otel-genai` alone is sufficient.
 
 ---
 
@@ -477,7 +474,7 @@ Each processor exports independently. If one backend is unreachable, the others 
 | `openinference-instrumentation-bedrock` | AWS Bedrock |
 | `openinference-instrumentation-vertexai` | Google Vertex AI |
 
-All are installable from PyPI. They emit standard OpenInference + OTel GenAI attributes — the exporter (Phoenix / SigNoz / Langfuse OTLP) determines the destination.
+All are installable from PyPI. They emit OpenInference attributes natively — Phoenix consumes them directly. For Langfuse / SigNoz exporters, the user-side code (the Custom path or wrapper code) must additionally emit OTel-GenAI keys per the resolution rule (`openinference.md` and `otel_genai.md`).
 
 ---
 

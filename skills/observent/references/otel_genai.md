@@ -1,0 +1,184 @@
+# OpenTelemetry GenAI Semantic Conventions
+
+Canonical attribute reference for the OTel-GenAI spec — the convention Langfuse and SigNoz consume. observent emits these keys when the resolved convention is `otel-genai` or `both` (see `../SKILL.md` Step 3).
+
+**Source:** https://github.com/open-telemetry/semantic-conventions-genai/tree/main/docs/gen-ai
+**Last verified:** 2026-05-08.
+**Status:** This spec is in development; attribute names may shift. Re-verify before bumping the floor.
+
+---
+
+## Span name conventions
+
+| Span type | Span name format |
+|---|---|
+| Inference (chat / text completion) | `{gen_ai.operation.name} {gen_ai.request.model}` |
+| Embeddings | `{gen_ai.operation.name} {gen_ai.request.model}` |
+| Retrievals | `{gen_ai.operation.name} {gen_ai.data_source.id}` |
+| Create agent | `create_agent {gen_ai.agent.name}` |
+| Invoke agent (local) | `invoke_agent {gen_ai.agent.name}` (span kind `INTERNAL`) |
+| Invoke agent (remote) | `invoke_agent {gen_ai.agent.name}` (span kind `CLIENT`) |
+
+Default span kind is `CLIENT`; use `INTERNAL` for same-process operations.
+
+---
+
+## Required attributes (every gen_ai span)
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `gen_ai.operation.name` | string | One of the well-known values below |
+| `gen_ai.provider.name` | string | One of the well-known providers below |
+
+### Well-known `gen_ai.operation.name` values
+
+`chat`, `text_completion`, `embeddings`, `retrieval`, `generate_content`, `execute_tool`, `create_agent`, `invoke_agent`, `invoke_workflow`.
+
+### Well-known `gen_ai.provider.name` values
+
+`openai`, `anthropic`, `aws.bedrock`, `azure.ai.openai`, `azure.ai.inference`, `gcp.gemini`, `gcp.vertex_ai`, `gcp.gen_ai`, `cohere`, `mistral_ai`, `groq`, `deepseek`, `perplexity`, `x_ai`, `ibm.watsonx.ai`.
+
+---
+
+## Conditionally required
+
+| Attribute | Type | When |
+|---|---|---|
+| `gen_ai.request.model` | string | When available |
+| `gen_ai.conversation.id` | string | When a conversation / thread id exists |
+| `gen_ai.output.type` | string | When applicable — `text`, `image`, `json`, `speech` |
+| `gen_ai.request.choice.count` | int | When the request asked for ≠1 choices |
+| `gen_ai.data_source.id` | string | For retrieval spans |
+| `error.type` | string | When the operation ends in error (provider error code or canonical exception name) |
+
+---
+
+## Recommended
+
+### Response
+
+| Attribute | Type | Applies to |
+|---|---|---|
+| `gen_ai.response.id` | string | All operations |
+| `gen_ai.response.model` | string | All operations |
+| `gen_ai.response.finish_reasons` | string[] | Inference |
+| `gen_ai.response.time_to_first_chunk` | double | Streaming requests |
+
+### Token usage
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `gen_ai.usage.input_tokens` | int | All operations |
+| `gen_ai.usage.output_tokens` | int | Inference / generation |
+| `gen_ai.usage.cache_creation.input_tokens` | int | When applicable (Anthropic) |
+| `gen_ai.usage.cache_read.input_tokens` | int | When applicable (Anthropic) |
+| `gen_ai.usage.reasoning.output_tokens` | int | When applicable (reasoning models) |
+
+### Request parameters
+
+| Attribute | Type | Applies to |
+|---|---|---|
+| `gen_ai.request.temperature` | double | Inference |
+| `gen_ai.request.top_p` | double | Inference |
+| `gen_ai.request.top_k` | double | Inference / retrieval |
+| `gen_ai.request.max_tokens` | int | Inference |
+| `gen_ai.request.frequency_penalty` | double | Inference |
+| `gen_ai.request.presence_penalty` | double | Inference |
+| `gen_ai.request.stop_sequences` | string[] | Inference |
+| `gen_ai.request.seed` | int | When in request |
+| `gen_ai.request.stream` | bool | When streaming |
+
+### Embeddings
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `gen_ai.embeddings.dimension.count` | int | Output vector dimension |
+| `gen_ai.request.encoding_formats` | string[] | Encoding formats requested |
+
+### Server
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `server.address` | string | All operations |
+| `server.port` | int | When `server.address` is set |
+
+---
+
+## Opt-in (sensitive content — may contain PII)
+
+These are **not** emitted by default. Enable only when capturing prompt / completion content is acceptable for your privacy posture.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `gen_ai.input.messages` | JSON | Chat history (schema: `gen-ai-input-messages.json`) |
+| `gen_ai.output.messages` | JSON | Model responses (schema: `gen-ai-output-messages.json`) |
+| `gen_ai.system_instructions` | JSON | System prompts (schema: `gen-ai-system-instructions.json`) |
+| `gen_ai.tool.definitions` | JSON | Available tool specs (schema: `gen-ai-tool-definitions.json`) |
+| `gen_ai.retrieval.documents` | JSON | Retrieved docs with id, score (schema: `gen-ai-retrieval-documents.json`) |
+| `gen_ai.retrieval.query.text` | string | Retrieval query text |
+
+---
+
+## Agent spans
+
+`gen_ai.operation.name` ∈ `{create_agent, invoke_agent, invoke_workflow}` plus:
+
+| Attribute | Type | Requirement | Notes |
+|---|---|---|---|
+| `gen_ai.agent.id` | string | Conditionally required | Unique agent identifier |
+| `gen_ai.agent.name` | string | Conditionally required | Human-readable name |
+| `gen_ai.agent.version` | string | Conditionally required | Agent version |
+| `gen_ai.agent.description` | string | Conditionally required | Free-form description |
+
+Agents reuse the request / usage / response attributes above when invoking a model.
+
+---
+
+## Sampling-decision attributes
+
+These attributes should be populated **at span start** so head-based samplers can use them. Don't compute them lazily.
+
+`gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `server.address`, `server.port`.
+
+---
+
+## Events
+
+The spec defines structured input / output events as an alternative to opt-in content attributes. See upstream `gen-ai-events.md`. observent currently uses the attribute form; revisit if backends start preferring events.
+
+---
+
+## Metrics
+
+The spec defines:
+
+- `gen_ai.client.token.usage` — histogram, per-token usage by operation.
+- `gen_ai.client.operation.duration` — histogram, end-to-end operation latency.
+- `gen_ai.server.request.duration` — histogram (server-side equivalent).
+- `gen_ai.server.time_per_output_token` — histogram for streaming.
+
+See upstream `gen-ai-metrics.md`. Backends ingest these alongside spans.
+
+---
+
+## Framework-specific notes
+
+The upstream spec includes per-provider supplements. Summary:
+
+- **`anthropic.md`** — `gen_ai.usage.cache_creation.input_tokens`, `gen_ai.usage.cache_read.input_tokens` are the canonical Anthropic prompt-cache metrics. `gen_ai.provider.name = "anthropic"`.
+- **`openai.md`** — covers Chat Completions and Responses API. `gen_ai.provider.name = "openai"` (or `"azure.ai.openai"` for Azure-hosted).
+- **`azure-ai-inference.md`** — `gen_ai.provider.name = "azure.ai.inference"`.
+- **`aws-bedrock.md`** — `gen_ai.provider.name = "aws.bedrock"`. Includes guidance on Converse API.
+- **`mcp.md`** — Model Context Protocol semantics for tool / resource interactions.
+
+---
+
+## Errors
+
+When a span ends in error, set:
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `error.type` | string | Provider error code (`rate_limit_exceeded`, `invalid_request_error`, …) or canonical exception name |
+
+Pair with the standard OTel `record_exception()` API.
