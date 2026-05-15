@@ -6,6 +6,7 @@ Usage:
   python validate_setup.py langfuse [--smoke-test]
   python validate_setup.py signoz [--smoke-test]
   python validate_setup.py elastic-apm [--smoke-test]
+  python validate_setup.py langsmith [--smoke-test]
   python validate_setup.py phoenix,signoz [--smoke-test]   # multi-backend fan-out
   python validate_setup.py all
 
@@ -15,7 +16,7 @@ Per backend:
   - Probes the configured endpoint for reachability
   - With --smoke-test: emits one synthetic LLM span (carrying the convention
     that backend prefers — OI for Phoenix, OTel-GenAI for Langfuse / SigNoz /
-    Elastic APM)
+    Elastic APM / LangSmith)
 
 Exit code: 0 on pass, 1 on any failure.
 """
@@ -33,12 +34,13 @@ from urllib.parse import urlparse
 
 
 # Per-backend convention preference. See references/matrix.md § Convention resolution.
-# Phoenix is OpenInference-native; Langfuse / SigNoz / Elastic APM consume OTel-GenAI.
+# Phoenix is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith consume OTel-GenAI.
 BACKEND_CONVENTION: dict[str, str] = {
     "phoenix": "oi",
     "langfuse": "otel-genai",
     "signoz": "otel-genai",
     "elastic-apm": "otel-genai",
+    "langsmith": "otel-genai",
 }
 
 
@@ -298,6 +300,43 @@ def _emit_elastic_apm_smoke(
     r.info("Verify the transaction appears in Kibana APM (Services → observent-smoke-test) within ~10s.")
 
 
+def check_langsmith(smoke: bool) -> Result:
+    r = Result("langsmith")
+    if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
+        r.fail(
+            "opentelemetry-exporter-otlp-proto-http not installed "
+            "(pip install 'opentelemetry-exporter-otlp-proto-http>=1.25')"
+        )
+
+    base = os.environ.get("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com").rstrip("/")
+    endpoint = f"{base}/otel/v1/traces"
+    r.info(f"LANGSMITH_ENDPOINT = {base}")
+    r.info(f"OTLP traces endpoint = {endpoint}")
+
+    api_key = _check_env(r, "LANGSMITH_API_KEY")
+    project = os.environ.get("LANGSMITH_PROJECT")
+    if project:
+        r.ok(f"LANGSMITH_PROJECT = {project}")
+    else:
+        r.info("LANGSMITH_PROJECT not set (traces land in the 'default' project)")
+
+    parsed = urlparse(endpoint)
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    _probe_http(r, root, method="GET")
+
+    if smoke and r.passed and api_key:
+        headers = {"x-api-key": api_key}
+        if project:
+            headers["Langsmith-Project"] = project
+        _emit_smoke_span(
+            r,
+            endpoint=endpoint,
+            headers=headers,
+            convention=BACKEND_CONVENTION["langsmith"],
+        )
+    return r
+
+
 def _phoenix_headers(api_key: str | None) -> dict[str, str]:
     if api_key:
         return {"Authorization": f"Bearer {api_key}"}
@@ -380,6 +419,7 @@ CHECKS: dict[str, Callable[[bool], Result]] = {
     "langfuse": check_langfuse,
     "signoz": check_signoz,
     "elastic-apm": check_elastic_apm,
+    "langsmith": check_langsmith,
 }
 
 
@@ -411,14 +451,14 @@ def main() -> int:
     parser.add_argument(
         "backend",
         type=_parse_backends,
-        help="Backend or comma-separated list (phoenix, langfuse, signoz, elastic-apm, all). "
-        'e.g. "phoenix" or "phoenix,elastic-apm".',
+        help="Backend or comma-separated list (phoenix, langfuse, signoz, elastic-apm, langsmith, all). "
+        'e.g. "phoenix" or "phoenix,langsmith".',
     )
     parser.add_argument(
         "--smoke-test",
         action="store_true",
         help="Emit one synthetic span per backend (LLM span via OTLP for "
-        "phoenix/langfuse/signoz; transaction via native elasticapm.Client "
+        "phoenix/langfuse/signoz/langsmith; transaction via native elasticapm.Client "
         "for elastic-apm).",
     )
     args = parser.parse_args()

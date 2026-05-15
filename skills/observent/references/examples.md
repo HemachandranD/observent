@@ -1,8 +1,8 @@
 # observent Examples
 
-Eight runnable end-to-end examples — one per supported framework, with the three backends rotated to demonstrate all of them. Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
+Runnable end-to-end examples covering 8 frameworks × 5 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
-> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz examples (2, 3, 4, 6, 7) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; both backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith examples (2, 3, 4, 6, 7, 9, 10) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
 
 ---
 
@@ -703,9 +703,73 @@ python autogen_elastic.py
 
 ---
 
-## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM)
+## 10. LangGraph + LangSmith (pure OTLP — LangChain's hosted UI)
 
-Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all four destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
+LangSmith is LangChain's hosted observability platform. observent uses its OTLP HTTP endpoint so the same `OTLPSpanExporter` + `LangChainInstrumentor` stack works across cloud (US / EU) and enterprise self-host. No `langsmith` SDK code is generated — LangSmith maps OTel-GenAI conventions to its native trace schema on ingest.
+
+```python
+# langgraph_langsmith.py
+import os
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+from langchain_anthropic import ChatAnthropic
+from langgraph.prebuilt import create_react_agent
+
+# --- Observability: LangSmith via OTLP HTTP ---
+_ls_base = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com").rstrip("/")
+_ls_headers = {"x-api-key": os.environ["LANGSMITH_API_KEY"]}
+if project := os.getenv("LANGSMITH_PROJECT"):
+    _ls_headers["Langsmith-Project"] = project
+
+exporter = OTLPSpanExporter(endpoint=f"{_ls_base}/otel/v1/traces", headers=_ls_headers)
+provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "langgraph-langsmith-demo")}))
+provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+
+LangChainInstrumentor().instrument(tracer_provider=provider)
+
+# --- Agent ---
+llm = ChatAnthropic(model="claude-sonnet-4-6")
+
+
+def get_weather(city: str) -> str:
+    """Get weather for a city."""
+    return f"It's sunny in {city}."
+
+
+agent = create_react_agent(llm, tools=[get_weather])
+result = agent.invoke({"messages": [{"role": "user", "content": "Weather in Paris?"}]})
+print(result["messages"][-1].content)
+
+provider.shutdown()  # flush before exit
+```
+
+```bash
+pip install 'langgraph>=0.2' 'langchain-anthropic' \
+            'openinference-instrumentation-langchain>=0.1' \
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'
+export ANTHROPIC_API_KEY=sk-...
+export LANGSMITH_API_KEY=ls_...
+# Optional: route to a named project (default: "default")
+# export LANGSMITH_PROJECT=langgraph-demo
+# Optional: EU region or self-host
+# export LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
+python langgraph_langsmith.py
+# UI: https://smith.langchain.com → your project → Traces
+```
+
+*Last verified: 2026-05-15 with Python 3.12.*
+
+---
+
+## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM + LangSmith)
+
+Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz, LangSmith), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all five destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM, LangSmith}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
 
 ```python
 # fanout.py
@@ -743,6 +807,16 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
     headers=_sn_headers,
 )))
 
+# LangSmith
+_ls_base = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com").rstrip("/")
+_ls_headers = {"x-api-key": os.environ["LANGSMITH_API_KEY"]}
+if os.getenv("LANGSMITH_PROJECT"):
+    _ls_headers["Langsmith-Project"] = os.environ["LANGSMITH_PROJECT"]
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=f"{_ls_base}/otel/v1/traces",
+    headers=_ls_headers,
+)))
+
 trace.set_tracer_provider(provider)
 
 # Elastic APM (native agent — coexists with the TracerProvider above; bridges OTel spans).
@@ -768,12 +842,12 @@ with tracer.start_as_current_span("smoke-llm") as span:
     span.set_attribute("gen_ai.usage.output_tokens", 8)
 
 provider.shutdown()
-# Spans now in all four backends. Failure in one doesn't affect the others.
+# Spans now in all five backends. Failure in one doesn't affect the others.
 ```
 
-For Phoenix-less fan-out (e.g. `langfuse,signoz` or `signoz,elastic-apm`), drop the OI block — `otel-genai` alone is sufficient.
+For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,signoz`), drop the OI block — `otel-genai` alone is sufficient.
 
-*Last verified: 2026-05-08 with Python 3.12.*
+*Last verified: 2026-05-15 with Python 3.12.*
 
 ---
 

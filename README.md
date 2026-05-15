@@ -12,25 +12,25 @@ Generic LLM tracing isn't enough for multi-agent apps. You need:
 - **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, AutoGen) as first-class spans.
 - **Identity attributes** — `agent.name`, `agent.role`, `agent.framework` on every span for filtering.
 - **Session grouping** — multi-turn conversations grouped under one `session.id`.
-- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
+- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM / LangSmith; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
 - **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
 
 observent generates code that does all of this correctly the first time.
 
 ## Supported frameworks × backends
 
-| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM |
-|---|:---:|:---:|:---:|:---:|
-| LangGraph | ✓ | ✓ | ✓ | ✓ |
-| CrewAI | ✓ | ✓ | ✓ | ✓ |
-| AutoGen v0.4 (`autogen-agentchat`) | ✓ | ✓ | ✓ | ✓ |
-| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ |
-| OpenAI Agents SDK *(native trace processor)* | ✓ | ✓ | ✓ | ✓ |
-| smolagents | ✓ | ✓ | ✓ | ✓ |
-| LlamaIndex | ✓ | ✓ | ✓ | ✓ |
-| Custom (no framework) | ✓ | ✓ | ✓ | ✓ |
+| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith |
+|---|:---:|:---:|:---:|:---:|:---:|
+| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ |
+| AutoGen v0.4 (`autogen-agentchat`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OpenAI Agents SDK *(native trace processor)* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
+| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Custom (no framework) | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. AutoGen v0.2 (`pyautogen`) is not supported — use the Custom path or upgrade to v0.4.
+Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. AutoGen v0.2 (`pyautogen`) is not supported — use the Custom path or upgrade to v0.4.
 
 ## Supported providers
 
@@ -134,17 +134,19 @@ bash /tmp/observent/uninstall.sh          # macOS / Linux
 /observent smolagents langfuse
 /observent custom phoenix
 /observent autogen-agentchat elastic-apm
+/observent langgraph langsmith
 
 # Multi-backend fan-out — second arg accepts a comma-separated list:
 /observent langgraph phoenix,signoz
-/observent crewai phoenix,langfuse,signoz,elastic-apm
+/observent langgraph phoenix,langsmith
+/observent crewai phoenix,langfuse,signoz,elastic-apm,langsmith
 
 /observent-detect                                # run detectors and report what's installed
 /observent-validate phoenix [--smoke-test]       # single backend
 /observent-validate phoenix,signoz --smoke-test  # multi-backend
 ```
 
-The convention emitted by generated code is **mechanically resolved from the chosen backend set** — Phoenix → OpenInference; Langfuse / SigNoz / Elastic APM → OpenTelemetry GenAI; mixed (Phoenix + at least one of Langfuse / SigNoz / Elastic APM) → both. There's no runtime override; to switch conventions, re-run `/observent` with a different backend(s).
+The convention emitted by generated code is **mechanically resolved from the chosen backend set** — Phoenix → OpenInference; Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI; mixed (Phoenix + at least one of Langfuse / SigNoz / Elastic APM / LangSmith) → both. There's no runtime override; to switch conventions, re-run `/observent` with a different backend(s).
 
 ### Gemini CLI / Cursor / Windsurf / Cline / Codex
 
@@ -172,9 +174,9 @@ For e.g. `langgraph` + `phoenix`, you get:
 - A few lines added to your entry point that initialise Phoenix and register the LangChain instrumentor.
 - An `.env.example` with `PHOENIX_PROJECT_NAME` (and `PHOENIX_API_KEY` for cloud).
 - A `pip install` command pinned to known-good minimum versions.
-- Span attributes following the convention resolved from your backend(s) — OpenInference for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM, both when fanning out across Phoenix and any of them.
+- Span attributes following the convention resolved from your backend(s) — OpenInference for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM / LangSmith, both when fanning out across Phoenix and any of them.
 
-For Elastic APM, you get the 3-line native-agent setup (`elasticapm.Client(...)` + `elasticapm.instrument()`) with the framework instrumentor on top — Kibana's APM UI then shows transaction spans, auto-instrumented infra metrics, and LLM spans together. For multi-backend fan-out (e.g. `phoenix,elastic-apm`), you get a single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend plus the `elasticapm.Client` next to it; each path exports independently.
+For Elastic APM, you get the 3-line native-agent setup (`elasticapm.Client(...)` + `elasticapm.instrument()`) with the framework instrumentor on top — Kibana's APM UI then shows transaction spans, auto-instrumented infra metrics, and LLM spans together. For LangSmith, you get a pure-OTLP `OTLPSpanExporter` block parameterized by `LANGSMITH_API_KEY` (+ optional `LANGSMITH_ENDPOINT` and `LANGSMITH_PROJECT`) — no `langsmith` SDK code, so it composes cleanly into the multi-backend fan-out. For multi-backend fan-out (e.g. `phoenix,elastic-apm` or `phoenix,langsmith`), you get a single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend plus the `elasticapm.Client` next to it (if Elastic is in the set); each path exports independently.
 
 For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`. The resolved convention is written into the helper as a module-level literal (`_CONVENTION = "oi"` / `"otel-genai"` / `"both"`) at generation time — no env var, no runtime override.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**observent** is a Claude Code plugin that wires up observability for multi-agent Python applications. It supports 8 frameworks × 4 backends (Arize Phoenix · Langfuse · SigNoz · Elastic APM) — a full grid of 32 integration paths.
+**observent** is a Claude Code plugin that wires up observability for multi-agent Python applications. It supports 8 frameworks × 5 backends (Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith) — a full grid of 40 integration paths.
 
 The repo *is* the plugin: skill files live under `skills/observent/`, plugin manifests under `.claude-plugin/`, and slash commands under `commands/`. Users install it via `claude plugin install HemachandranD/observent`.
 
@@ -56,15 +56,17 @@ python skills/observent/scripts/validate_setup.py phoenix
 python skills/observent/scripts/validate_setup.py langfuse
 python skills/observent/scripts/validate_setup.py signoz
 python skills/observent/scripts/validate_setup.py elastic-apm
+python skills/observent/scripts/validate_setup.py langsmith
 python skills/observent/scripts/validate_setup.py all
 
 # Validate multiple backends (multi-backend fan-out — comma-separated)
 python skills/observent/scripts/validate_setup.py phoenix,signoz
-python skills/observent/scripts/validate_setup.py phoenix,langfuse,signoz,elastic-apm
+python skills/observent/scripts/validate_setup.py phoenix,langsmith
+python skills/observent/scripts/validate_setup.py phoenix,langfuse,signoz,elastic-apm,langsmith
 
 # Validate AND emit one synthetic LLM span per backend (using each backend's preferred convention)
 python skills/observent/scripts/validate_setup.py phoenix --smoke-test
-python skills/observent/scripts/validate_setup.py phoenix,signoz --smoke-test
+python skills/observent/scripts/validate_setup.py phoenix,langsmith --smoke-test
 
 # Lint + type-check
 ruff check skills/observent/scripts/
@@ -121,10 +123,11 @@ Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OB
 - **OpenAI Agents SDK uses native `set_trace_processors()`**, not `openinference-instrumentation-openai`. This is non-negotiable — `-openai` loses agent structure (handoffs, runs, guardrails).
 - **Per-backend convention** — the convention emitted by generated code is mechanically derived from the chosen backend set, not a free choice:
   - `{phoenix}` → OpenInference only (Phoenix-native UI). Canonical keys: `skills/observent/references/openinference.md`.
-  - Any non-empty subset of `{langfuse, signoz, elastic-apm}` (no Phoenix) → OTel-GenAI only. Canonical keys: `skills/observent/references/otel_genai.md`.
-  - Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm}` → both, so each backend's UI lights up. This is the only case dual-emission is justified.
+  - Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith}` (no Phoenix) → OTel-GenAI only. Canonical keys: `skills/observent/references/otel_genai.md`.
+  - Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith}` → both, so each backend's UI lights up. This is the only case dual-emission is justified.
   No `OBSERVENT_CONVENTION` override — the rule is fixed by the backend set.
 - **Elastic APM uses the native agent** — `elasticapm.Client(...)` + `elasticapm.instrument()` is the default generated path (not OTLP). The agent's OTel bridge picks up the OpenInference framework instrumentors so LLM spans land in Kibana alongside auto-instrumented transactions. Pure-OTLP via `OTLPSpanExporter` to `:8200/v1/traces` is documented as a secondary path for users avoiding the `elastic-apm` dependency. This mirrors the existing Langfuse precedent (`CallbackHandler` / `@observe`) — native SDKs are allowed; the "OTLP HTTP not gRPC" constraint is only about HTTP-vs-gRPC inside OTLP.
+- **LangSmith uses pure OTLP HTTP** — `OTLPSpanExporter` to `${LANGSMITH_ENDPOINT}/otel/v1/traces` (default `https://api.smith.langchain.com`) with header `x-api-key: ${LANGSMITH_API_KEY}`. No `langsmith` SDK code is generated — LangSmith maps OTel-GenAI conventions to its native trace schema on ingest, so the generated stack is mechanically identical to SigNoz. This keeps LangSmith composable in the multi-backend fan-out template.
 - **Mandatory attributes** — every generated template must populate model, provider, prompt+completion+total tokens, input/output messages, and (for Anthropic) cache tokens. The reference doc lists the full set per span kind.
 - **Context propagation** — `start_as_current_span` (never `start_span`), Python ≥ 3.11 inherits async context, `attach()`/`detach()` for threads, `inject()` into env for subprocess, HTTPX/Requests instrumentors for cross-service.
 - **Diff preview before write** — even when auto-invoked. The skill never silently modifies user code.

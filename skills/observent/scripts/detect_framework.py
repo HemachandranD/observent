@@ -35,6 +35,7 @@ BACKENDS: dict[str, list[str]] = {
     "langfuse": ["langfuse"],
     "opentelemetry": ["opentelemetry"],
     "elastic-apm": ["elasticapm"],
+    "langsmith": ["langsmith"],
 }
 
 INSTRUMENTORS: dict[str, str] = {
