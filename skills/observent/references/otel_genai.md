@@ -1,10 +1,28 @@
 # OpenTelemetry GenAI Semantic Conventions
 
-Canonical attribute reference for the OTel-GenAI spec — the convention Langfuse and SigNoz consume. observent emits these keys when the resolved convention is `otel-genai` or `both` (see `../SKILL.md` Step 3).
+Canonical attribute reference for the OTel-GenAI spec — the convention Langfuse, SigNoz, Elastic APM, and LangSmith consume. observent emits these keys when the resolved convention is `otel-genai` or `both` (see `../SKILL.md` Step 3).
 
-**Source:** https://github.com/open-telemetry/semantic-conventions-genai/tree/main/docs/gen-ai
-**Last verified:** 2026-05-08.
-**Status:** This spec is in development; attribute names may shift. Re-verify before bumping the floor.
+**Status:** This spec is in development upstream; attribute names may shift. Re-verify before bumping the floor.
+
+---
+
+## Maintainer's sources
+
+Every table below derives from the OTel-GenAI spec, which lives in two places (rendered docs + spec source). Per-section `**Sources:**` bullets call out subsections that point to additional upstream artifacts (events, metrics, provider supplements, sampling, errors).
+
+**Primary spec:**
+- Rendered docs (gen-ai) — https://opentelemetry.io/docs/specs/semconv/gen-ai/
+- Spec source — https://github.com/open-telemetry/semantic-conventions/tree/main/docs/gen-ai
+- Stability/status & roadmap — https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/README.md
+
+**Adjacent specs cited by individual sections:**
+- gen-ai events — https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-events.md (§ Events)
+- gen-ai metrics — https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-metrics.md (§ Metrics)
+- Per-provider supplements (`anthropic.md`, `openai.md`, `azure-ai-inference.md`, `aws-bedrock.md`, `mcp.md`) — https://github.com/open-telemetry/semantic-conventions/tree/main/docs/gen-ai (§ Framework-specific notes)
+- OTel sampling — https://opentelemetry.io/docs/concepts/sampling/ (§ Sampling-decision attributes)
+- OTel error attributes — https://opentelemetry.io/docs/specs/semconv/general/attributes/#error-attributes (§ Errors)
+
+Last reviewed: 2026-05-17.
 
 ---
 
@@ -73,6 +91,10 @@ Default span kind is `CLIENT`; use `INTERNAL` for same-process operations.
 | `gen_ai.usage.cache_creation.input_tokens` | int | When applicable (Anthropic) |
 | `gen_ai.usage.cache_read.input_tokens` | int | When applicable (Anthropic) |
 | `gen_ai.usage.reasoning.output_tokens` | int | When applicable (reasoning models) |
+
+**Source-API note (OpenAI: Chat Completions vs Responses).** OTel-GenAI's canonical names (`gen_ai.usage.input_tokens` / `output_tokens`) match the OpenAI **Responses API** shape directly. For **Chat Completions**, the instrumentor maps `prompt_tokens → input_tokens` and `completion_tokens → output_tokens` — verify your instrumentor version applies the mapping for both endpoints if your agent mixes APIs. **Streaming gotcha:** Chat Completions streaming omits usage unless the request passes `stream_options={"include_usage": True}` (usage then arrives on the final SSE chunk); Responses API includes usage automatically. Without the opt-in, `gen_ai.usage.*` will be missing. **Reasoning tokens (o-series):** Both APIs map to `gen_ai.usage.reasoning.output_tokens` via the instrumentor — Responses surfaces them under `usage.output_tokens_details.reasoning_tokens`, Chat Completions under `usage.completion_tokens_details.reasoning_tokens`.
+
+**Sources:** OpenAI Chat Completions usage — https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage · OpenAI Responses usage — https://platform.openai.com/docs/api-reference/responses/object · `stream_options` opt-in — https://platform.openai.com/docs/api-reference/chat/create#chat-create-stream_options
 
 ### Request parameters
 
@@ -146,6 +168,8 @@ These attributes should be populated **at span start** so head-based samplers ca
 
 The spec defines structured input / output events as an alternative to opt-in content attributes. See upstream `gen-ai-events.md`. observent currently uses the attribute form; revisit if backends start preferring events.
 
+**Sources:** https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-events.md
+
 ---
 
 ## Metrics
@@ -159,6 +183,8 @@ The spec defines:
 
 See upstream `gen-ai-metrics.md`. Backends ingest these alongside spans.
 
+**Sources:** https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-metrics.md
+
 ---
 
 ## Framework-specific notes
@@ -171,6 +197,8 @@ The upstream spec includes per-provider supplements. Summary:
 - **`aws-bedrock.md`** — `gen_ai.provider.name = "aws.bedrock"`. Includes guidance on Converse API.
 - **`mcp.md`** — Model Context Protocol semantics for tool / resource interactions.
 
+**Sources:** per-provider supplements live alongside the main spec at https://github.com/open-telemetry/semantic-conventions/tree/main/docs/gen-ai — re-check each `.md` for added providers or renamed attributes when bumping the verified date above.
+
 ---
 
 ## Errors
@@ -182,3 +210,5 @@ When a span ends in error, set:
 | `error.type` | string | Provider error code (`rate_limit_exceeded`, `invalid_request_error`, …) or canonical exception name |
 
 Pair with the standard OTel `record_exception()` API.
+
+**Sources:** OTel general error attributes — https://opentelemetry.io/docs/specs/semconv/general/attributes/#error-attributes · OTel exception semconv — https://opentelemetry.io/docs/specs/semconv/exceptions/

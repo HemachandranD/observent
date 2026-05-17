@@ -2,8 +2,22 @@
 
 Canonical attribute reference for the OpenInference (OI) tracing spec — the convention Arize Phoenix consumes natively. observent emits these keys when the resolved convention is `oi` or `both` (see `../SKILL.md` Step 3).
 
-**Source:** https://arize-ai.github.io/openinference/spec/semantic_conventions.html
-**Last verified:** 2026-05-08.
+---
+
+## Maintainer's sources
+
+Every span-kind / attribute table below derives from the OpenInference spec — re-verify against the URLs below when the upstream spec ships changes. Per-section `**Sources:**` bullets call out subsections that pull from adjacent specs (OTel baggage, OTel exceptions).
+
+**Primary spec:**
+- Rendered docs — https://arize-ai.github.io/openinference/spec/semantic_conventions.html
+- Spec source — https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md
+- Python instrumentors index (one PyPI package per framework) — https://github.com/Arize-ai/openinference/tree/main/python
+
+**Adjacent specs cited by individual sections:**
+- OTel baggage API (Cross-cutting) — https://opentelemetry.io/docs/specs/otel/baggage/api/
+- OTel exception attributes (Exception handling) — https://opentelemetry.io/docs/specs/semconv/exceptions/
+
+Last reviewed: 2026-05-17.
 
 ---
 
@@ -102,6 +116,10 @@ Flattened — e.g. `llm.input_messages.0.message.contents.0.message_content.type
 | `llm.token_count.prompt_details.audio` | int | Audio input tokens |
 | `llm.token_count.completion_details.reasoning` | int | Reasoning tokens |
 | `llm.token_count.completion_details.audio` | int | Audio output tokens |
+
+**Source-API note (OpenAI: Chat Completions vs Responses).** The two OpenAI text endpoints return usage under different field names — Chat Completions: `usage.{prompt_tokens, completion_tokens, total_tokens}`; Responses API: `usage.{input_tokens, output_tokens, total_tokens}`. `openinference-instrumentation-openai` normalizes both into the OI keys above (`llm.token_count.prompt` / `.completion` / `.total`), but only when its version supports the Responses API — check the instrumentor changelog if you mix both APIs in a single agent. **Streaming gotcha:** Chat Completions streaming omits usage unless the request passes `stream_options={"include_usage": True}`; Responses API includes usage in the final event automatically. Without the opt-in, `llm.token_count.*` will be missing on the span. **Reasoning tokens (o-series):** Responses API exposes them under `usage.output_tokens_details.reasoning_tokens`; Chat Completions under `usage.completion_tokens_details.reasoning_tokens`. Both map to `llm.token_count.completion_details.reasoning`.
+
+**Sources:** OpenAI Chat Completions usage — https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage · OpenAI Responses usage — https://platform.openai.com/docs/api-reference/responses/object · `stream_options` opt-in — https://platform.openai.com/docs/api-reference/chat/create#chat-create-stream_options
 
 ### Cost (USD)
 
@@ -249,6 +267,8 @@ Set on most span kinds for at-a-glance inspection in the UI.
 
 Set once at the entry point with OTel baggage; promoted to span attributes via `BaggageSpanProcessor`.
 
+**Sources:** OTel baggage API spec — https://opentelemetry.io/docs/specs/otel/baggage/api/ · `BaggageSpanProcessor` (PyPI `opentelemetry-processor-baggage`) — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/processor/opentelemetry-processor-baggage
+
 | Attribute | Type | Notes |
 |---|---|---|
 | `session.id` | string | Groups traces per conversation / session |
@@ -261,6 +281,8 @@ Set once at the entry point with OTel baggage; promoted to span attributes via `
 ---
 
 ## Exception handling
+
+**Sources:** OTel exception semantic conventions — https://opentelemetry.io/docs/specs/semconv/exceptions/ (the OpenInference spec inherits these unchanged).
 
 | Attribute | Type | Notes |
 |---|---|---|

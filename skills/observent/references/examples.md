@@ -6,6 +6,26 @@ Runnable end-to-end examples covering 8 frameworks × 5 backends, with backends 
 
 ---
 
+## Maintainer's sources
+
+Each example carries a per-example `**Sources:**` bullet pointing to the framework + backend docs the snippet was verified against. Bump the `*Last verified: …*` footer when you re-run an example end-to-end.
+
+**Specs & SDK (apply to every example):**
+- W3C Trace Context Level 1 — https://www.w3.org/TR/trace-context/
+- W3C Baggage — https://www.w3.org/TR/baggage/
+- OTel Python SDK — https://opentelemetry.io/docs/languages/python/
+- OTLP/HTTP exporter — https://github.com/open-telemetry/opentelemetry-python/tree/main/exporter/opentelemetry-exporter-otlp-proto-http
+
+**Cross-service HTTP propagation (W3C `traceparent` + `tracestate` + `baggage` injection on outbound requests):**
+- `opentelemetry-instrumentation-httpx` — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/instrumentation/opentelemetry-instrumentation-httpx (OpenAI/Anthropic SDKs use `httpx`)
+- `opentelemetry-instrumentation-requests` — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/instrumentation/opentelemetry-instrumentation-requests
+
+Enable one or both alongside the framework instrumentor when your app fans out to sibling services — the SDK's default composite propagator (`TraceContextTextMapPropagator` + `W3CBaggagePropagator`) handles the wire format; the HTTP instrumentor handles the actual header injection. The examples below add `HTTPXClientInstrumentor().instrument()` where the LLM client is `httpx`-based (OpenAI, Anthropic, LangChain integrations) so the trace tree stays continuous across downstream services.
+
+Last reviewed: 2026-05-17.
+
+---
+
 ## 1. LangGraph + Arize Phoenix (local, zero account)
 
 ```python
@@ -13,6 +33,7 @@ Runnable end-to-end examples covering 8 frameworks × 5 backends, with backends 
 import os
 from phoenix.otel import register
 from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from langchain_anthropic import ChatAnthropic
 from langgraph.prebuilt import create_react_agent
 
@@ -22,6 +43,7 @@ tracer_provider = register(
     endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
 )
 LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=tracer_provider)  # W3C traceparent on outbound HTTP
 
 # --- Agent ---
 llm = ChatAnthropic(model="claude-sonnet-4-6")
@@ -47,12 +69,15 @@ python -m phoenix.server.main serve   # or `pip install arize-phoenix && phoenix
 
 # 2. Install dependencies:
 pip install 'arize-phoenix>=5.0' 'openinference-instrumentation-langchain>=0.1' \
+            'opentelemetry-instrumentation-httpx>=0.48' \
             'langgraph>=0.2' 'langchain-anthropic>=0.2'
 
 # 3. Set ANTHROPIC_API_KEY and run:
 export ANTHROPIC_API_KEY=sk-ant-...
 python main.py
 ```
+
+**Sources:** Phoenix `register()` / OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · LangGraph — https://langchain-ai.github.io/langgraph/ · `openinference-instrumentation-langchain` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain · `opentelemetry-instrumentation-httpx` — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/instrumentation/opentelemetry-instrumentation-httpx
 
 *Last verified: 2026-05-08 with Python 3.12.*
 
@@ -120,6 +145,8 @@ python crew_main.py
 # Visit https://cloud.langfuse.com to see Crew → Agent → Task → LLM hierarchy
 ```
 
+**Sources:** Langfuse LangChain integration — https://langfuse.com/docs/integrations/langchain/tracing · Langfuse `CallbackHandler` — https://python.reference.langfuse.com/langfuse/langchain · CrewAI — https://docs.crewai.com/ · Langfuse OpenAI/CrewAI cost tracking — https://langfuse.com/docs/model-usage-and-cost
+
 *Last verified: 2026-05-08 with Python 3.12.*
 
 ---
@@ -136,6 +163,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from openinference.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from agent_framework import Agent
 from agent_framework.openai import OpenAIChatClient
@@ -160,6 +188,7 @@ provider.add_span_processor(
 )
 trace.set_tracer_provider(provider)
 OpenAIInstrumentor().instrument(tracer_provider=provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
 # --- Agents ---
 async def main(session_id: str):
@@ -198,11 +227,14 @@ docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d
 
 pip install 'agent-framework>=1.4' \
             'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48' \
             'openinference-instrumentation-openai>=0.1'
 export OPENAI_API_KEY=sk-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
 python maf_signoz.py
 # UI: http://localhost:3301
 ```
+
+**Sources:** Microsoft Agent Framework — https://github.com/microsoft/agent-framework · MAF observability — https://learn.microsoft.com/en-us/agent-framework/python/observability · SigNoz OTLP ingestion — https://signoz.io/docs/instrumentation/opentelemetry-python/ · `openinference-instrumentation-openai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai
 
 *Last verified: 2026-05-17 with Python 3.12.*
 
@@ -293,6 +325,8 @@ export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-...
 python anthropic_langfuse.py
 ```
 
+**Sources:** Langfuse `@observe` decorator — https://langfuse.com/docs/sdk/python/decorators · Langfuse `update_current_observation` (usage / cost) — https://langfuse.com/docs/model-usage-and-cost · Anthropic Messages API — https://docs.anthropic.com/en/api/messages · Anthropic prompt caching usage fields — https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching · Note: Langfuse `@observe` uses its own OTel-bridged tracer; cross-service HTTP propagation is automatic when the SDK is initialized — no separate `HTTPXClientInstrumentor` needed for this path.
+
 *Last verified: 2026-05-08 with Python 3.12.*
 
 ---
@@ -306,6 +340,7 @@ This example uses the **OpenAI Agents SDK's native tracing** wired to Phoenix �
 import os
 from phoenix.otel import register
 from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from agents import Agent, Runner, function_tool
 
 # --- Observability: Phoenix native trace processor for Agents SDK ---
@@ -314,6 +349,7 @@ tracer_provider = register(
     endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
 )
 OpenAIAgentsInstrumentor().instrument(tracer_provider=tracer_provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=tracer_provider)  # W3C traceparent on outbound HTTP
 
 # --- Agents with handoff ---
 @function_tool
@@ -342,10 +378,13 @@ if __name__ == "__main__":
 ```bash
 phoenix serve &  # background Phoenix UI on :6006
 pip install 'arize-phoenix>=5.0' 'openinference-instrumentation-openai-agents>=0.1' \
+            'opentelemetry-instrumentation-httpx>=0.48' \
             'openai-agents>=0.0.4'
 export OPENAI_API_KEY=sk-...
 python openai_agents_phoenix.py
 ```
+
+**Sources:** OpenAI Agents SDK tracing — https://openai.github.io/openai-agents-python/tracing/ · OpenAI Agents SDK `set_trace_processors` — https://openai.github.io/openai-agents-python/ref/tracing/ · `openinference-instrumentation-openai-agents` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai-agents · Phoenix `register()` — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python
 
 *Last verified: 2026-05-08 with Python 3.12.*
 
@@ -363,6 +402,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from smolagents import CodeAgent, DuckDuckGoSearchTool, LiteLLMModel
 
 # --- Observability: Langfuse via OTLP ---
@@ -382,6 +422,7 @@ provider.add_span_processor(
 )
 trace.set_tracer_provider(provider)
 SmolagentsInstrumentor().instrument(tracer_provider=provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
 # --- Agent ---
 model = LiteLLMModel(model_id="anthropic/claude-sonnet-4-6")
@@ -395,11 +436,14 @@ if __name__ == "__main__":
 
 ```bash
 pip install 'smolagents>=1.0' 'openinference-instrumentation-smolagents>=0.1' \
-            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48'
 export ANTHROPIC_API_KEY=sk-ant-...
 export LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-... LANGFUSE_HOST=https://cloud.langfuse.com
 python smolagents_langfuse.py
 ```
+
+**Sources:** smolagents — https://huggingface.co/docs/smolagents · `openinference-instrumentation-smolagents` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-smolagents · Langfuse OTLP endpoint (`/api/public/otel/v1/traces`) — https://langfuse.com/docs/opentelemetry/get-started
 
 *Last verified: 2026-05-08 with Python 3.12.*
 
@@ -416,6 +460,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.llms.anthropic import Anthropic
@@ -436,6 +481,7 @@ provider.add_span_processor(
 )
 trace.set_tracer_provider(provider)
 LlamaIndexInstrumentor().instrument(tracer_provider=provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
 # --- RAG pipeline ---
 Settings.llm = Anthropic(model="claude-sonnet-4-6")
@@ -453,11 +499,14 @@ if __name__ == "__main__":
 ```bash
 pip install 'llama-index>=0.11' 'llama-index-llms-anthropic' \
             'openinference-instrumentation-llama-index>=2.0' \
-            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48'
 mkdir -p docs && echo "Sample document content." > docs/sample.txt
 export ANTHROPIC_API_KEY=sk-ant-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
 python llama_signoz.py
 ```
+
+**Sources:** LlamaIndex — https://docs.llamaindex.ai/ · `openinference-instrumentation-llama-index` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-llama-index · SigNoz OTLP ingestion — https://signoz.io/docs/instrumentation/opentelemetry-python/
 
 *Last verified: 2026-05-08 with Python 3.12.*
 
@@ -589,6 +638,7 @@ def set_tool_attrs(span, *, name: str, description: str = "", parameters: dict |
 import os
 import anthropic
 from opentelemetry import trace
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from phoenix.otel import register
 from observent_otel import with_agent_span, set_llm_attrs, set_tool_attrs
 
@@ -596,6 +646,7 @@ tracer_provider = register(
     project_name=os.getenv("PHOENIX_PROJECT_NAME", "custom-agent-demo"),
     endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
 )
+HTTPXClientInstrumentor().instrument(tracer_provider=tracer_provider)  # W3C traceparent on outbound HTTP
 tracer = trace.get_tracer("custom-agent")
 client = anthropic.Anthropic()
 
@@ -640,6 +691,8 @@ if __name__ == "__main__":
     print(executor(plan, q))
     tracer_provider.shutdown()
 ```
+
+**Sources:** OpenInference span kinds (`AGENT`, `LLM`, `TOOL`) — https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md · OTel-GenAI operations (`invoke_agent`, `chat`, `execute_tool`) — https://opentelemetry.io/docs/specs/semconv/gen-ai/ · Anthropic Messages API (usage fields) — https://docs.anthropic.com/en/api/messages · See `openinference.md` and `otel_genai.md` for the canonical key tables this helper writes.
 
 *Last verified: 2026-05-08 with Python 3.12.*
 
@@ -709,6 +762,8 @@ python maf_elastic.py
 # Kibana APM UI: http://localhost:5601/app/apm → Services → maf-demo
 ```
 
+**Sources:** Elastic APM Python agent — https://www.elastic.co/guide/en/apm/agent/python/current/index.html · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · Microsoft Agent Framework observability — https://learn.microsoft.com/en-us/agent-framework/python/observability · Note: `elasticapm.instrument()` auto-instruments `httpx`/`requests`/`urllib3` and injects W3C `traceparent` on outbound HTTP — no separate `HTTPXClientInstrumentor` needed for this path.
+
 *Last verified: 2026-05-17 with Python 3.12.*
 
 ---
@@ -726,6 +781,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from langchain_anthropic import ChatAnthropic
 from langgraph.prebuilt import create_react_agent
@@ -742,6 +798,7 @@ provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 
 LangChainInstrumentor().instrument(tracer_provider=provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
 # --- Agent ---
 llm = ChatAnthropic(model="claude-sonnet-4-6")
@@ -762,7 +819,8 @@ provider.shutdown()  # flush before exit
 ```bash
 pip install 'langgraph>=0.2' 'langchain-anthropic' \
             'openinference-instrumentation-langchain>=0.1' \
-            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48'
 export ANTHROPIC_API_KEY=sk-...
 export LANGSMITH_API_KEY=ls_...
 # Optional: route to a named project (default: "default")
@@ -772,6 +830,8 @@ export LANGSMITH_API_KEY=ls_...
 python langgraph_langsmith.py
 # UI: https://smith.langchain.com → your project → Traces
 ```
+
+**Sources:** LangSmith OTLP ingestion (`/otel/v1/traces`) — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · LangSmith API key auth (`x-api-key`) — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry#1-set-up-environment · LangSmith regions / endpoints — https://docs.smith.langchain.com/administration/concepts#regions · `openinference-instrumentation-langchain` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain
 
 *Last verified: 2026-05-15 with Python 3.12.*
 
@@ -788,6 +848,7 @@ import base64
 import elasticapm
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -828,6 +889,7 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
 )))
 
 trace.set_tracer_provider(provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
 # Elastic APM (native agent — coexists with the TracerProvider above; bridges OTel spans).
 elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "fanout-demo"))
@@ -856,6 +918,8 @@ provider.shutdown()
 ```
 
 For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,signoz`), drop the OI block — `otel-genai` alone is sufficient.
+
+**Sources:** OTel multi-exporter (multiple `BatchSpanProcessor` on one `TracerProvider`) — https://opentelemetry.io/docs/languages/python/exporters/ · Phoenix OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · Langfuse OTLP — https://langfuse.com/docs/opentelemetry/get-started · SigNoz OTLP — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · LangSmith OTLP — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry
 
 *Last verified: 2026-05-15 with Python 3.12.*
 

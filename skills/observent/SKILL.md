@@ -107,10 +107,16 @@ If Step 1's detector reported `fastapi` or `starlette` under `web_frameworks`, *
 The redaction list is a **generation-time literal** in the generated file (no env var override), matching the same rule as `_CONVENTION`. See `references/fastapi_payload.md` for the canonical middleware body, the full key list, attribute schema, and convention notes.
 
 ### Context propagation rules
+
+observent emits W3C-compliant context on the wire — every example and template relies on the OTel SDK's **default composite propagator**: `TraceContextTextMapPropagator` ([W3C Trace Context Level 1](https://www.w3.org/TR/trace-context/) — `traceparent` + `tracestate`) **plus** `W3CBaggagePropagator` ([W3C Baggage](https://www.w3.org/TR/baggage/) — `baggage` header). Together they cover (a) the trace identity + sampling decision and (b) cross-cutting key/value context — and they ride separate HTTP headers (do not stuff app context into `tracestate`; that's a vendor field with a 512-byte cap per W3C TC §3.3.1.2).
+
+- **Do not override the global propagator.** Never call `set_global_textmap()` with B3, Jaeger, or a custom propagator — that breaks `traceparent` interop with every backend in the matrix. The SDK default is already correct; leave it alone.
 - Use `tracer.start_as_current_span()` (never the raw `start_span` — it does not auto-attach).
 - For async: Python 3.11+ inherits context automatically across `asyncio.create_task`. For older versions, wrap with `contextvars.copy_context().run(...)`.
 - For threads: use the `attach()`/`detach()` pattern shown in `references/matrix.md` § Context Propagation.
-- For HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests` so `traceparent` flows automatically.
+- For HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests` so `traceparent`, `tracestate`, and `baggage` flow automatically onto outbound calls.
+- For subprocess fan-out: use `opentelemetry.propagate.inject(env)` to write `traceparent` (and `baggage`) into the child's environment before `subprocess.run(env=env)`; the child re-extracts with `extract(os.environ)`. On Windows, environment variable names are case-insensitive — read with the exact case `inject` wrote (`traceparent`) or normalize.
+- Per W3C TC §3.2.2.2, a malformed `traceparent` triggers a **restart** of the trace at the receiver (new trace_id, no parent link) rather than a failure — the OTel SDK already handles this correctly; do not add custom guard code.
 
 ### Span attribute coverage
 The keys you emit are governed by the **convention resolved in Step 3**:
