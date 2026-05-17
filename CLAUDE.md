@@ -83,7 +83,7 @@ Update in this order:
 2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list and the description's auto-invocation triggers.
 3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
 4. `skills/observent/references/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
-5. `skills/observent/references/matrix.md` § Verified Versions — add a row for the new framework + instrumentor packages and bump the table's "Last verified" date to today.
+5. `skills/observent/references/matrix.md` § Verified Versions — add a row for the new framework + instrumentor packages with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-framework `pip install` snippet you added in step 3.
 6. CI passes (frontmatter parse, imports, lint, type-check).
 
 ### Adding a new backend
@@ -95,7 +95,7 @@ Update in this order:
 3. `skills/observent/SKILL.md` — update the description, the backend-options list, and the endpoints table.
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
-6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) and bump the table's "Last verified" date to today.
+6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
 
 ### Adding a new provider
 
@@ -141,4 +141,4 @@ The 8×3 matrix in `references/matrix.md` is canonical. If you change a row or c
 
 `references/openinference.md` and `references/otel_genai.md` are the canonical attribute references. `references/matrix.md` § Mandatory Span Attributes only carries a per-kind summary table — full attribute lists live in those two files. When the upstream specs change, update these files (and bump their `Last verified` footers); don't re-inline attributes back into `references/matrix.md`.
 
-The **Verified Versions** table in `references/matrix.md` is the canonical record of dependency floors — when you bump a minimum, update that table. The per-example `*Last verified: …*` footers in `references/examples.md` are a different signal: they record when each individual example was last actually re-run end-to-end. Don't conflate them: the table is "what we claim works," the footer is "when we last proved it for this example."
+The **Verified Versions** table in `references/matrix.md` is the canonical record of exact dependency pins (`==X.Y.Z`) — not floors. When you bump a pin, update the table **and** the matching per-backend Install line, every per-framework `pip install` snippet that mentions that package, and the `*Last verified: …*` footer of any example in `references/examples.md` that was re-run against the new version. The per-example footers are a different signal: they record when each individual example was last actually re-run end-to-end. Don't conflate them: the table is "what we claim works," the footer is "when we last proved it for this example." `scripts/validate_setup.py` error messages intentionally stay on `>=` form so user-facing hints suggest a minimum that will work, not the maintainer's exact pin.

@@ -63,32 +63,32 @@ Last reviewed: 2026-05-17.
 
 Last verified: 2026-05-17 against Python 3.12.
 
-| Package | Minimum version |
+| Package | Pinned version |
 |---|---|
-| arize-phoenix | >=5.0 |
-| langfuse | >=3.0 |
-| elastic-apm | >=6.20 |
-| langsmith | >=0.1.140 |
-| opentelemetry-sdk | >=1.25 |
-| opentelemetry-exporter-otlp-proto-http | >=1.25 |
-| langgraph | >=0.2 |
-| crewai | >=0.80 |
-| agent-framework | >=1.4 |
-| anthropic | >=0.40 |
-| openai-agents | >=0.0.4 |
-| smolagents | >=1.0 |
-| llama-index | >=0.11 |
-| openinference-instrumentation-langchain | >=0.1 |
-| openinference-instrumentation-crewai | >=0.1 |
-| openinference-instrumentation-openai | >=0.1 |
-| openinference-instrumentation-openai-agents | >=0.1 |
-| openinference-instrumentation-anthropic | >=0.1 |
-| openinference-instrumentation-llama-index | >=2.0 |
-| openinference-instrumentation-smolagents | >=0.1 |
+| arize-phoenix | ==15.10.0 |
+| langfuse | ==4.6.1 |
+| elastic-apm | ==6.25.0 |
+| langsmith | ==0.8.5 |
+| opentelemetry-sdk | ==1.41.1 |
+| opentelemetry-exporter-otlp-proto-http | ==1.41.1 |
+| langgraph | ==1.2.0 |
+| crewai | ==1.14.4 |
+| agent-framework | ==1.4.0 |
+| anthropic | ==0.102.0 |
+| openai-agents | ==0.17.2 |
+| smolagents | ==1.25.0 |
+| llama-index | ==0.14.22 |
+| openinference-instrumentation-langchain | ==0.1.65 |
+| openinference-instrumentation-crewai | ==1.1.6 |
+| openinference-instrumentation-openai | ==0.1.48 |
+| openinference-instrumentation-openai-agents | ==1.5.0 |
+| openinference-instrumentation-anthropic | ==1.0.4 |
+| openinference-instrumentation-llama-index | ==4.4.1 |
+| openinference-instrumentation-smolagents | ==0.1.30 |
 
-These are the floors `examples.md` and the per-framework install commands below target. When bumping any minimum, update this table **and** the per-example "Last verified" footer in `examples.md` to match.
+These are the exact versions `examples.md` and the per-framework install commands below target. When bumping any pin, update this table **and** the matching per-backend Install line, the per-framework `pip install` snippet, and the `*Last verified: …*` footer of any example in `examples.md` that was re-run.
 
-**Sources:** each row's PyPI page at `https://pypi.org/project/<package-name>/` — verify against the release history; minimums should be the oldest version the example was actually tested against.
+**Sources:** each row's PyPI page at `https://pypi.org/project/<package-name>/` — pins are the exact version the most recent re-verification pass installed.
 
 ---
 
@@ -105,7 +105,7 @@ These are the floors `examples.md` and the per-framework install commands below 
 - **Auth:** None for local. Cloud uses `PHOENIX_API_KEY` as `Authorization: Bearer <key>`.
 - **Required env vars:** None local. Cloud: `PHOENIX_API_KEY`, optional `PHOENIX_COLLECTOR_ENDPOINT`.
 - **Optional env vars:** `PHOENIX_PROJECT_NAME` (groups traces into projects).
-- **Install:** `pip install 'arize-phoenix>=5.0' 'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'`
+- **Install:** `pip install 'arize-phoenix==15.10.0' 'opentelemetry-sdk==1.41.1' 'opentelemetry-exporter-otlp-proto-http==1.41.1'`
 - **Sources:** Phoenix docs — https://docs.arize.com/phoenix · `phoenix.otel.register` — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · OpenInference instrumentors — https://github.com/Arize-ai/openinference/tree/main/python
 
 **Canonical setup snippet:**
@@ -142,7 +142,7 @@ session = px.launch_app()  # UI on http://localhost:6006
   - Cloud EU: `https://cloud.langfuse.com/api/public/otel/v1/traces`
 - **Auth:** HTTP Basic — `Authorization: Basic base64(public_key:secret_key)`.
 - **Required env vars:** `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`. Optional `LANGFUSE_HOST` (defaults to `https://cloud.langfuse.com`).
-- **Install:** `pip install 'langfuse>=3.0'` (plus framework-specific extras as listed below).
+- **Install:** `pip install 'langfuse==4.6.1'` (plus framework-specific extras as listed below).
 - **Sources:** Langfuse docs — https://langfuse.com/docs · OTel integration — https://langfuse.com/docs/opentelemetry/get-started · LangChain integration — https://langfuse.com/docs/integrations/langchain · `@observe` decorator — https://langfuse.com/docs/sdk/python/decorators
 
 **Canonical setup snippets:**
@@ -195,7 +195,7 @@ exporter = OTLPSpanExporter(
   - Cloud UI: `https://<tenant>.{us,eu,in}.signoz.cloud`
 - **Auth:** None for self-host. Cloud requires header `signoz-access-token: <token>`. (Verify against current SigNoz docs — header name has changed historically.)
 - **Required env vars:** `SIGNOZ_ENDPOINT` (full OTLP traces URL). Cloud also requires `SIGNOZ_INGESTION_KEY`.
-- **Install:** `pip install 'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25'` + relevant `openinference-instrumentation-*` packages.
+- **Install:** `pip install 'opentelemetry-sdk==1.41.1' 'opentelemetry-exporter-otlp-proto-http==1.41.1'` + relevant `openinference-instrumentation-*` packages.
 - **Sources:** SigNoz docs — https://signoz.io/docs · OTel Python instrumentation guide — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Cloud ingestion-key header — https://signoz.io/docs/ingestion/signoz-cloud/keys/
 
 **Self-host quickstart:**
@@ -244,7 +244,7 @@ trace.set_tracer_provider(provider)
   - Cloud Kibana UI: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
 - **Auth:** Self-host — none unless a secret token is configured. Cloud — `Authorization: Bearer <ELASTIC_APM_SECRET_TOKEN>` or `Authorization: ApiKey <ELASTIC_APM_API_KEY>` (the agent reads either from env vars).
 - **Required env vars:** `ELASTIC_APM_SERVER_URL` (defaults to `http://localhost:8200`). Cloud also needs `ELASTIC_APM_SECRET_TOKEN` or `ELASTIC_APM_API_KEY`. Optional: `ELASTIC_APM_SERVICE_NAME`, `ELASTIC_APM_ENVIRONMENT`.
-- **Install:** `pip install 'elastic-apm>=6.20'` + relevant `openinference-instrumentation-*` packages.
+- **Install:** `pip install 'elastic-apm==6.25.0'` + relevant `openinference-instrumentation-*` packages.
 - **Sources:** Elastic APM Python agent — https://www.elastic.co/guide/en/apm/agent/python/current/index.html · OTel bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · APM Server OTLP intake — https://www.elastic.co/guide/en/observability/current/apm-open-telemetry-direct.html
 
 **Canonical setup (native agent — primary):**
@@ -299,7 +299,7 @@ Use the OTLP path only when you have a strong reason to avoid the `elastic-apm` 
   - Cloud UI: `https://smith.langchain.com` (US), `https://eu.smith.langchain.com` (EU)
 - **Auth:** Header `x-api-key: ${LANGSMITH_API_KEY}`. Project routing via optional header `Langsmith-Project: ${LANGSMITH_PROJECT}` (otherwise traces land in the `default` project).
 - **Required env vars:** `LANGSMITH_API_KEY`. Optional: `LANGSMITH_ENDPOINT` (default `https://api.smith.langchain.com`), `LANGSMITH_PROJECT`.
-- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http>=1.25`. The `langsmith` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `langsmith` SDK directly (datasets, evals).
+- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http==1.41.1`. The `langsmith` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `langsmith` SDK directly (datasets, evals).
 - **Sources:** LangSmith docs — https://docs.smith.langchain.com · OTel ingest endpoint — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · LangSmith regions & endpoints — https://docs.smith.langchain.com/administration/concepts#data-regions
 
 **Canonical setup (pure OTLP):**
@@ -336,7 +336,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Tracing model:** LangChain callback system + standard OTel via `LangChainInstrumentor`.
 - **Key entry points:** `StateGraph.compile()` → `.invoke()`, `.stream()`, `.astream()`.
 - **Where to thread `session_id`:** `RunnableConfig.configurable["session_id"]` and as OTel baggage.
-- **Phoenix / SigNoz:** `pip install openinference-instrumentation-langchain` then call `LangChainInstrumentor().instrument(tracer_provider=provider)`.
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-langchain==0.1.65'` then call `LangChainInstrumentor().instrument(tracer_provider=provider)`.
 - **Langfuse:** `langfuse.langchain.CallbackHandler` passed via `config={"callbacks": [handler]}`.
 - **Sources:** LangGraph docs — https://langchain-ai.github.io/langgraph/ · `openinference-instrumentation-langchain` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain · Langfuse LangChain callback — https://langfuse.com/docs/integrations/langchain
 
@@ -345,7 +345,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Tracing model:** Native CrewAI events + LangChain callbacks for the underlying LLM calls.
 - **Key entry points:** `Crew.kickoff()`, `Agent`, `Task` (delegations create child spans).
 - **Where to thread `session_id`:** Pass via `inputs` dict and set OTel baggage at the top.
-- **Phoenix / SigNoz:** `pip install openinference-instrumentation-crewai openinference-instrumentation-langchain` — captures Crew → Agent → Task → LLM hierarchy.
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-crewai==1.1.6' 'openinference-instrumentation-langchain==0.1.65'` — captures Crew → Agent → Task → LLM hierarchy.
 - **Langfuse:** Use `langfuse.langchain.CallbackHandler` — CrewAI's LLM wrapper inherits LangChain callbacks.
 - **Sources:** CrewAI docs — https://docs.crewai.com · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai · `openinference-instrumentation-langchain` (underlying LLM calls) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain
 
@@ -354,7 +354,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Tracing model:** Native OpenTelemetry emission built into `agent-framework`. The framework's spans land on the global `TracerProvider` automatically — just register the provider before constructing any `Agent`. Underlying model calls captured by `OpenAIInstrumentor` (or `AnthropicInstrumentor` for Anthropic-backed agents).
 - **Key entry points:** `Agent.run()`, `agent_framework.openai.OpenAIChatClient`, the workflow primitives (sequential, concurrent, handoff, group collaboration) under `agent_framework.workflows`.
 - **Where to thread `session_id`:** OTel baggage at the top — MAF's native context propagation carries it across agents and tool calls.
-- **Phoenix / SigNoz / Langfuse / LangSmith via OTLP:** `pip install agent-framework openinference-instrumentation-openai` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
+- **Phoenix / SigNoz / Langfuse / LangSmith via OTLP:** `pip install 'agent-framework==1.4.0' 'openinference-instrumentation-openai==0.1.48'` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
 - **Note:** observent no longer supports AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into agent-framework. Migrate AutoGen code to MAF, or use the **Custom** path.
 - **Sources:** Microsoft Agent Framework — https://github.com/microsoft/agent-framework · MAF observability guidance — search "Observability" / "OpenTelemetry" in the repo README · `openinference-instrumentation-openai` (raw model spans) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai
 
@@ -363,7 +363,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Tracing model:** Wrap entry points with the OpenInference Anthropic instrumentor or with Langfuse `@observe` decorators.
 - **Key entry points:** `client.messages.create()`, `client.beta.messages.create()`, agent tool-call loops.
 - **Where to thread `session_id`:** Set OTel baggage at the top of each conversation turn.
-- **Phoenix / SigNoz:** `pip install openinference-instrumentation-anthropic` — captures `prompt_token_count`, `completion_token_count`, **prompt cache read/write tokens**, tool calls.
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-anthropic==1.0.4'` — captures `prompt_token_count`, `completion_token_count`, **prompt cache read/write tokens**, tool calls.
 - **Langfuse:** `@observe(as_type="generation")` and update via `langfuse_context.update_current_observation(usage={...})`.
 - **Sources:** Anthropic agents docs — https://docs.anthropic.com/en/docs/agents · `openinference-instrumentation-anthropic` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-anthropic · Anthropic prompt caching — https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 
@@ -372,7 +372,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Tracing model:** **Native** — the SDK has its own tracing pipeline configurable via `set_trace_processors()`. This captures handoffs, guardrails, and agent runs as first-class spans, not as raw OpenAI API calls.
 - **Key entry points:** `Runner.run()`, `Agent`, `handoff()`, `Guardrail`.
 - **Where to thread `session_id`:** Pass via `Runner.run(... metadata={"session.id": ...})`; use OTel baggage as fallback.
-- **Phoenix:** `pip install openinference-instrumentation-openai-agents` then:
+- **Phoenix:** `pip install 'openinference-instrumentation-openai-agents==1.5.0'` then:
   ```python
   from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
   OpenAIAgentsInstrumentor().instrument(tracer_provider=provider)
@@ -386,14 +386,14 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 
 - **Tracing model:** `openinference-instrumentation-smolagents` covers `CodeAgent.run()`, `ToolCallingAgent.run()`, tool calls, LLM calls.
 - **Phoenix / SigNoz / Langfuse:** Same instrumentor — only the exporter destination changes.
-- **Install:** `pip install openinference-instrumentation-smolagents`
+- **Install:** `pip install 'openinference-instrumentation-smolagents==0.1.30'`
 - **Sources:** smolagents docs — https://huggingface.co/docs/smolagents · `openinference-instrumentation-smolagents` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-smolagents
 
 ### LlamaIndex (`llama_index`)
 
 - **Tracing model:** `openinference-instrumentation-llama-index` (preferred) or LlamaIndex's `set_global_handler()` API.
 - **Key entry points:** `Workflow.run()`, `QueryEngine.query()`, `RetrieverQueryEngine.query()`, `AgentWorker.run_step()`.
-- **Phoenix / SigNoz:** `pip install openinference-instrumentation-llama-index`
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-llama-index==4.4.1'`
 - **Langfuse:** `from langfuse.llama_index import LlamaIndexCallbackHandler` then `Settings.callback_manager = CallbackManager([handler])`.
 - **Sources:** LlamaIndex docs — https://docs.llamaindex.ai · `openinference-instrumentation-llama-index` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-llama-index · Langfuse LlamaIndex integration — https://langfuse.com/docs/integrations/llama-index
 
