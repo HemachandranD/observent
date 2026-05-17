@@ -1,6 +1,6 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, AutoGen v0.4, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -10,7 +10,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: detect the user's agent framework, wire up the chosen backend, and produce code that captures the **right** attributes (model, tokens, tool calls, agent identity) with **correct context propagation** across async, threads, and agent handoffs.
 
 **Backends supported (exactly 5):** Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith.
-**Frameworks supported (8):** LangGraph · CrewAI · AutoGen v0.4 (`autogen-agentchat`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom.
+**Frameworks supported (8):** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom.
 
 ---
 
@@ -30,10 +30,10 @@ Then check for pre-existing observability setup:
 
 Parsing rules:
 
-1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `autogen-agentchat` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use that.
+1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use that.
 2. Else if exactly one framework is detected, confirm it with the user in one short sentence.
 3. Else if multiple are detected, ask which one to instrument.
-4. If `autogen-v0.2` is detected (`pyautogen` / old `autogen`), inform the user that observent supports v0.4 (`autogen-agentchat`) only and offer the **Custom** path or migration help.
+4. If `autogen` / `autogen_agentchat` / `pyautogen` is detected in the user's project, inform them that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) — Microsoft's unification of AutoGen and Semantic Kernel — and observent no longer supports AutoGen. Offer to set up MAF, or the **Custom** path if they need to keep their existing AutoGen code.
 5. If none detected, ask which framework they're using; if "none / writing from scratch", use the **Custom** path.
 
 ## Step 3 — Resolve backend(s) and convention
@@ -99,6 +99,12 @@ Use the integration matrix in `references/matrix.md` (sections **Per-framework**
 
 ### OpenAI Agents SDK is special
 **Always** use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This captures handoffs, guardrails, and agent runs as first-class spans. Phoenix and Langfuse ship dedicated processors; for SigNoz, use the SDK's OTLP-compatible processor.
+
+### FastAPI request payload capture
+
+If Step 1's detector reported `fastapi` or `starlette` under `web_frameworks`, **additionally** generate `observent_fastapi_payload.py` from the canonical template in `references/fastapi_payload.md` and register it on the user's `FastAPI()` app with `app.add_middleware(ObserventPayloadMiddleware)`. This attaches the inbound request headers / query / body and outbound response body as `http.request.*` / `http.response.*` span attributes on the FastAPI server span, with sensitive keys (auth credentials, session/CSRF, PII) redacted at the value level — the key itself stays so the attribute shape is stable. No truncation; if traces grow large, tighten `_REDACT_KEYS` rather than truncating. The middleware coexists with `opentelemetry-instrumentation-fastapi` (which observent already installs) — payload attributes land on the same span that carries `http.method` / `http.route` / `http.status_code`.
+
+The redaction list is a **generation-time literal** in the generated file (no env var override), matching the same rule as `_CONVENTION`. See `references/fastapi_payload.md` for the canonical middleware body, the full key list, attribute schema, and convention notes.
 
 ### Context propagation rules
 - Use `tracer.start_as_current_span()` (never the raw `start_span` — it does not auto-attach).
@@ -239,6 +245,7 @@ Report back:
 - `references/openinference.md` — canonical OpenInference semantic conventions reference (Phoenix-native, used when convention=`oi` or `both`).
 - `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith, used when convention=`otel-genai` or `both`).
 - `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
-- `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors.
+- `references/fastapi_payload.md` — canonical FastAPI / Starlette middleware that captures inbound request + outbound response payloads as redacted span attributes (auth credentials, session/CSRF, PII keys redacted; no truncation).
+- `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks (FastAPI / Starlette / Flask / Django).
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
 - `scripts/validate_setup.py <backend|backend,backend,...|all> [--smoke-test]` — env vars, package presence, endpoint reachability, per-backend convention-aware synthetic span emission.

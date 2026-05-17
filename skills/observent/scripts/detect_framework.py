@@ -22,8 +22,7 @@ from typing import Any
 FRAMEWORKS: dict[str, list[str]] = {
     "langgraph": ["langgraph"],
     "crewai": ["crewai"],
-    "autogen-agentchat": ["autogen_agentchat"],
-    "autogen-v0.2": ["autogen", "pyautogen"],
+    "microsoft-agent-framework": ["agent_framework"],
     "anthropic-agents": ["anthropic"],
     "openai-agents": ["agents"],
     "smolagents": ["smolagents"],
@@ -45,6 +44,13 @@ INSTRUMENTORS: dict[str, str] = {
     "openinference-instrumentation-anthropic": "openinference.instrumentation.anthropic",
     "openinference-instrumentation-llama-index": "openinference.instrumentation.llama_index",
     "openinference-instrumentation-smolagents": "openinference.instrumentation.smolagents",
+}
+
+WEB_FRAMEWORKS: dict[str, list[str]] = {
+    "fastapi": ["fastapi"],
+    "starlette": ["starlette"],
+    "flask": ["flask"],
+    "django": ["django"],
 }
 
 
@@ -152,12 +158,25 @@ def detect(root: Path) -> dict[str, Any]:
         {"package": pkg} for pkg, mod in INSTRUMENTORS.items() if _is_installed(mod)
     ]
 
+    web_frameworks_found: list[dict[str, Any]] = []
+    for label, modules in WEB_FRAMEWORKS.items():
+        sources = []
+        if any(_is_installed(m) for m in modules):
+            sources.append("installed")
+        if any(_name_match(m, declared) for m in modules):
+            sources.append("declared")
+        if any(m in imports for m in modules):
+            sources.append("imported")
+        if sources:
+            web_frameworks_found.append({"name": label, "sources": sources})
+
     return {
         "python": sys.version.split()[0],
         "cwd": str(root),
         "frameworks": frameworks_found,
         "backends": backends_found,
         "instrumentors": instrumentors_found,
+        "web_frameworks": web_frameworks_found,
         "imports_truncated": imports_truncated,
     }
 

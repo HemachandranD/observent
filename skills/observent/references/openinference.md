@@ -148,7 +148,7 @@ Pair with generic `input.value` / `output.value` for actual call args and return
 |---|---|---|
 | `agent.name` | string | Required — used for UI grouping |
 | `agent.role` | string | |
-| `agent.framework` | string | `langgraph` / `crewai` / `autogen-agentchat` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom` |
+| `agent.framework` | string | `langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom` |
 | `input.value` | string | Triggering task or message |
 | `output.value` | string | Final agent output |
 

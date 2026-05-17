@@ -3,7 +3,7 @@ prompt = """
 Run the observent observability setup for this project.
 
 Arguments (optional): {{args}}
-  - First arg: framework  (langgraph | crewai | autogen-agentchat | anthropic-agents | openai-agents | smolagents | llama-index | custom)
+  - First arg: framework  (langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom)
   - Second arg: backend(s) — one or more, comma-separated  (phoenix | langfuse | signoz | elastic-apm | langsmith; e.g. "phoenix" or "phoenix,langsmith")
 
 Follow the full 8-step observent workflow: detect the framework, resolve the backend(s), pick the convention from the per-backend rule, show a diff preview, write the integration code (single or multi-exporter as needed), and validate the setup.

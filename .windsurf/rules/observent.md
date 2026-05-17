@@ -9,7 +9,7 @@ globs:
 
 **Invoke when** the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their Python agent app; or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 
-**Frameworks:** LangGraph · CrewAI · AutoGen v0.4 · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom
+**Frameworks:** LangGraph · CrewAI · Microsoft Agent Framework · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom
 **Backends:** Arize Phoenix · Langfuse · SigNoz
 
 ## How to run

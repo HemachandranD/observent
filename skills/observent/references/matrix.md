@@ -6,24 +6,26 @@ Complete reference for frameworks, backends, integration mechanics, span attribu
 
 ## 8 × 5 Compatibility Matrix
 
-| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith |
+| Framework | Arize Phoenix<br>*OI* | Langfuse<br>*OTel-GenAI* | SigNoz<br>*OTel-GenAI* | Elastic APM<br>*OTel-GenAI* | LangSmith<br>*OTel-GenAI* |
 |---|---|---|---|---|---|
 | LangGraph | OI: `LangChainInstrumentor` | LangChain callback (`langfuse.langchain.CallbackHandler`) | OTLP + OI: `LangChainInstrumentor` | Native agent + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` |
 | CrewAI | OI: `CrewAIInstrumentor` (+ LangChain) | LangChain callback (CrewAI inherits) | OTLP + OI: `CrewAIInstrumentor` | Native agent + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` |
-| AutoGen v0.4 | OI: `OpenAIInstrumentor` + `autogen-ext` OTel | OTLP exporter + `OpenAIInstrumentor` | OTLP + `OpenAIInstrumentor` | Native agent + `OpenAIInstrumentor` | OTLP + `OpenAIInstrumentor` |
+| Microsoft Agent Framework | OI: `OpenAIInstrumentor` + MAF native OTel | OTLP exporter + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | Native agent + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` |
 | Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` | Native agent + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` |
 | OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend | Native APM agent + OpenAI Agents SDK trace processor (OTel bridge) | **Native trace processor** with OTLP backend |
 | smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` | Native agent + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` |
 | LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` | Native agent + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` |
 | Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter | Manual spans + `elasticapm.Client` (OTel bridge) | Manual spans + OTLP exporter |
 
-**OI** = OpenInference instrumentor (`openinference-instrumentation-*`). For Phoenix, SigNoz, and LangSmith the OI instrumentor is the same — only the exporter destination differs. For Elastic APM, the OI instrumentor still emits OTel spans; the `elasticapm.Client` agent picks them up via its OTel bridge (no separate exporter needed) and ingests them alongside auto-instrumented transaction spans.
+**Reading the matrix:** the italic label under each backend's header (e.g. *OI*, *OTel-GenAI*) is the **semantic convention** that backend prefers — Phoenix is OpenInference-native; the other four are OTel-GenAI-native. The convention observent emits at generation time is derived mechanically from the backend set you pick (see SKILL.md § Step 3): single Phoenix → OI only; any Phoenix-less subset → OTel-GenAI only; Phoenix + any other → both.
+
+**OI** = OpenInference instrumentor (`openinference-instrumentation-*`). The OI instrumentor itself emits raw OTel spans regardless of which backend you target — only the exporter destination and the *attribute keys* the backend reads differ. For Elastic APM, the OI instrumentor still emits OTel spans; the `elasticapm.Client` agent picks them up via its OTel bridge (no separate exporter needed) and ingests them alongside auto-instrumented transaction spans.
 
 ---
 
 ## Verified Versions
 
-Last verified: 2026-05-15 against Python 3.12.
+Last verified: 2026-05-17 against Python 3.12.
 
 | Package | Minimum version |
 |---|---|
@@ -35,7 +37,7 @@ Last verified: 2026-05-15 against Python 3.12.
 | opentelemetry-exporter-otlp-proto-http | >=1.25 |
 | langgraph | >=0.2 |
 | crewai | >=0.80 |
-| autogen-agentchat | >=0.4 |
+| agent-framework | >=1.4 |
 | anthropic | >=0.40 |
 | openai-agents | >=0.0.4 |
 | smolagents | >=1.0 |
@@ -304,14 +306,14 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Langfuse:** Use `langfuse.langchain.CallbackHandler` — CrewAI's LLM wrapper inherits LangChain callbacks.
 - **Docs:** https://docs.crewai.com
 
-### AutoGen v0.4 (`autogen-agentchat`)
+### Microsoft Agent Framework (`agent-framework`)
 
-- **Tracing model:** OpenTelemetry-native via `autogen-ext`. Underlying model calls captured by `OpenAIInstrumentor`.
-- **Key entry points:** `RoundRobinGroupChat.run()`, `AssistantAgent`, `Selector`/`Swarm`/`MagenticOne` teams.
-- **Where to thread `session_id`:** OTel baggage at the top — `autogen-ext` propagates context across the team.
-- **Phoenix / SigNoz / Langfuse via OTLP:** `pip install openinference-instrumentation-openai` + the autogen-ext OTel hooks.
-- **Note:** v0.2 (`pyautogen`) is **not** supported here — use the Custom path or migrate.
-- **Docs:** https://microsoft.github.io/autogen/
+- **Tracing model:** Native OpenTelemetry emission built into `agent-framework`. The framework's spans land on the global `TracerProvider` automatically — just register the provider before constructing any `Agent`. Underlying model calls captured by `OpenAIInstrumentor` (or `AnthropicInstrumentor` for Anthropic-backed agents).
+- **Key entry points:** `Agent.run()`, `agent_framework.openai.OpenAIChatClient`, the workflow primitives (sequential, concurrent, handoff, group collaboration) under `agent_framework.workflows`.
+- **Where to thread `session_id`:** OTel baggage at the top — MAF's native context propagation carries it across agents and tool calls.
+- **Phoenix / SigNoz / Langfuse / LangSmith via OTLP:** `pip install agent-framework openinference-instrumentation-openai` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
+- **Note:** observent no longer supports AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into agent-framework. Migrate AutoGen code to MAF, or use the **Custom** path.
+- **Docs:** https://github.com/microsoft/agent-framework
 
 ### Anthropic Agents SDK (`anthropic`)
 
@@ -461,10 +463,14 @@ RequestsInstrumentor().instrument()
 
 Outgoing HTTP requests will carry `traceparent` and `tracestate` headers automatically, so a downstream agent service can resume the trace.
 
+### Inbound HTTP payload capture (FastAPI / Starlette)
+
+When the user's agent app is a FastAPI or Starlette service, observent generates an additional middleware that captures the inbound request (headers, query, body) and the outbound response body as `http.request.*` / `http.response.*` span attributes — with sensitive keys (auth credentials, session/CSRF, PII) redacted at the value level. Full payloads are attached without truncation. See **`references/fastapi_payload.md`** for the canonical middleware body, the redaction key list, and registration steps.
+
 ### Agent handoffs
 
 - **OpenAI Agents SDK** — handoffs are first-class trace events when using `set_trace_processors()`. No manual work.
-- **AutoGen v0.4** — `autogen-ext`'s OTel integration captures team-to-team and agent-to-agent message passing. Enable explicitly per its docs.
+- **Microsoft Agent Framework** — MAF's native OTel integration captures workflow-level agent handoffs and tool dispatch as first-class spans. Register a global `TracerProvider` before any `Agent(...)` construction; the framework attaches to it automatically.
 - **CrewAI** — Task delegation creates parent/child spans automatically via `openinference-instrumentation-crewai`.
 - **LangGraph** — Each node transition becomes a span automatically via `LangChainInstrumentor`.
 - **Custom** — Use a `with_agent_context` helper to attach agent identity:
@@ -576,7 +582,7 @@ Each processor / agent exports independently. If one backend is unreachable, the
 |---|---|
 | `openinference-instrumentation-langchain` | LangGraph, LangChain, CrewAI underlying LLM calls |
 | `openinference-instrumentation-crewai` | CrewAI Crew/Agent/Task structure |
-| `openinference-instrumentation-openai` | OpenAI SDK, AutoGen v0.4 (model client) |
+| `openinference-instrumentation-openai` | OpenAI SDK, Microsoft Agent Framework (model client) |
 | `openinference-instrumentation-openai-agents` | OpenAI Agents SDK (use this — not plain `-openai`) |
 | `openinference-instrumentation-anthropic` | Anthropic SDK incl. prompt caching tokens |
 | `openinference-instrumentation-llama-index` | LlamaIndex Workflows, QueryEngines, Retrievers |

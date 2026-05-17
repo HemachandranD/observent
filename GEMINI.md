@@ -2,7 +2,7 @@
 
 **Invoke when** the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their Python agent app; or mentions Arize, Phoenix, Langfuse, SigNoz, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 
-**Frameworks:** LangGraph · CrewAI · AutoGen v0.4 (`autogen-agentchat`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom
+**Frameworks:** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom
 **Backends:** Arize Phoenix · Langfuse · SigNoz
 
 ---
@@ -20,7 +20,7 @@ python "$OBSERVENT_HOME/scripts/existing_setup.py"
 
 ### Step 2 — Resolve framework
 
-Use the detector output. If the user passed a framework as an argument, use it directly. If multiple frameworks are found, ask the user to pick one. If `autogen-v0.2` is detected, inform them observent supports v0.4 only and offer the Custom path.
+Use the detector output. If the user passed a framework as an argument, use it directly. If multiple frameworks are found, ask the user to pick one. If `autogen` / `autogen_agentchat` / `pyautogen` is detected, inform the user that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) and observent no longer supports AutoGen — offer to set up MAF, or the Custom path.
 
 ### Step 3 — Resolve backend
 

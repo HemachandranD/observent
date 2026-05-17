@@ -9,7 +9,7 @@ Works with Claude Code, Gemini CLI, Cursor, Windsurf, Cline, and OpenAI Codex CL
 Generic LLM tracing isn't enough for multi-agent apps. You need:
 
 - **Span hierarchy** — `Crew → Agent → LLM call`, `Workflow → Step → Tool` — so the trace tree maps to your agent topology.
-- **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, AutoGen) as first-class spans.
+- **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, Microsoft Agent Framework) as first-class spans.
 - **Identity attributes** — `agent.name`, `agent.role`, `agent.framework` on every span for filtering.
 - **Session grouping** — multi-turn conversations grouped under one `session.id`.
 - **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM / LangSmith; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
@@ -23,14 +23,14 @@ observent generates code that does all of this correctly the first time.
 |---|:---:|:---:|:---:|:---:|:---:|
 | LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ |
 | CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ |
-| AutoGen v0.4 (`autogen-agentchat`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Microsoft Agent Framework (`agent-framework`) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
 | OpenAI Agents SDK *(native trace processor)* | ✓ | ✓ | ✓ | ✓ | ✓ |
 | smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
 | LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Custom (no framework) | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. AutoGen v0.2 (`pyautogen`) is not supported — use the Custom path or upgrade to v0.4.
+Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. Microsoft Agent Framework uses its built-in OpenTelemetry support — observent layers `OpenAIInstrumentor` on top for raw model-call spans. observent does not support AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into `agent-framework`; migrate to MAF or use the Custom path.
 
 ## Supported providers
 
@@ -127,13 +127,13 @@ bash /tmp/observent/uninstall.sh          # macOS / Linux
 /observent
 /observent langgraph phoenix
 /observent crewai langfuse
-/observent autogen-agentchat signoz
+/observent microsoft-agent-framework signoz
 /observent openai-agents phoenix
 /observent anthropic-agents langfuse
 /observent llama-index signoz
 /observent smolagents langfuse
 /observent custom phoenix
-/observent autogen-agentchat elastic-apm
+/observent microsoft-agent-framework elastic-apm
 /observent langgraph langsmith
 
 # Multi-backend fan-out — second arg accepts a comma-separated list:

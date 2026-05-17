@@ -124,10 +124,10 @@ python crew_main.py
 
 ---
 
-## 3. AutoGen v0.4 + SigNoz (OTLP, session_id propagation)
+## 3. Microsoft Agent Framework + SigNoz (OTLP, session_id propagation)
 
 ```python
-# autogen_signoz.py
+# maf_signoz.py
 import asyncio
 import os
 from opentelemetry import baggage, context, trace
@@ -137,18 +137,18 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from openinference.instrumentation.openai import OpenAIInstrumentor
 
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.teams import RoundRobinGroupChat
-from autogen_agentchat.conditions import MaxMessageTermination
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from agent_framework import Agent
+from agent_framework.openai import OpenAIChatClient
 
 # --- Observability: SigNoz via OTLP ---
+# Register the global TracerProvider BEFORE constructing any Agent — MAF's
+# native OTel emission attaches to whatever provider is set globally.
 headers = {}
 if key := os.getenv("SIGNOZ_INGESTION_KEY"):
     headers["signoz-access-token"] = key
 
 provider = TracerProvider(
-    resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "autogen-demo")}),
+    resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "maf-demo")}),
 )
 provider.add_span_processor(
     BatchSpanProcessor(
@@ -168,15 +168,21 @@ async def main(session_id: str):
     ctx = baggage.set_baggage("user.id", "user-42", context=ctx)
     token = context.attach(ctx)
     try:
-        model_client = OpenAIChatCompletionClient(model="gpt-4o")
-        assistant = AssistantAgent("assistant", model_client=model_client,
-                                   system_message="You are a concise expert.")
-        critic = AssistantAgent("critic", model_client=model_client,
-                                system_message="Critique the assistant's answer in 1 sentence.")
-        team = RoundRobinGroupChat([assistant, critic],
-                                   termination_condition=MaxMessageTermination(4))
-        result = await team.run(task="Explain how LLM caching works.")
-        print(result.messages[-1].content)
+        client = OpenAIChatClient(model_id="gpt-4o")
+        assistant = Agent(
+            client=client,
+            name="assistant",
+            instructions="You are a concise expert.",
+        )
+        critic = Agent(
+            client=client,
+            name="critic",
+            instructions="Critique the assistant's answer in 1 sentence.",
+        )
+        # Simple two-step workflow: assistant answers, critic reviews.
+        answer = await assistant.run("Explain how LLM caching works.")
+        review = await critic.run(f"Assistant answered:\n{answer}")
+        print(review)
     finally:
         context.detach(token)
         provider.shutdown()
@@ -190,15 +196,15 @@ if __name__ == "__main__":
 git clone https://github.com/SigNoz/signoz.git && cd signoz/deploy
 docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d
 
-pip install 'autogen-agentchat>=0.4' 'autogen-ext[openai]' \
+pip install 'agent-framework>=1.4' \
             'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
             'openinference-instrumentation-openai>=0.1'
 export OPENAI_API_KEY=sk-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
-python autogen_signoz.py
+python maf_signoz.py
 # UI: http://localhost:3301
 ```
 
-*Last verified: 2026-05-08 with Python 3.12.*
+*Last verified: 2026-05-17 with Python 3.12.*
 
 ---
 
@@ -639,45 +645,49 @@ if __name__ == "__main__":
 
 ---
 
-## 9. AutoGen v0.4 + Elastic APM (native agent — transactions + LLM spans)
+## 9. Microsoft Agent Framework + Elastic APM (native agent — transactions + LLM spans)
 
-The Elastic APM Python agent gets you transaction tracing and infrastructure / runtime metrics out of the box, and its built-in OTel bridge picks up spans from `OpenAIInstrumentor` so the LLM calls show up in the same Kibana service map. This example uses the **native agent** (the slash-command default); see `matrix.md` § Elastic APM for the OTLP-only variant.
+The Elastic APM Python agent gets you transaction tracing and infrastructure / runtime metrics out of the box, and its built-in OTel bridge picks up spans from MAF's native OTel emission and from `OpenAIInstrumentor` so the LLM calls show up in the same Kibana service map. This example uses the **native agent** (the slash-command default); see `matrix.md` § Elastic APM for the OTLP-only variant.
 
 ```python
-# autogen_elastic.py
+# maf_elastic.py
 import asyncio
 import os
 import elasticapm
 from openinference.instrumentation.openai import OpenAIInstrumentor
 
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.teams import RoundRobinGroupChat
-from autogen_agentchat.conditions import MaxMessageTermination
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from agent_framework import Agent
+from agent_framework.openai import OpenAIChatClient
 
 # --- Observability: native Elastic APM agent ---
 # Reads ELASTIC_APM_SERVER_URL / SECRET_TOKEN / API_KEY from the environment.
 elasticapm.Client(
-    service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "autogen-demo"),
+    service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "maf-demo"),
     environment=os.getenv("ELASTIC_APM_ENVIRONMENT", "dev"),
 )
 elasticapm.instrument()  # auto-instruments asyncio / urllib3 / requests / httpx / ...
 
-# OI instrumentor still emits OTel spans; the agent's bridge ingests them
-# alongside the auto-instrumented transaction spans.
+# MAF emits OTel spans natively and OI instrumentor adds raw model spans;
+# the Elastic APM agent's OTel bridge ingests both alongside the
+# auto-instrumented transaction spans.
 OpenAIInstrumentor().instrument()
 
 
 async def main() -> None:
-    model_client = OpenAIChatCompletionClient(model="gpt-4o")
-    assistant = AssistantAgent("assistant", model_client=model_client,
-                               system_message="You are a concise expert.")
-    critic = AssistantAgent("critic", model_client=model_client,
-                            system_message="Critique the assistant's answer in 1 sentence.")
-    team = RoundRobinGroupChat([assistant, critic],
-                               termination_condition=MaxMessageTermination(4))
-    result = await team.run(task="Explain how LLM caching works.")
-    print(result.messages[-1].content)
+    client = OpenAIChatClient(model_id="gpt-4o")
+    assistant = Agent(
+        client=client,
+        name="assistant",
+        instructions="You are a concise expert.",
+    )
+    critic = Agent(
+        client=client,
+        name="critic",
+        instructions="Critique the assistant's answer in 1 sentence.",
+    )
+    answer = await assistant.run("Explain how LLM caching works.")
+    review = await critic.run(f"Assistant answered:\n{answer}")
+    print(review)
 
 
 if __name__ == "__main__":
@@ -689,17 +699,17 @@ if __name__ == "__main__":
 # or use Elastic Cloud and set ELASTIC_APM_SERVER_URL + ELASTIC_APM_SECRET_TOKEN.
 
 pip install 'elastic-apm>=6.20' \
-            'autogen-agentchat>=0.4' 'autogen-ext[openai]' \
+            'agent-framework>=1.4' \
             'openinference-instrumentation-openai>=0.1'
 export OPENAI_API_KEY=sk-...
 export ELASTIC_APM_SERVER_URL=http://localhost:8200
 # Cloud only:
 # export ELASTIC_APM_SECRET_TOKEN=...
-python autogen_elastic.py
-# Kibana APM UI: http://localhost:5601/app/apm → Services → autogen-demo
+python maf_elastic.py
+# Kibana APM UI: http://localhost:5601/app/apm → Services → maf-demo
 ```
 
-*Last verified: 2026-05-08 with Python 3.12.*
+*Last verified: 2026-05-17 with Python 3.12.*
 
 ---
 
