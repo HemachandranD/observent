@@ -15,16 +15,21 @@ The repo *is* the plugin: skill files live under `skills/observent/`, plugin man
   plugin.json           # Claude Code plugin manifest — name, version, author
   marketplace.json      # Marketplace listing for `claude plugin install`
 commands/
-  observent.toml          # /observent [framework] [backend|backend,...] — full setup workflow
-  observent-detect.toml   # /observent-detect — run detectors and report
-  observent-validate.toml # /observent-validate <backend|backend,...> [--smoke-test]
+  observent.toml            # /observent [framework] [backend|backend,...] — full SDD lifecycle (spec→plan→tasks→implement) with resume
+  observent-spec.toml       # /observent-spec — produce .observent/spec.md only
+  observent-plan.toml       # /observent-plan — produce .observent/plan.md from spec.md
+  observent-tasks.toml      # /observent-tasks — decompose plan.md into .observent/tasks.json
+  observent-implement.toml  # /observent-implement — execute (or resume) tasks.json
+  observent-detect.toml     # /observent-detect — run detectors and report
+  observent-validate.toml   # /observent-validate <backend|backend,...> [--smoke-test]
 skills/observent/
-  SKILL.md              # Skill entry point — frontmatter + 8-step instructions
+  SKILL.md              # Skill entry point — frontmatter + 4-phase SDD workflow (Spec / Plan / Tasks / Implement)
   references/
-    matrix.md           # 8×3 matrix, per-framework + per-backend reference,
+    spec_schema.md      # Canonical schema for the three .observent/ artifacts (spec.md, plan.md, tasks.json)
+    matrix.md           # 8×5 matrix, per-framework + per-backend reference,
                         # span attribute summary, context propagation, troubleshooting
     openinference.md    # Canonical OpenInference attribute reference (Phoenix path)
-    otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz path)
+    otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz / Elastic APM / LangSmith path)
     examples.md         # 8 runnable examples covering all frameworks + multi-backend fan-out
   scripts/
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
@@ -34,6 +39,8 @@ skills/observent/
 README.md               # Public-facing — install, usage, supported matrix
 LICENSE                 # MIT
 ```
+
+**Note on `.observent/`:** the skill's three persisted artifacts (`spec.md`, `plan.md`, `tasks.json`) live in the **user's project**, not this repo — they are created by `/observent-spec` on first run in whatever project the user is instrumenting. Do not commit a `.observent/` directory into this plugin repo. See `skills/observent/references/spec_schema.md` for the canonical artifact schemas.
 
 ## Tech Stack
 
@@ -75,12 +82,14 @@ mypy --strict skills/observent/scripts/
 
 ## How to Extend
 
+> **Schema generality:** the spec / plan / tasks artifacts (`skills/observent/references/spec_schema.md`) are generic over framework and backend *strings* — adding a new framework or backend does **not** require schema edits. Only the matrix and detector entries below need updating; the skill picks up the new option via those.
+
 ### Adding a new framework
 
 Update in this order:
 
 1. `skills/observent/scripts/detect_framework.py` — add an entry to `FRAMEWORKS`.
-2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list and the description's auto-invocation triggers.
+2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list in Phase 1 § Step 1.2 and the description's auto-invocation triggers.
 3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
 4. `skills/observent/references/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 5. `skills/observent/references/matrix.md` § Verified Versions — add a row for the new framework + instrumentor packages with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-framework `pip install` snippet you added in step 3.
@@ -92,7 +101,7 @@ Update in this order:
 
 1. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`.
 2. `skills/observent/scripts/detect_framework.py` — add an entry to `BACKENDS`.
-3. `skills/observent/SKILL.md` — update the description, the backend-options list, and the endpoints table.
+3. `skills/observent/SKILL.md` — update the description, the backend-options list in Phase 1 § Step 1.3, the convention-derivation table (if applicable), and the endpoints table in Phase 2 § Step 2.5.
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
@@ -119,6 +128,7 @@ Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OB
 
 ## Design Constraints
 
+- **Spec-driven lifecycle** — the skill produces three artifacts in the user's project under `.observent/`: `spec.md` (what & why), `plan.md` (how, with generated content in anchored fenced blocks), and `tasks.json` (ordered, mutable checkpoint that doubles as the session file). Downstream artifacts carry a sha256 fingerprint of their upstream's frontmatter so drift forces regeneration. `tasks.json` is the resume point — any task with status `pending` or `failed` means the workflow is incomplete and `/observent` should offer to resume. **No imperative driver script**: each `kind` (`confirm` / `write_file` / `edit_file` / `run_command` / `validate`) maps 1:1 to a Claude Code tool. Canonical schemas: `skills/observent/references/spec_schema.md`.
 - **OTLP HTTP, not gRPC** is the default exporter for all three backends. Reasons: works through corporate proxies, smaller dep tree, Phoenix Cloud only supports HTTP.
 - **OpenAI Agents SDK uses native `set_trace_processors()`**, not `openinference-instrumentation-openai`. This is non-negotiable — `-openai` loses agent structure (handoffs, runs, guardrails).
 - **Per-backend convention** — the convention emitted by generated code is mechanically derived from the chosen backend set, not a free choice:
@@ -134,8 +144,8 @@ Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OB
 
 ## Documentation Hygiene
 
-The 8×3 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
-- `SKILL.md` (Step 6 endpoint table, the matrix-implicit instructions)
+The 8×5 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
+- `SKILL.md` (Phase 2 § Step 2.5 endpoint table, Phase 1 § Step 1.3 backend-options list)
 - `README.md` (Supported matrix)
 - `references/examples.md` (if a removed combination had an example)
 

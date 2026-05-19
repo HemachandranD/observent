@@ -1,0 +1,13 @@
+description = "observent: execute (or resume) .observent/tasks.json — applies all pending tasks"
+prompt = """
+Run the observent SDD Implement phase for this project.
+
+Preconditions:
+  - `.observent/tasks.json` must exist. If it does not, instruct the user to run `/observent` (full lifecycle) or `/observent-tasks` first.
+
+On invocation:
+  1. Read `.observent/tasks.json`. Verify `plan_fingerprint` against the live `.observent/plan.md` frontmatter; if it mismatches, regenerate `tasks.json` first (preserving `status` for any task whose `id`+`payload` are byte-identical).
+  2. If any task has status `pending` or `failed`, prompt the user: `Resume from task <id> (<kind>)? (yes / restart / abort)`.
+  3. Execute tasks in array order following Phase 4 of the observent skill (`SKILL.md § Phase 4 — Implement`). After every task: mutate `status` / `started_at` / `finished_at` / `error` and rewrite `tasks.json` to disk before moving on.
+  4. When all tasks are terminal, print the summary per Step 4.3 (framework + backends + convention + files + pip install + env vars + UI URLs + one-line next step).
+"""

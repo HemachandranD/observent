@@ -1,0 +1,252 @@
+# observent — Spec / Plan / Tasks Schema
+
+This file is the **canonical schema reference** for the three artifacts the observent skill produces and consumes in the **user's project** under `.observent/`. The skill should construct and validate these artifacts strictly against the shapes documented here.
+
+```
+<user-project>/
+  .observent/
+    spec.md       # what & why  — Markdown + YAML frontmatter
+    plan.md       # how         — YAML frontmatter + fenced-block bodies referenced by anchor
+    tasks.json    # checkpoint  — ordered task list, mutated as work proceeds
+```
+
+Three principles:
+
+1. **Each artifact is fingerprinted by its upstream.** `plan.md` stores a sha256 of `spec.md`'s frontmatter; `tasks.json` stores a sha256 of `plan.md`'s frontmatter. Downstream regenerates when the fingerprint mismatches.
+2. **`tasks.json` IS the session.** No separate `session.json`. Presence of any task with status `pending` or `failed` means the workflow is incomplete and `/observent` should offer to resume.
+3. **No imperative drivers.** The skill reads/writes these files directly via Read/Write/Edit. There is no `run_tasks.py` — task `kind` values map 1:1 to Claude Code tools.
+
+---
+
+## 1. `.observent/spec.md`
+
+**Purpose:** capture the *what* and *why* — detected environment, user choices (framework, backends), the convention derived from those choices, and the existing-setup decision. Locked once the user confirms; downstream artifacts re-derive from this file.
+
+**Format:** YAML frontmatter (structured fields) followed by free-form Markdown (user-editable prose). The skill regenerates the frontmatter on `/observent-spec` re-runs but preserves the prose body.
+
+```yaml
+---
+schema_version: 1
+created_at: 2026-05-19T10:00:00Z
+updated_at: 2026-05-19T10:00:00Z
+status: draft               # draft | locked
+detection:
+  frameworks_detected: [langgraph]                       # from detect_framework.py: frameworks[].name
+  backends_installed:  []                                # from detect_framework.py: backends[].name
+  web_frameworks:      [fastapi]                         # from detect_framework.py: web_frameworks[].name
+  existing_setup:                                        # from existing_setup.py: detected[]
+    - {name: opentelemetry, kind: instrumentation, imports: [main.py], env_vars_in_files: [], env_files: []}
+  project_fingerprint: sha256:<hex>                      # sha256 of (pyproject.toml + requirements*.txt + poetry.lock) bytes, in that fixed order
+choice:
+  framework: langgraph                                   # one of: langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom
+  backends: [phoenix, langsmith]                         # non-empty subset of: phoenix | langfuse | signoz | elastic-apm | langsmith
+  convention: both                                       # derived mechanically from `backends` — see § Convention derivation below
+  existing_setup_decision: extend                        # extend | replace | abort | none  (none = no existing setup found)
+  endpoints:                                             # one entry per backend in `choice.backends`
+    phoenix:   {mode: self-host, url: "http://localhost:6006/v1/traces"}
+    langsmith: {mode: cloud,     url: "https://api.smith.langchain.com/otel/v1/traces"}
+  env_vars_required: [PHOENIX_API_KEY, LANGSMITH_API_KEY, LANGSMITH_PROJECT]
+  fastapi_payload_capture: true                          # true iff detection.web_frameworks contains fastapi or starlette
+---
+
+# Observability Spec
+
+Free-form rationale and user notes. The skill preserves this body across re-runs of `/observent-spec`; only the frontmatter is regenerated.
+```
+
+### Convention derivation (mechanical, not user-supplied)
+
+| `choice.backends` set | `choice.convention` |
+|---|---|
+| `{phoenix}` | `oi` |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith}` (no Phoenix) | `otel-genai` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith}` | `both` |
+
+The skill writes this field — it is never asked of the user. To change the convention the user changes the backend set and re-runs `/observent-spec`.
+
+### Project fingerprint
+
+`detection.project_fingerprint` is sha256 over the concatenated bytes of, in this order:
+
+1. `pyproject.toml` (if present)
+2. `requirements.txt`, `requirements-dev.txt`, `requirements/*.txt` sorted lexicographically (each if present)
+3. `poetry.lock` (if present)
+
+Missing files contribute nothing (not a placeholder). Computed at spec generation and on every resume. A mismatch on resume triggers the drift prompt (§ "Resume mechanics" in SKILL.md).
+
+---
+
+## 2. `.observent/plan.md`
+
+**Purpose:** capture the *how* — the deterministic mapping from `spec.choice` to concrete file operations, install commands, env vars, and the multi-backend processor shape. The plan body holds the **actual generated content** for every file as fenced blocks behind anchor comments; `tasks.json` refers to those anchors instead of duplicating content.
+
+**Format:** YAML frontmatter followed by anchored fenced blocks.
+
+```markdown
+---
+schema_version: 1
+generated_from_spec_at: 2026-05-19T10:01:00Z
+spec_fingerprint: sha256:<hex of spec.md frontmatter>
+files:
+  - {path: "observent_otel.py",            op: create, purpose: "TracerProvider + per-backend BatchSpanProcessors"}
+  - {path: "observent_fastapi_payload.py", op: create, purpose: "Request/response capture middleware (redacted)"}
+  - {path: "main.py",                      op: edit,   purpose: "Import observent_otel; register payload middleware"}
+  - {path: ".env",                         op: append, purpose: "Env var stubs (names only, no values)"}
+pip_install: "pip install opentelemetry-sdk==X.Y.Z openinference-instrumentation-langchain==X.Y.Z arize-phoenix-otel==X.Y.Z ..."
+env_vars:
+  phoenix:   [PHOENIX_API_KEY]
+  langsmith: [LANGSMITH_API_KEY, LANGSMITH_PROJECT]
+processors:
+  - {backend: phoenix,   kind: BatchSpanProcessor, exporter: OTLPSpanExporter}
+  - {backend: langsmith, kind: BatchSpanProcessor, exporter: OTLPSpanExporter}
+elastic_apm_native_agent: false                # true iff `elastic-apm` ∈ spec.choice.backends
+openai_agents_native_processors: false         # true iff spec.choice.framework == openai-agents
+---
+
+<!-- plan:observent_otel -->
+```python
+# full content of observent_otel.py — emitted verbatim into the user's project at task execution
+```
+
+<!-- plan:fastapi_payload -->
+```python
+# full content of observent_fastapi_payload.py
+```
+
+<!-- plan:main_edit -->
+```diff
+# unified diff applied to main.py
+```
+
+<!-- plan:env_append -->
+```
+# lines appended to .env (names only — no values)
+PHOENIX_API_KEY=
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=
+```
+```
+
+### Anchor naming
+
+Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a single fenced block. Slugs are stable identifiers referenced from `tasks.json` via `content_ref: "plan#<slug>"` (for `write_file`) or `diff_ref: "plan#<slug>"` (for `edit_file`). The skill MUST NOT inline the same content into both files — `plan.md` is the single source of truth.
+
+### Plan invariants
+
+- `files[].path` is relative to the user's project root.
+- `files[].op` is `create` (write a new file), `edit` (apply a unified diff), or `append` (append to file; create if missing).
+- `pip_install` is **one** line, even when long; the skill quotes pinned versions from `references/matrix.md § Verified Versions`.
+- `env_vars` keys are exactly the entries in `spec.choice.backends`.
+- `processors` lists one entry per OTLP backend in `spec.choice.backends`; Elastic APM in native-agent mode does NOT appear here (it attaches to the global tracer via its OTel bridge — captured by `elastic_apm_native_agent: true` instead).
+
+---
+
+## 3. `.observent/tasks.json`
+
+**Purpose:** ordered, mutable task list that drives the implement phase. **This is the checkpoint** — the skill mutates entries as it executes them. Resume = read this file, find the first non-terminal task, continue.
+
+```json
+{
+  "schema_version": 1,
+  "plan_fingerprint": "sha256:<hex of plan.md frontmatter>",
+  "created_at": "2026-05-19T10:02:00Z",
+  "updated_at": "2026-05-19T10:02:00Z",
+  "tasks": [
+    {
+      "id": "t01",
+      "kind": "confirm",
+      "payload": {"prompt": "Apply diff preview? (yes / preview <file> / abort)"},
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "error": null
+    },
+    {
+      "id": "t02",
+      "kind": "write_file",
+      "payload": {"path": "observent_otel.py", "content_ref": "plan#observent_otel"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t03",
+      "kind": "write_file",
+      "payload": {"path": "observent_fastapi_payload.py", "content_ref": "plan#fastapi_payload"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t04",
+      "kind": "edit_file",
+      "payload": {"path": "main.py", "diff_ref": "plan#main_edit"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t05",
+      "kind": "run_command",
+      "payload": {"cmd": "pip install opentelemetry-sdk==X.Y.Z ..."},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t06",
+      "kind": "validate",
+      "payload": {"cmd": "python ${CLAUDE_SKILL_DIR}/scripts/validate_setup.py phoenix,langsmith"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    }
+  ]
+}
+```
+
+### Task `kind` reference
+
+| `kind` | Maps to | Required `payload` fields |
+|---|---|---|
+| `confirm` | User prompt | `prompt` (string) |
+| `write_file` | Write tool | `path` (project-relative), `content_ref` (`plan#<slug>`) |
+| `edit_file` | Edit tool | `path`, `diff_ref` (`plan#<slug>`) |
+| `run_command` | Bash tool | `cmd` (string) |
+| `validate` | Bash tool, final task | `cmd` (string — calls `validate_setup.py` with the resolved backend list) |
+
+### Status reference
+
+| Status | Terminal? | Meaning |
+|---|---|---|
+| `pending` | No | Not started yet |
+| `failed` | No | Started but errored; resume retries |
+| `done` | Yes | Completed successfully |
+| `skipped` | Yes | User chose to skip (e.g., declined a `confirm`) |
+
+"Incomplete workflow" = any task with `pending` or `failed`. `/observent` and `/observent-implement` MUST scan for this on every invocation before doing anything else.
+
+### Mutation rules
+
+When the skill starts a task it sets `status: pending` → `started_at` to now (it stays `pending` until done/failed; there is no `in_progress` value). On success: `status: done`, `finished_at` = now, `error` = null. On failure: `status: failed`, `finished_at` = now, `error` = a short string. The `confirm` kind sets `status: done` on `yes`, `skipped` on `no`/`abort` (abort also halts the run).
+
+After mutating any task, the skill rewrites `tasks.json` to disk before moving to the next task. This is what makes the workflow durable across session breaks.
+
+### Task ordering
+
+Tasks execute strictly in array order. The first task is always a `confirm` carrying the rendered diff preview (file list + diffs + pip command + env var groups, mechanically derived from `plan.md` — same content the old Step 5 produced). The last task is always `validate`. Between them: `write_file` entries first, then `edit_file`, then `run_command` (pip install). This order ensures the user-visible diff preview matches the order in which files appear on disk.
+
+---
+
+## 4. Drift detection
+
+Two layers of fingerprints. The skill computes the live value and compares to the stored value at every invocation; mismatches force regeneration of the downstream artifact.
+
+| Compare | Stored in | Live source | Mismatch action |
+|---|---|---|---|
+| Project deps | `spec.detection.project_fingerprint` | sha256 of `pyproject.toml`+`requirements*.txt`+`poetry.lock` | Prompt: `Project deps changed since spec was written. Re-run /observent-spec? (yes / continue anyway / abort)` |
+| Spec → Plan | `plan.spec_fingerprint` | sha256 of live `spec.md` frontmatter | Regenerate `plan.md` (and consequently `tasks.json`) before continuing |
+| Plan → Tasks | `tasks.plan_fingerprint` | sha256 of live `plan.md` frontmatter | Regenerate `tasks.json` before continuing — but preserve `status` for tasks whose `id` + `payload` are identical (so a re-plan does not re-execute work already done; see § Resume mechanics in SKILL.md) |
+
+The fingerprint covers **only the YAML frontmatter** of `spec.md` and `plan.md`, not the prose / fenced-block bodies. This way edits to the human-readable parts (a comment in the spec body, a tweak to a generated file's docstring in the plan body) do not force regeneration; only structural changes do.
+
+---
+
+## 5. `.observent/` gitignore guidance
+
+The skill's spec-phase preamble offers two options, with **commit** as the recommended default:
+
+- **Commit `.observent/`** — observability config is reviewable in PRs; teammates see what's wired up. Recommended.
+- **Ignore `.observent/`** — treat it as ephemeral local state. Add `.observent/` to `.gitignore`.
+
+Either is valid; the skill does not write a `.gitignore` entry on the user's behalf.

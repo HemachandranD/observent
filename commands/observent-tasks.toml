@@ -1,0 +1,11 @@
+description = "observent: run the Tasks phase only — decompose plan.md into .observent/tasks.json"
+prompt = """
+Run the observent SDD Tasks phase for this project.
+
+Preconditions:
+  - `.observent/plan.md` must exist. If it does not, instruct the user to run `/observent-plan` first (which itself requires `.observent/spec.md`).
+
+Follow Phase 3 (Tasks) of the observent skill: read `plan.md`, decompose into the ordered task array (`confirm` first, then `write_file`, then `edit_file`, then `run_command` for pip install, then `validate` last), and write `.observent/tasks.json` per the canonical schema (`references/spec_schema.md § 3`).
+
+Set `plan_fingerprint` to sha256 of the live `plan.md` frontmatter. All tasks start `status: pending`. Do NOT execute the tasks.
+"""

@@ -1,257 +1,258 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications using a spec-driven lifecycle (spec → plan → tasks → implement) with project-local persistent state in .observent/. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. The .observent/tasks.json checkpoint makes the workflow resumable across session breaks. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-# observent — Multi-Agent Observability Setup
+# observent — Multi-Agent Observability (Spec-Driven)
 
-You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: detect the user's agent framework, wire up the chosen backend, and produce code that captures the **right** attributes (model, tokens, tool calls, agent identity) with **correct context propagation** across async, threads, and agent handoffs.
+You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: produce three artifacts under `.observent/` in the user's project, then execute the task list.
 
 **Backends supported (exactly 5):** Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith.
 **Frameworks supported (8):** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom.
 
+## Lifecycle
+
+```
+.observent/spec.md     →    .observent/plan.md     →    .observent/tasks.json     →    user files
+   (what & why)              (how, with content)         (checkpoint, mutable)         (executed)
+```
+
+Four phases — Spec, Plan, Tasks, Implement — described below. The artifacts are fingerprinted: downstream regenerates when upstream changes. `tasks.json` doubles as the session checkpoint; any task with status `pending` or `failed` means the workflow is incomplete and you should offer to resume.
+
+**Canonical schema reference:** `references/spec_schema.md`. Construct and validate the three artifacts strictly against the shapes documented there. This SKILL.md describes the *workflow*; `spec_schema.md` is the contract.
+
 ---
 
-## Step 1 — Detect environment
+## On every invocation — resume check first
 
-Run the detector and ingest its JSON output:
+Before doing anything else:
 
-!`python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
+1. Read `.observent/tasks.json` if it exists.
+2. If any task has status `pending` or `failed`, prompt the user:
+   `Found incomplete observent run. Resume from task <id> (<kind>)? (yes / restart / abort)`
+   - `yes` → jump to the Implement phase from the first non-terminal task.
+   - `restart` → delete `.observent/{spec.md, plan.md, tasks.json}` and start fresh from the Spec phase.
+   - `abort` → exit without changes.
+3. If `tasks.json` is absent or all tasks are terminal (`done` / `skipped`), check upstream drift (§ Drift detection) and run the lifecycle from the earliest phase whose artifact is missing or stale.
 
-Then check for pre-existing observability setup:
+If invoked with `$1`/`$2` args, capture them as the user's framework/backend preferences and proceed into the Spec phase; they override prior choices and invalidate downstream fingerprints.
 
-!`python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
+---
 
-**Use both reports** to drive subsequent steps. If `existing_setup.py` reports any entry with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files`, treat the project as having existing observability and go to Step 4. Entries with `kind: "instrumentation"` (OpenTelemetry SDK / OpenInference) alone don't count — they may belong to an unrelated tracing setup.
+## Phase 1 — Spec
 
-## Step 2 — Resolve framework
+**Goal:** produce `.observent/spec.md` capturing what to set up and why. Locks once the user confirms the choices.
 
-Parsing rules:
+### Step 1.1 — Detect environment
 
-1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use that.
-2. Else if exactly one framework is detected, confirm it with the user in one short sentence.
+Run both detectors **in parallel** — they're independent deterministic scripts that emit JSON, so issue them as two Bash tool calls in a **single message**, not sequentially:
+
+- `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
+- `python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
+
+Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`.
+
+For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files` as existing observability. Entries with `kind: "instrumentation"` alone don't count — they may belong to an unrelated tracing setup.
+
+### Step 1.2 — Resolve framework
+
+1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use it.
+2. Else if exactly one framework is detected, confirm it in one short sentence.
 3. Else if multiple are detected, ask which one to instrument.
-4. If `autogen` / `autogen_agentchat` / `pyautogen` is detected in the user's project, inform them that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) — Microsoft's unification of AutoGen and Semantic Kernel — and observent no longer supports AutoGen. Offer to set up MAF, or the **Custom** path if they need to keep their existing AutoGen code.
-5. If none detected, ask which framework they're using; if "none / writing from scratch", use the **Custom** path.
+4. If `autogen` / `autogen_agentchat` / `pyautogen` is detected, inform the user that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) — Microsoft's unification of AutoGen and Semantic Kernel — and observent no longer supports AutoGen. Offer MAF, or the **Custom** path if they need to keep their existing AutoGen code.
+5. If none detected, ask; "none / writing from scratch" → **Custom** path.
 
-## Step 3 — Resolve backend(s) and convention
+### Step 1.3 — Resolve backend(s) and convention
 
-`$2` accepts **one or more** backends, comma-separated (e.g. `phoenix` or `phoenix,langsmith`). If `$2` was passed, parse it into a deduplicated set. Otherwise present these five options with one-line trade-offs and ask the user to pick **one or more**:
+`$2` accepts one or more backends, comma-separated (e.g. `phoenix` or `phoenix,langsmith`). If `$2` was passed, parse into a deduplicated set. Otherwise present these five with one-line trade-offs and ask the user to pick one or more:
 
 - **Arize Phoenix** — local-first, no account needed (`px.launch_app()`), OpenTelemetry-native, best dev-loop UX.
 - **Langfuse** — open-source self-hostable; best token cost tracking, prompt versioning, eval datasets.
-- **SigNoz** — full-stack APM (traces + metrics + logs); best when you want LLM observability alongside infrastructure metrics in a self-hostable OTel stack.
-- **Elastic APM** — Elastic Stack APM Server with the native `elastic-apm` agent; best when you also need transaction tracing and infrastructure metrics in Kibana alongside LLM tracing.
-- **LangSmith** — LangChain's hosted observability platform (US + EU cloud, enterprise self-host); best when you're already on LangGraph/LangChain and want LangSmith UI features (datasets, evals, prompt versioning) tied to your traces. Pure OTLP HTTP; OTel-GenAI conventions on the wire.
+- **SigNoz** — full-stack APM (traces + metrics + logs); best when you want LLM observability alongside infra metrics in a self-hostable OTel stack.
+- **Elastic APM** — Elastic Stack APM Server with the native `elastic-apm` agent; best when you also need transaction tracing and infra metrics in Kibana alongside LLM tracing.
+- **LangSmith** — LangChain's hosted observability platform (US + EU cloud, enterprise self-host); best when you're already on LangGraph/LangChain. Pure OTLP HTTP; OTel-GenAI conventions on the wire.
 
-When the user picks multiple, all backends receive the same spans via independent processors / agents — see Step 6 (Multi-backend fan-out template) and `references/matrix.md` § Multi-Backend Fan-Out.
+**Derive the convention mechanically** from the resolved backend set (do not ask the user):
 
-### Resolve the semantic convention
+| Backend set | Convention |
+|---|---|
+| `{phoenix}` | `oi` (OpenInference only — Phoenix-native UI) |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith}` (no Phoenix) | `otel-genai` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith}` | `both` |
 
-Once the backend set is fixed, derive the convention mechanically:
+State the resolved convention in one short sentence (e.g. "Resolved: phoenix,elastic-apm → emitting both OI and OTel-GenAI attributes").
 
-| Backend set | Convention emitted | Why |
-|---|---|---|
-| `{phoenix}` | **OI only** (`references/openinference.md`) | Phoenix UI is OpenInference-native |
-| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith}` (no Phoenix) | **OTel-GenAI only** (`references/otel_genai.md`) | all four prefer OTel-GenAI; SigNoz / Elastic APM / LangSmith treat OI as opaque |
-| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith}` | **Both** | the only case where dual emission is required |
+### Step 1.4 — Existing-setup decision
 
-State the resolved convention in one short sentence to the user before moving on (e.g. "Resolved: phoenix,elastic-apm → emitting both OI and OTel-GenAI attributes").
+If Step 1.1 found pre-existing observability config, ask explicitly:
+- **Extend** — keep their existing setup, add observent attributes/instrumentors on top.
+- **Replace** — overwrite with observent's recommended pattern.
+- **Abort** — exit without changes.
 
-## Step 4 — Existing-setup handling
+Never overwrite without asking, even when auto-invoked. Store the choice in `spec.choice.existing_setup_decision`. Once locked it is **not re-prompted on resume**; to change it the user re-runs `/observent-spec`.
 
-If Step 1 found pre-existing observability config, ask the user **explicitly**:
+### Step 1.5 — Write `.observent/spec.md`
 
-- **Extend** — keep their existing setup, add observent attributes/instrumentors on top
-- **Replace** — overwrite their existing setup with observent's recommended pattern
-- **Abort** — exit without changes
+Construct the YAML frontmatter per `references/spec_schema.md § 1`. Compute `detection.project_fingerprint` from `pyproject.toml` + `requirements*.txt` + `poetry.lock` (see schema for exact ordering). Write the file; set `status: locked` once the user has confirmed the choices in Steps 1.2–1.4. Preserve any existing prose body on re-runs.
 
-Never overwrite without asking, even when auto-invoked.
+---
 
-## Step 5 — Diff preview (mandatory before writing)
+## Phase 2 — Plan
 
-Before any `Write` or `Edit` to user files, present a single message containing:
+**Goal:** read `spec.md` and produce `.observent/plan.md` with the full generated content embedded in fenced blocks behind anchor comments. Deterministic from spec — no user questions in this phase except the diff-preview confirm in Phase 4.
 
-1. **New files** to be created (paths only, with one-line description each).
-2. **Modifications** to existing files (file path + a unified diff of the additions).
-3. **`pip install`** command(s) to run.
-4. **Environment variables** to add to `.env`, grouped by backend (names only, never real values). When multiple backends are selected, list one group per backend.
-5. **Resolved convention** — one line: `Convention: oi | otel-genai | both` (from the Step 3 table).
-6. **Backends and exporters** — one line per backend listing its endpoint placeholder so the user sees the fan-out shape at a glance.
+### Step 2.1 — Decide structure
 
-End with: *"Apply these changes? (yes / preview <file> / abort)"*. Wait for confirmation.
+Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), determine:
 
-## Step 6 — Generate
+- **Files to generate** — typically:
+  - `observent_otel.py` (always — backend init + framework instrumentation).
+  - `observent_fastapi_payload.py` (only if `spec.choice.fastapi_payload_capture: true`).
+  - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel` and register middleware.
+  - `.env` append with required env var names.
+- **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
+- **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
+- **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
 
-Use the integration matrix in `references/matrix.md` (sections **Per-framework** and **Per-backend**) to construct the code. Every generated template must include:
+### Step 2.2 — Required pieces in every generated file
 
-### Required pieces in every generated file
-- **Backend init** — exporter or callback configured from env vars, never hard-coded keys.
-- **Framework instrumentation** — the right OpenInference instrumentor or native trace processor (see matrix).
-- **Multi-agent attributes** on every agent/chain span (keys depend on the resolved convention — see § Span attribute coverage below):
-  - OI: `openinference.span.kind` (`AGENT` / `CHAIN` / `LLM` / `TOOL` / `RETRIEVER`), `agent.name`, `agent.role`, `agent.framework`
-  - OTel-GenAI: `gen_ai.operation.name` (`invoke_agent` / `chat` / `execute_tool` / ...), `gen_ai.agent.name`, `gen_ai.provider.name`
-- **Baggage** for `session.id`, `user.id`, `tenant.id`, `app.version` set at the entry point so they propagate.
-- **Flush-on-exit** — `provider.shutdown()` or `langfuse.flush()` registered via `atexit` so spans don't get lost.
-- **OTLP HTTP** (not gRPC) by default — works through corporate proxies, smaller dep tree.
+Every `observent_otel.py` template must include:
 
-### OpenAI Agents SDK is special
-**Always** use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This captures handoffs, guardrails, and agent runs as first-class spans. Phoenix and Langfuse ship dedicated processors; for SigNoz, use the SDK's OTLP-compatible processor.
+- **Backend init** — exporter / native client configured from env vars; never hard-code keys.
+- **Framework instrumentation** — the right OpenInference instrumentor or native trace processor (see `references/matrix.md`).
+- **Multi-agent attributes** on every agent/chain span, keyed by `spec.choice.convention`:
+  - `oi`: `openinference.span.kind` (`AGENT` / `CHAIN` / `LLM` / `TOOL` / `RETRIEVER`), `agent.name`, `agent.role`, `agent.framework`.
+  - `otel-genai`: `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.provider.name`.
+  - `both`: emit the union.
+- **Baggage** for `session.id`, `user.id`, `tenant.id`, `app.version` at the entry point.
+- **Flush-on-exit** — `provider.shutdown()` or `langfuse.flush()` via `atexit`.
+- **OTLP HTTP** (not gRPC) for all OTLP backends.
+- **Convention as a generation-time literal** — for the Custom path, write `_CONVENTION = "<oi|otel-genai|both>"` as a literal in `observent_otel.py`. Do **not** make it read an env var; convention is a generation-time decision.
 
-### FastAPI request payload capture
+### Step 2.3 — FastAPI payload capture
 
-If Step 1's detector reported `fastapi` or `starlette` under `web_frameworks`, **additionally** generate `observent_fastapi_payload.py` from the canonical template in `references/fastapi_payload.md` and register it on the user's `FastAPI()` app with `app.add_middleware(ObserventPayloadMiddleware)`. This attaches the inbound request headers / query / body and outbound response body as `http.request.*` / `http.response.*` span attributes on the FastAPI server span, with sensitive keys (auth credentials, session/CSRF, PII) redacted at the value level — the key itself stays so the attribute shape is stable. No truncation; if traces grow large, tighten `_REDACT_KEYS` rather than truncating. The middleware coexists with `opentelemetry-instrumentation-fastapi` (which observent already installs) — payload attributes land on the same span that carries `http.method` / `http.route` / `http.status_code`.
+If `spec.choice.fastapi_payload_capture: true`, generate `observent_fastapi_payload.py` from the canonical template in `references/fastapi_payload.md` and add `app.add_middleware(ObserventPayloadMiddleware)` to the user's FastAPI app. Sensitive keys (auth credentials, session/CSRF, PII) are redacted at the value level; the key stays so the attribute shape is stable. No truncation. The redaction list is a **generation-time literal** in the generated file.
 
-The redaction list is a **generation-time literal** in the generated file (no env var override), matching the same rule as `_CONVENTION`. See `references/fastapi_payload.md` for the canonical middleware body, the full key list, attribute schema, and convention notes.
+### Step 2.4 — Context propagation rules
 
-### Context propagation rules
+observent emits W3C-compliant context. Every template relies on the OTel SDK's default composite propagator (`TraceContextTextMapPropagator` + `W3CBaggagePropagator`).
 
-observent emits W3C-compliant context on the wire — every example and template relies on the OTel SDK's **default composite propagator**: `TraceContextTextMapPropagator` ([W3C Trace Context Level 1](https://www.w3.org/TR/trace-context/) — `traceparent` + `tracestate`) **plus** `W3CBaggagePropagator` ([W3C Baggage](https://www.w3.org/TR/baggage/) — `baggage` header). Together they cover (a) the trace identity + sampling decision and (b) cross-cutting key/value context — and they ride separate HTTP headers (do not stuff app context into `tracestate`; that's a vendor field with a 512-byte cap per W3C TC §3.3.1.2).
+- **Do not override the global propagator.** Never call `set_global_textmap()` with B3/Jaeger/custom — that breaks `traceparent` interop with every backend in the matrix.
+- Use `tracer.start_as_current_span()` (never the raw `start_span`).
+- Async: Python 3.11+ inherits context across `asyncio.create_task`. For older versions wrap with `contextvars.copy_context().run(...)`.
+- Threads: `attach()`/`detach()` pattern (see `references/matrix.md § Context Propagation`).
+- HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests`.
+- Subprocess fan-out: `opentelemetry.propagate.inject(env)` before `subprocess.run(env=env)`; child re-extracts with `extract(os.environ)`. On Windows, env var names are case-insensitive — read the exact case `inject` wrote (`traceparent`) or normalize.
 
-- **Do not override the global propagator.** Never call `set_global_textmap()` with B3, Jaeger, or a custom propagator — that breaks `traceparent` interop with every backend in the matrix. The SDK default is already correct; leave it alone.
-- Use `tracer.start_as_current_span()` (never the raw `start_span` — it does not auto-attach).
-- For async: Python 3.11+ inherits context automatically across `asyncio.create_task`. For older versions, wrap with `contextvars.copy_context().run(...)`.
-- For threads: use the `attach()`/`detach()` pattern shown in `references/matrix.md` § Context Propagation.
-- For HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests` so `traceparent`, `tracestate`, and `baggage` flow automatically onto outbound calls.
-- For subprocess fan-out: use `opentelemetry.propagate.inject(env)` to write `traceparent` (and `baggage`) into the child's environment before `subprocess.run(env=env)`; the child re-extracts with `extract(os.environ)`. On Windows, environment variable names are case-insensitive — read with the exact case `inject` wrote (`traceparent`) or normalize.
-- Per W3C TC §3.2.2.2, a malformed `traceparent` triggers a **restart** of the trace at the receiver (new trace_id, no parent link) rather than a failure — the OTel SDK already handles this correctly; do not add custom guard code.
-
-### Span attribute coverage
-The keys you emit are governed by the **convention resolved in Step 3**:
-
-- `oi` → emit OpenInference keys only. Canonical list: `references/openinference.md`.
-- `otel-genai` → emit OTel-GenAI keys only. Canonical list: `references/otel_genai.md`.
-- `both` → emit the union. Required when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz.
-
-At minimum, every generated template covers:
-- LLM spans: model, provider, input/output messages, prompt+completion+total tokens (+ Anthropic cache tokens if applicable), invocation params, finish reasons, tool calls.
-- TOOL spans: name, description, parameters, input.value, output.value.
-- AGENT spans: kind, name, role, framework, input/output.
-
-For frameworks with native instrumentors (most cases) these are populated automatically. For the **Custom** path, generate calls to the helper functions `set_llm_attrs()`, `set_tool_attrs()`, `set_agent_attrs()` defined in the user's new `observent_otel.py`. The helper branches on a module-level literal `_CONVENTION = "<oi|otel-genai|both>"` — **you write the resolved convention from Step 3 as a literal at generation time**. Do **not** make the helper read an env var; convention is a generation-time decision, not a runtime one. The user's call sites stay convention-agnostic; to switch conventions they re-run `/observent` with a different backend set.
-
-### Elastic APM is special — native agent, not OTLP
-
-For `elastic-apm` the **default generated path is the native `elastic-apm` Python agent** (not an `OTLPSpanExporter`). Three lines:
-
-```python
-import elasticapm
-elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "my-agent-app"))  # reads ELASTIC_APM_SERVER_URL / SECRET_TOKEN / API_KEY
-elasticapm.instrument()  # auto-instruments Flask / Django / FastAPI / asyncio etc.
-```
-
-The agent's built-in OTel bridge picks up spans from the global OTel SDK, so the OpenInference framework instrumentor (`LangChainInstrumentor`, etc.) keeps emitting LLM spans and Elastic ingests them alongside the auto-instrumented transactions. This is the same precedent set by Langfuse's `CallbackHandler` / `@observe` decorator — native SDK, not OTLP. The pure-OTLP variant (`OTLPSpanExporter` to `:8200/v1/traces`) is documented in `references/matrix.md` as a secondary path for users who don't want the `elastic-apm` dependency.
-
-### Multi-backend fan-out template
-
-When Step 3 resolved more than one backend, generate **one** `TracerProvider` with **one `BatchSpanProcessor` per OTLP backend** (Phoenix, Langfuse, SigNoz) and, if `elastic-apm` is in the set, **also** instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to it — the agent attaches to the same global tracer provider via its OTel bridge. Failures in any one path don't affect the others. Use this exact shape (omit unused branches):
-
-```python
-import os, base64
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
-provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "my-agent-app")}))
-
-# Phoenix
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-    endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
-    headers={"Authorization": f"Bearer {os.environ['PHOENIX_API_KEY']}"} if os.getenv("PHOENIX_API_KEY") else {},
-)))
-
-# Langfuse
-_lf_host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip("/")
-_lf_auth = base64.b64encode(f"{os.environ['LANGFUSE_PUBLIC_KEY']}:{os.environ['LANGFUSE_SECRET_KEY']}".encode()).decode()
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-    endpoint=f"{_lf_host}/api/public/otel/v1/traces",
-    headers={"Authorization": f"Basic {_lf_auth}"},
-)))
-
-# SigNoz
-_sn_headers = {"signoz-access-token": os.environ["SIGNOZ_INGESTION_KEY"]} if os.getenv("SIGNOZ_INGESTION_KEY") else {}
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-    endpoint=os.getenv("SIGNOZ_ENDPOINT", "http://localhost:4318/v1/traces"),
-    headers=_sn_headers,
-)))
-
-# LangSmith
-_ls_base = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com").rstrip("/")
-_ls_headers = {"x-api-key": os.environ["LANGSMITH_API_KEY"]}
-if os.getenv("LANGSMITH_PROJECT"):
-    _ls_headers["Langsmith-Project"] = os.environ["LANGSMITH_PROJECT"]
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-    endpoint=f"{_ls_base}/otel/v1/traces",
-    headers=_ls_headers,
-)))
-
-trace.set_tracer_provider(provider)
-
-# Elastic APM (native agent — coexists with the TracerProvider above)
-import elasticapm
-elasticapm.Client(service_name=os.getenv("ELASTIC_APM_SERVICE_NAME", "my-agent-app"))
-elasticapm.instrument()
-```
-
-Single-backend setups use the corresponding canonical setup snippet from `references/matrix.md` (Per-Backend Reference) — no fan-out chaining needed.
-
-### Endpoints — pick the right one
+### Step 2.5 — Endpoints
 
 | Backend | Self-host | Cloud |
 |---|---|---|
-| Phoenix | OTLP `http://localhost:6006/v1/traces` | OTLP `https://app.phoenix.arize.com/v1/traces` (Bearer `PHOENIX_API_KEY`) |
-| Langfuse | OTLP `http://localhost:3000/api/public/otel/v1/traces` | OTLP `https://us.cloud.langfuse.com/...` or `https://cloud.langfuse.com/...` (Basic auth from public+secret keys) |
-| SigNoz | OTLP `http://localhost:4318/v1/traces` | OTLP `https://ingest.{us,eu,in}.signoz.cloud:443/v1/traces` (header `signoz-access-token`) |
+| Phoenix | OTLP `http://localhost:6006/v1/traces` | `https://app.phoenix.arize.com/v1/traces` (Bearer `PHOENIX_API_KEY`) |
+| Langfuse | OTLP `http://localhost:3000/api/public/otel/v1/traces` | `https://us.cloud.langfuse.com/...` or `https://cloud.langfuse.com/...` (Basic from public+secret keys) |
+| SigNoz | OTLP `http://localhost:4318/v1/traces` | `https://ingest.{us,eu,in}.signoz.cloud:443/v1/traces` (header `signoz-access-token`) |
 | Elastic APM | APM Server `http://localhost:8200` (agent default) | `https://<deployment>.apm.<region>.cloud.es.io:443` (Bearer `ELASTIC_APM_SECRET_TOKEN` or ApiKey `ELASTIC_APM_API_KEY`) |
-| LangSmith | OTLP `${LANGSMITH_ENDPOINT}/otel/v1/traces` (enterprise self-host) | OTLP `https://api.smith.langchain.com/otel/v1/traces` (US) or `https://eu.api.smith.langchain.com/otel/v1/traces` (EU) (header `x-api-key: ${LANGSMITH_API_KEY}`) |
+| LangSmith | OTLP `${LANGSMITH_ENDPOINT}/otel/v1/traces` (enterprise self-host) | `https://api.smith.langchain.com/otel/v1/traces` (US) or `https://eu.api.smith.langchain.com/otel/v1/traces` (EU) (header `x-api-key`) |
 
-Default to self-host endpoints unless the user supplies cloud env vars (`PHOENIX_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `SIGNOZ_INGESTION_KEY`, `ELASTIC_APM_SECRET_TOKEN` or `ELASTIC_APM_API_KEY`, `LANGSMITH_API_KEY`). LangSmith is cloud-first — it has no localhost default; the env var must be set.
+Default to self-host unless the user supplies cloud env vars. LangSmith is cloud-first — it has no localhost default.
 
-## Step 7 — Validate
+### Step 2.6 — Write `.observent/plan.md`
 
-After files are written, run the validator with the comma-separated backend list resolved in Step 3:
+Construct YAML frontmatter + anchored fenced blocks per `references/spec_schema.md § 2`. Set `spec_fingerprint` to sha256 of the live `spec.md` frontmatter. Each generated file's full content lives in exactly one fenced block; `tasks.json` will reference it via `plan#<slug>`.
 
-!`python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" <backend-list>`
+---
 
-Examples: `phoenix`, `phoenix,signoz`, `phoenix,elastic-apm`, `phoenix,langsmith`, `phoenix,langfuse,signoz,elastic-apm,langsmith`, `all`.
+## Phase 3 — Tasks
 
-If env vars are set and the user wants a live trace, run with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM / LangSmith). Phoenix / Langfuse / SigNoz / LangSmith use an `OTLPSpanExporter`; Elastic APM uses the native `elasticapm.Client` so the smoke test exercises the same agent path the generated app will use.
+**Goal:** decompose `plan.md` into the ordered, mutable `.observent/tasks.json` checkpoint. No code generation here — content already lives in `plan.md`; tasks only reference it.
 
-Surface the script output verbatim. If it failed, suggest the likely cause (missing env var, unreachable endpoint, package not installed).
+### Step 3.1 — Build the task array
 
-## Step 8 — Summary
+Strict order:
 
-Report back:
-- Framework + backend(s) chosen + resolved convention (`oi` / `otel-genai` / `both`).
-- New files created and existing files modified.
+1. `confirm` — render the diff preview from `plan.md`:
+   - New files (paths + one-line purpose).
+   - Modified files with their unified diffs.
+   - `pip install` command.
+   - Env vars grouped by backend (names only, never values).
+   - Resolved convention.
+   - Backends and endpoints (one line each).
+   - Prompt: `Apply these changes? (yes / preview <file> / abort)`.
+2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"`.
+3. One `edit_file` task per `files[].op == edit`, with `diff_ref: "plan#<slug>"`.
+4. One `run_command` task for `pip_install`.
+5. One `validate` task — final — calling `validate_setup.py` with the comma-separated backend list from `spec.choice.backends`.
+
+### Step 3.2 — Write `.observent/tasks.json`
+
+Set `plan_fingerprint` to sha256 of the live `plan.md` frontmatter. All tasks start `status: pending`, `started_at: null`, `finished_at: null`, `error: null`. See `references/spec_schema.md § 3` for the exact JSON shape.
+
+---
+
+## Phase 4 — Implement
+
+**Goal:** execute the task list, mutating `tasks.json` to disk after each task. This phase is fully resumable — re-entry picks up from the first non-terminal task.
+
+### Step 4.1 — Execute tasks in array order
+
+For each task whose status is not terminal (`done` / `skipped`):
+
+| `kind` | Action | On success | On failure |
+|---|---|---|---|
+| `confirm` | Show `payload.prompt`; wait for user. | `yes` → `done`; `no`/`abort` → `skipped` (and halt the run on `abort`) | n/a |
+| `write_file` | Resolve `content_ref` against `plan.md`; `Write` the file. | `done` | `failed` with short error |
+| `edit_file` | Resolve `diff_ref` against `plan.md`; apply via `Edit`. | `done` | `failed` with short error |
+| `run_command` | Run via Bash. | `done` if exit 0 | `failed` |
+| `validate` | Run `validate_setup.py <backend-list>` via Bash; surface output verbatim. | `done` if exit 0 | `failed`; suggest the likely cause (missing env var, unreachable endpoint, package not installed) |
+
+After mutating any task: rewrite `tasks.json` to disk before moving to the next task. Set `started_at` when work begins, `finished_at` when it ends. On `failed`, the next invocation will offer to retry that task.
+
+### Step 4.2 — Optional smoke test
+
+If env vars are set and the user wants a live trace, offer to re-run `validate_setup.py` with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM / LangSmith). Phoenix / Langfuse / SigNoz / LangSmith use an `OTLPSpanExporter`; Elastic APM uses the native `elasticapm.Client` so the smoke test exercises the same agent path the generated app uses.
+
+### Step 4.3 — Summary
+
+Once all tasks are terminal, report back:
+
+- Framework + backend(s) + resolved convention (`oi` / `otel-genai` / `both`).
+- New files created and existing files modified (read from `plan.files`).
 - `pip install` command (one line).
 - Required env vars per backend (names only — user fills in values).
-- UI URL per backend chosen:
-  - Phoenix local: `http://localhost:6006`
-  - Phoenix cloud: `https://app.phoenix.arize.com`
-  - Langfuse self-host: `http://localhost:3000`
-  - Langfuse cloud: `https://cloud.langfuse.com` or `https://us.cloud.langfuse.com`
-  - SigNoz self-host: `http://localhost:3301`
-  - SigNoz cloud: `https://<tenant>.{us,eu,in}.signoz.cloud`
-  - Elastic APM self-host (Kibana): `http://localhost:5601/app/apm`
-  - Elastic APM cloud (Kibana): `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
-  - LangSmith cloud (US): `https://smith.langchain.com`
-  - LangSmith cloud (EU): `https://eu.smith.langchain.com`
-- One-line "next step" — set the env vars, run their app, refresh each UI.
+- UI URL per backend:
+  - Phoenix local: `http://localhost:6006` · Cloud: `https://app.phoenix.arize.com`
+  - Langfuse self-host: `http://localhost:3000` · Cloud: `https://cloud.langfuse.com` or `https://us.cloud.langfuse.com`
+  - SigNoz self-host: `http://localhost:3301` · Cloud: `https://<tenant>.{us,eu,in}.signoz.cloud`
+  - Elastic APM self-host (Kibana): `http://localhost:5601/app/apm` · Cloud: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
+  - LangSmith US: `https://smith.langchain.com` · EU: `https://eu.smith.langchain.com`
+- One-line next step — set the env vars, run the app, refresh each UI.
+
+---
+
+## Drift detection
+
+Run these checks at the start of any phase (after the resume prompt):
+
+| Compare | Stored in | Live source | Action on mismatch |
+|---|---|---|---|
+| Project deps | `spec.detection.project_fingerprint` | sha256 of `pyproject.toml` + `requirements*.txt` + `poetry.lock` (see `references/spec_schema.md § 1`) | Prompt: `Project deps changed since spec was written. Re-run /observent-spec? (yes / continue anyway / abort)` |
+| Spec → Plan | `plan.spec_fingerprint` | sha256 of live `spec.md` frontmatter | Regenerate `plan.md` (forces tasks regeneration too) |
+| Plan → Tasks | `tasks.plan_fingerprint` | sha256 of live `plan.md` frontmatter | Regenerate `tasks.json`, **but preserve** `status` for tasks whose `id` + `payload` are byte-identical to the prior version — so a re-plan does not re-execute completed work |
+
+Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block bodies don't trigger regeneration. Structural changes do.
 
 ---
 
 ## References
 
-- `references/matrix.md` — full per-framework + per-backend matrix, OpenInference instrumentor map, span-attribute summary, context propagation patterns, multi-backend fan-out, troubleshooting.
-- `references/openinference.md` — canonical OpenInference semantic conventions reference (Phoenix-native, used when convention=`oi` or `both`).
-- `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith, used when convention=`otel-genai` or `both`).
+- `references/spec_schema.md` — **canonical schema** for `.observent/spec.md`, `plan.md`, `tasks.json`. The contract; this SKILL.md describes the workflow.
+- `references/matrix.md` — full per-framework + per-backend matrix, OpenInference instrumentor map, span-attribute summary, context propagation patterns, multi-backend fan-out, troubleshooting, verified version pins.
+- `references/openinference.md` — canonical OpenInference semantic conventions reference (Phoenix-native; used when convention=`oi` or `both`).
+- `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith; used when convention=`otel-genai` or `both`).
 - `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
-- `references/fastapi_payload.md` — canonical FastAPI / Starlette middleware that captures inbound request + outbound response payloads as redacted span attributes (auth credentials, session/CSRF, PII keys redacted; no truncation).
-- `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks (FastAPI / Starlette / Flask / Django).
+- `references/fastapi_payload.md` — canonical FastAPI / Starlette middleware that captures inbound request + outbound response payloads as redacted span attributes.
+- `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
 - `scripts/validate_setup.py <backend|backend,backend,...|all> [--smoke-test]` — env vars, package presence, endpoint reachability, per-backend convention-aware synthetic span emission.
