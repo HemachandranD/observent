@@ -39,7 +39,8 @@ skills/observent/
     existing_setup.py   # Reports pre-existing observability config in user's project
 .github/workflows/ci.yml
 README.md               # Public-facing — install, usage, supported matrix
-LICENSE                 # MIT
+LICENSE                 # Apache-2.0
+NOTICE                  # Apache-2.0 attribution notice
 ```
 
 **Note on `.observent/`:** the skill's three persisted artifacts (`spec.md`, `plan.md`, `tasks.json`) live in the **user's project**, not this repo — they are created by `/observent-spec` on first run in whatever project the user is instrumenting. Do not commit a `.observent/` directory into this plugin repo. See `skills/observent/references/spec_schema.md` for the canonical artifact schemas.

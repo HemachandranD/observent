@@ -252,4 +252,4 @@ CI validates plugin manifests, command TOML files, script imports, SKILL.md fron
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
