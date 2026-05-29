@@ -84,6 +84,21 @@ antigravity extensions install https://github.com/HemachandranD/observent --auto
 
 The installer also drops an `AGENTS.md` into your project root, which both the Antigravity CLI and the desktop IDE read automatically.
 
+### OpenAI Codex (extension — CLI + IDE)
+
+The installer wires up both surfaces. To do it manually:
+
+```bash
+# CLI: load the context extension from ~/.codex/extensions/
+mkdir -p ~/.codex/extensions/observent
+cp -r /tmp/observent/.codex/. ~/.codex/extensions/observent/
+
+# IDE (openai.chatgpt VS Code extension): reads AGENTS.md from the project root
+cp /tmp/observent/AGENTS.md ./AGENTS.md
+```
+
+The CLI loads `.codex/context.md`; the VS Code extension shares `~/.codex/config.toml` with the CLI and reads the project-root `AGENTS.md`. Both surfaces then run the same observent workflow.
+
 ### Cursor / Windsurf / Cline / GitHub Copilot (project-scoped rules)
 
 Run the installer from your project root — it copies the rule / instructions file for each detected IDE into the project:
