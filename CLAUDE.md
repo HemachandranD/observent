@@ -37,6 +37,14 @@ skills/observent/
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
     validate_setup.py   # Per-backend env + reachability check; --smoke-test emits a span
     existing_setup.py   # Reports pre-existing observability config in user's project
+test_workflows/         # Local test bed (NOT shipped in the plugin) — two demo agent
+  building_blocks.py    #   apps (CrewAI + LangGraph) exercising every span kind, used to
+  mcp_server.py         #   smoke-test that /observent wires up tracing end-to-end.
+  llm_service.py        #   See test_workflows/README.md.
+  crewai_app.py
+  langgraph_app.py
+  requirements.txt
+  .env.example
 .github/workflows/ci.yml
 README.md               # Public-facing — install, usage, supported matrix
 LICENSE                 # Apache-2.0
@@ -44,6 +52,11 @@ NOTICE                  # Apache-2.0 attribution notice
 ```
 
 **Note on `.observent/`:** the skill's three persisted artifacts (`spec.md`, `plan.md`, `tasks.json`) live in the **user's project**, not this repo — they are created by `/observent-spec` on first run in whatever project the user is instrumenting. Do not commit a `.observent/` directory into this plugin repo. See `skills/observent/references/spec_schema.md` for the canonical artifact schemas.
+
+**Note on `test_workflows/`:** a local test bed only — it is **not** part of the installed plugin. The two demo apps (CrewAI + LangGraph) each take a user question and walk one linear pipeline that hits every span kind (agent · retriever · tool · MCP-over-stdio · two LLM calls: a direct Azure OpenAI call and a shared FastAPI LLM service). Run them, then run `/observent` against the folder to confirm every span kind lands in the backend. Environment gotchas worth remembering:
+- **CrewAI ≥ 1.0** routes `LLM(model="azure/<deployment>")` to its *native* `azure.ai.inference` provider (a different API from Azure OpenAI). Pass `is_litellm=True` to force the litellm path we actually want — see `test_workflows/crewai_app.py`. CrewAI 1.x also makes `litellm` an **optional** extra, so it must be installed explicitly.
+- **litellm pin:** versions `1.82.7` / `1.82.8` were a March 2026 supply-chain compromise (credential stealer targeting `.env` files) and are yanked from PyPI; `CVE-2026-42208` (SQL injection) affects older releases. Pin a recent clean release (e.g. `litellm==1.86.2`).
+- On Windows, litellm ships a pathologically deep nested file that trips the 260-char `MAX_PATH` limit when the venv sits under a long path (e.g. a OneDrive folder). Either enable `LongPathsEnabled` or install litellm into a short-path target dir and link it via a `.pth`.
 
 ## Tech Stack
 
