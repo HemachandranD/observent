@@ -45,9 +45,21 @@ if (Is-Installed "claude_code") {
         try { $alreadyInstalled = (claude plugin list 2>$null) -match "observent" } catch {}
         if ($alreadyInstalled) {
             Write-Host "    ↳ already installed — skipping"
+        } elseif ($DryRun) {
+            Write-Host "[dry-run] claude plugin install HemachandranD/observent (fallback: claude plugin install $RepoDir)"
         } else {
-            Invoke-Step { claude plugin install $RepoDir } "claude plugin install $RepoDir"
-            Write-Host "    ✓ Claude Code plugin installed"
+            # Prefer the marketplace form (self-contained, supports `claude
+            # plugin update`, survives deleting this clone). Fall back to the
+            # local repo path only if it fails — e.g. offline.
+            $marketplaceOk = $false
+            try { claude plugin install HemachandranD/observent; $marketplaceOk = $? } catch { $marketplaceOk = $false }
+            if ($marketplaceOk) {
+                Write-Host "    ✓ Claude Code plugin installed (marketplace)"
+            } else {
+                Write-Host "    ↳ marketplace install failed — falling back to local path"
+                claude plugin install $RepoDir
+                Write-Host "    ✓ Claude Code plugin installed (local path)"
+            }
         }
         $Installed += "Claude Code"
     }

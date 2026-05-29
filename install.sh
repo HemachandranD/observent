@@ -54,8 +54,18 @@ if is_installed claude_code; then
     echo "    ↳ already installed — skipping"
     INSTALLED+=("Claude Code")
   else
-    run claude plugin install "$REPO_DIR"
-    echo "    ✓ Claude Code plugin installed"
+    # Prefer the marketplace form (self-contained, supports `claude plugin
+    # update`, survives deleting this clone). Fall back to the local repo path
+    # only if it fails — e.g. offline, or the marketplace isn't reachable.
+    if $DRY_RUN; then
+      echo "[dry-run] claude plugin install HemachandranD/observent (fallback: claude plugin install $REPO_DIR)"
+    elif claude plugin install HemachandranD/observent; then
+      echo "    ✓ Claude Code plugin installed (marketplace)"
+    else
+      echo "    ↳ marketplace install failed — falling back to local path"
+      claude plugin install "$REPO_DIR"
+      echo "    ✓ Claude Code plugin installed (local path)"
+    fi
     INSTALLED+=("Claude Code")
   fi
 fi
