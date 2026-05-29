@@ -10,5 +10,6 @@ Then report:
   - Which agent frameworks are installed or declared as dependencies.
   - Which observability backends are installed.
   - Whether any existing observability config was found (imports, env vars, config files).
-  - Recommended next step (run /observent [framework] [backend] to proceed).
+  - Docker availability (from the detector's `docker` block: `available` / `compose_available`) — this determines whether observent can offer to provision an unreachable self-host backend locally.
+  - Recommended next step (run /observent [framework] [backend] to proceed). If Docker is available, note that /observent will offer to spin up any chosen self-host backend (Phoenix · Langfuse · SigNoz · Elastic APM) that isn't already running. LangSmith has no OSS self-host and is never provisioned locally.
 """

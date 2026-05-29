@@ -52,7 +52,7 @@ Run both detectors **in parallel** — they're independent deterministic scripts
 - `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
 - `python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
 
-Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`.
+Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`. `detect_framework.py` also reports a `docker` block (`{available, compose_available}`) — capture it into `spec.detection.docker_available` / `docker_compose_available` for the provisioning offer in Step 1.6.
 
 For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files` as existing observability. Entries with `kind: "instrumentation"` alone don't count — they may belong to an unrelated tracing setup.
 
@@ -93,9 +93,21 @@ If Step 1.1 found pre-existing observability config, ask explicitly:
 
 Never overwrite without asking, even when auto-invoked. Store the choice in `spec.choice.existing_setup_decision`. Once locked it is **not re-prompted on resume**; to change it the user re-runs `/observent-spec`.
 
-### Step 1.5 — Write `.observent/spec.md`
+### Step 1.5 — Local provisioning offer
 
-Construct the YAML frontmatter per `references/spec_schema.md § 1`. Compute `detection.project_fingerprint` from `pyproject.toml` + `requirements*.txt` + `poetry.lock` (see schema for exact ordering). Write the file; set `status: locked` once the user has confirmed the choices in Steps 1.2–1.4. Preserve any existing prose body on re-runs.
+For each backend whose resolved `endpoints.<backend>.mode == self-host`, probe the endpoint and record reachability in `spec.detection.backends_reachable.<backend>`. When a self-host backend is **unreachable**:
+
+- **Backend ∈ {phoenix, langfuse, signoz, elastic-apm} and Docker available** (`detection.docker_available && detection.docker_compose_available`): ask
+  `<backend> isn't reachable at <url>. Provision it locally with Docker? (yes / no, I'll start it myself / skip)`.
+  On `yes` set `spec.choice.self_host_provision.<backend> = true`; otherwise `false`.
+- **Docker not available**: state that and skip the offer (set `false`). For Phoenix, mention the `px.launch_app()` in-process alternative. The final `validate` will still report the backend as unreachable.
+- **Backend == langsmith**: never offer Docker — surface the enterprise-license note from `references/self_host.md § LangSmith` and keep it cloud-first. `self_host_provision` gets no `langsmith` key.
+
+Templates and pinned image tags are **not** decided here — they live in `references/self_host.md` and are materialized in Phase 2. This step only records the decision. Reachable backends and cloud-mode backends get no `self_host_provision` entry.
+
+### Step 1.6 — Write `.observent/spec.md`
+
+Construct the YAML frontmatter per `references/spec_schema.md § 1`. Compute `detection.project_fingerprint` from `pyproject.toml` + `requirements*.txt` + `poetry.lock` (see schema for exact ordering). Write the file; set `status: locked` once the user has confirmed the choices in Steps 1.2–1.5. Preserve any existing prose body on re-runs.
 
 ---
 
@@ -115,6 +127,10 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
 - **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
+- **Local provisioning** — for each backend with `spec.choice.self_host_provision.<backend> == true`, materialize the chosen stack from `references/self_host.md` into a `plan.provision[]` entry:
+  - `method: vendored-compose` (Phoenix, Elastic APM) → add a `files[]` create entry for `docker-compose.observent-<backend>.yml`, copy the pinned compose template into a `<!-- plan:compose_<backend> -->` anchor, and set `up_command`/`down_command` to the `docker compose -f … up -d --wait` / `down` lines.
+  - `method: upstream-clone` (Langfuse, SigNoz) → no compose file; set `up_command` to the pinned `git clone … && docker compose -f … up -d --wait` line from `self_host.md` (no `<!-- plan:compose_* -->` anchor).
+  Copy image tags **verbatim** from `references/self_host.md § Image Versions` — never invent versions. When `self_host_provision` is empty, `plan.provision` is `[]`.
 
 ### Step 2.2 — Required pieces in every generated file
 
@@ -179,11 +195,13 @@ Strict order:
    - Env vars grouped by backend (names only, never values).
    - Resolved convention.
    - Backends and endpoints (one line each).
+   - Any locally provisioned stacks: the compose file (`vendored-compose`) or clone target (`upstream-clone`) and the `docker compose … up` command, one line each, from `plan.provision[]`.
    - Prompt: `Apply these changes? (yes / preview <file> / abort)`.
-2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"`.
+2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"` (this includes any `vendored-compose` `docker-compose.observent-<backend>.yml`).
 3. One `edit_file` task per `files[].op == edit`, with `diff_ref: "plan#<slug>"`.
 4. One `run_command` task for `pip_install`.
-5. One `validate` task — final — calling `validate_setup.py` with the comma-separated backend list from `spec.choice.backends`.
+5. One `run_command` task per `plan.provision[]` entry, with `cmd` set to that entry's `up_command` (`docker compose … up -d --wait`, or the pinned clone+up for `upstream-clone`). These come **after** pip-install and **before** `validate` so the endpoint is live when validation runs.
+6. One `validate` task — final — calling `validate_setup.py` with the comma-separated backend list from `spec.choice.backends`.
 
 ### Step 3.2 — Write `.observent/tasks.json`
 
@@ -224,9 +242,10 @@ Once all tasks are terminal, report back:
 - UI URL per backend:
   - Phoenix local: `http://localhost:6006` · Cloud: `https://app.phoenix.arize.com`
   - Langfuse self-host: `http://localhost:3000` · Cloud: `https://cloud.langfuse.com` or `https://us.cloud.langfuse.com`
-  - SigNoz self-host: `http://localhost:3301` · Cloud: `https://<tenant>.{us,eu,in}.signoz.cloud`
+  - SigNoz self-host: `http://localhost:8080` (recent unified image; older releases `3301`) · Cloud: `https://<tenant>.{us,eu,in}.signoz.cloud`
   - Elastic APM self-host (Kibana): `http://localhost:5601/app/apm` · Cloud: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
   - LangSmith US: `https://smith.langchain.com` · EU: `https://eu.smith.langchain.com`
+- For any locally provisioned stack (from `plan.provision[]`): note that it's now running under Docker and give the matching `down_command` to stop it (e.g. `docker compose -f docker-compose.observent-phoenix.yml down`).
 - One-line next step — set the env vars, run the app, refresh each UI.
 
 ---
@@ -253,6 +272,7 @@ Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block b
 - `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith; used when convention=`otel-genai` or `both`).
 - `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
 - `references/fastapi_payload.md` — canonical FastAPI / Starlette middleware that captures inbound request + outbound response payloads as redacted span attributes.
+- `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
 - `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
 - `scripts/validate_setup.py <backend|backend,backend,...|all> [--smoke-test]` — env vars, package presence, endpoint reachability, per-backend convention-aware synthetic span emission.

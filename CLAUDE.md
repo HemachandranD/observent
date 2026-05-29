@@ -31,6 +31,8 @@ skills/observent/
     openinference.md    # Canonical OpenInference attribute reference (Phoenix path)
     otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz / Elastic APM / LangSmith path)
     examples.md         # 8 runnable examples covering all frameworks + multi-backend fan-out
+    self_host.md        # local-provisioning reference: pinned Docker compose / clone commands
+                        # per self-hostable backend + image-tag pin table
   scripts/
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
     validate_setup.py   # Per-backend env + reachability check; --smoke-test emits a span
@@ -105,6 +107,7 @@ Update in this order:
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
+7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack or `upstream-clone` when the stack needs repo-mounted config files), add a row to the § Image Versions table with the exact image tag(s), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
 
 ### Adding a new provider
 
@@ -140,6 +143,7 @@ Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OB
 - **LangSmith uses pure OTLP HTTP** — `OTLPSpanExporter` to `${LANGSMITH_ENDPOINT}/otel/v1/traces` (default `https://api.smith.langchain.com`) with header `x-api-key: ${LANGSMITH_API_KEY}`. No `langsmith` SDK code is generated — LangSmith maps OTel-GenAI conventions to its native trace schema on ingest, so the generated stack is mechanically identical to SigNoz. This keeps LangSmith composable in the multi-backend fan-out template.
 - **Mandatory attributes** — every generated template must populate model, provider, prompt+completion+total tokens, input/output messages, and (for Anthropic) cache tokens. The reference doc lists the full set per span kind.
 - **Context propagation** — `start_as_current_span` (never `start_span`), Python ≥ 3.11 inherits async context, `attach()`/`detach()` for threads, `inject()` into env for subprocess, HTTPX/Requests instrumentors for cross-service.
+- **Local self-host provisioning** — when a chosen backend's endpoint is `self-host` and unreachable, and Docker + Compose are available, the skill *offers* to stand it up locally. Covered backends: **Phoenix · Langfuse · SigNoz · Elastic APM**. **LangSmith is excluded** — it has no free OSS/Docker edition (self-host is enterprise-licensed), so it gets an explanatory note instead of an offer. **Two confirmation gates, never automatic:** (1) the Phase 1 §1.5 opt-in prompt (`Provision it locally with Docker?`) — a `no`/`skip` means no Docker task is generated; (2) the Phase 4 `confirm` task, which surfaces the `docker compose … up -d --wait` command (and the full compose file for `vendored-compose` backends) in the diff preview — `docker compose up` only runs after the user approves it. Provisioning stays inside the lifecycle as ordinary tasks — a `write_file` for a vendored compose (Phoenix, Elastic APM) and/or a `run_command` that runs the `up` command (or a pinned upstream `git clone` + up for Langfuse, SigNoz) — placed after `pip install` and before the final `validate`. No imperative Docker driver. Canonical templates + pinned image tags: `skills/observent/references/self_host.md`.
 - **Diff preview before write** — even when auto-invoked. The skill never silently modifies user code.
 
 ## Documentation Hygiene
@@ -150,5 +154,7 @@ The 8×5 matrix in `references/matrix.md` is canonical. If you change a row or c
 - `references/examples.md` (if a removed combination had an example)
 
 `references/openinference.md` and `references/otel_genai.md` are the canonical attribute references. `references/matrix.md` § Mandatory Span Attributes only carries a per-kind summary table — full attribute lists live in those two files. When the upstream specs change, update these files (and bump their `Last verified` footers); don't re-inline attributes back into `references/matrix.md`.
+
+The **Image Versions** table in `references/self_host.md` is the canonical record of exact Docker image tags for the local-provisioning stacks (analogous to the matrix's Verified Versions, but for images not pip packages). When you bump an image tag, update that table and its `Last verified` footer; the compose templates in the same file are the only place image tags are written — don't duplicate them elsewhere.
 
 The **Verified Versions** table in `references/matrix.md` is the canonical record of exact dependency pins (`==X.Y.Z`) — not floors. When you bump a pin, update the table **and** the matching per-backend Install line, every per-framework `pip install` snippet that mentions that package, and the `*Last verified: …*` footer of any example in `references/examples.md` that was re-run against the new version. The per-example footers are a different signal: they record when each individual example was last actually re-run end-to-end. Don't conflate them: the table is "what we claim works," the footer is "when we last proved it for this example." `scripts/validate_setup.py` error messages intentionally stay on `>=` form so user-facing hints suggest a minimum that will work, not the maintainer's exact pin.
