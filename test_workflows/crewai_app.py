@@ -60,7 +60,9 @@ def llm_service_tool(prompt: str) -> str:
 
 
 def build_crew(question: str) -> Crew:
-    llm = LLM(model=f"azure/{os.environ['AZURE_OPENAI_DEPLOYMENT']}")
+    # is_litellm=True forces CrewAI's litellm path (Azure OpenAI) instead of the
+    # native "azure" provider, which is Azure AI Inference and needs an extra package.
+    llm = LLM(model=f"azure/{os.environ['AZURE_OPENAI_DEPLOYMENT']}", is_litellm=True)
 
     agent = Agent(
         role="Customer Support Specialist",
