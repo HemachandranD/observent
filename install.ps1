@@ -71,14 +71,21 @@ if (Is-Installed "antigravity") {
     $Installed += "Antigravity"
 }
 
-# ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
+# ── 5. OpenAI Codex (CLI + IDE) ───────────────────────────────────────────────
 if (Is-Installed "codex") {
-    Write-Host "  Detected: OpenAI Codex CLI"
+    Write-Host "  Detected: OpenAI Codex (CLI + IDE)"
+    # CLI: the .codex/ extension is loaded from ~/.codex/extensions/observent.
     $CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\observent"
     Invoke-Step { New-Item -ItemType Directory -Force -Path $CodexExt | Out-Null } "mkdir $CodexExt"
     Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\.codex\*" "$CodexExt\" } "cp .codex → $CodexExt"
     Write-Host "    ✓ Codex extension → $CodexExt"
-    $Installed += "Codex CLI"
+    # IDE (openai.chatgpt VS Code extension) shares ~/.codex/config.toml and
+    # reads AGENTS.md from the project — drop it so the editor surface is covered.
+    $codexAgents = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
+    $codexAgentsOut = Join-Path $ProjectDir "AGENTS.md"
+    Invoke-Step { Set-Content -Path $codexAgentsOut -Value $codexAgents -Encoding utf8 } "write $codexAgentsOut"
+    Write-Host "    ✓ AGENTS.md → $codexAgentsOut"
+    $Installed += "Codex (CLI + IDE)"
 }
 
 # ── 6. Project-scoped adapters ─────────────────────────────────────────────────
@@ -128,5 +135,5 @@ if ($Installed.Count -gt 0) {
     Write-Host "  Scripts: $ObserventHome\scripts\"
 } else {
     Write-Host "No supported providers were detected."
-    Write-Host "Install Claude Code, Antigravity, GitHub Copilot, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
+    Write-Host "Install Claude Code, Antigravity, GitHub Copilot, Codex, Cursor, Windsurf, or Cline, then re-run."
 }

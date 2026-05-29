@@ -81,14 +81,23 @@ if is_installed antigravity; then
   INSTALLED+=("Antigravity")
 fi
 
-# ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
+# ── 5. OpenAI Codex (CLI + IDE) ───────────────────────────────────────────────
 if is_installed codex; then
-  echo "  Detected: OpenAI Codex CLI"
+  echo "  Detected: OpenAI Codex (CLI + IDE)"
+  # CLI: the .codex/ extension is loaded from ~/.codex/extensions/observent.
   CODEX_EXT="$HOME/.codex/extensions/observent"
   run mkdir -p "$CODEX_EXT"
   run cp -r "$REPO_DIR/.codex/." "$CODEX_EXT/"
   echo "    ✓ Codex extension → $CODEX_EXT"
-  INSTALLED+=("Codex CLI")
+  # IDE (openai.chatgpt VS Code extension) shares ~/.codex/config.toml and reads
+  # AGENTS.md from the project — drop it so the editor surface is covered too.
+  if $DRY_RUN; then
+    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/AGENTS.md > $PROJECT_DIR/AGENTS.md"
+  else
+    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/AGENTS.md" > "$PROJECT_DIR/AGENTS.md"
+  fi
+  echo "    ✓ AGENTS.md → $PROJECT_DIR/AGENTS.md"
+  INSTALLED+=("Codex (CLI + IDE)")
 fi
 
 # ── 6. Project-scoped adapters (Cursor / Windsurf / Cline / GitHub Copilot) ───
@@ -146,5 +155,5 @@ if [[ ${#INSTALLED[@]} -gt 0 ]]; then
   echo "  Scripts: $OBSERVENT_HOME/scripts/"
 else
   echo "No supported providers were detected."
-  echo "Install Claude Code, Antigravity, GitHub Copilot, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
+  echo "Install Claude Code, Antigravity, GitHub Copilot, Codex, Cursor, Windsurf, or Cline, then re-run."
 fi

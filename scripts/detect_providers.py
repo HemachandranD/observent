@@ -71,11 +71,15 @@ def _copilot() -> ProviderInfo:
 
 
 def _codex() -> ProviderInfo:
+    # Codex CLI (`codex` binary / ~/.codex) and the VS Code IDE extension
+    # (`openai.chatgpt`) share ~/.codex/config.toml and both read AGENTS.md.
+    ext_dirs = ("~/.vscode/extensions", "~/.vscode-insiders/extensions")
+    has_ide = any(_glob_any(d, "openai.chatgpt-*") for d in ext_dirs)
     return {
-        "label": "OpenAI Codex CLI",
-        "installed": _has_binary("codex") or _dir_exists("~/.codex"),
+        "label": "OpenAI Codex (CLI + IDE)",
+        "installed": _has_binary("codex") or _dir_exists("~/.codex") or has_ide,
         "config_dir": str(Path("~/.codex").expanduser()),
-        "install_cmd": "copy .codex/ into ~/.codex/extensions/observent/",
+        "install_cmd": "copy .codex/ into ~/.codex/extensions/observent/ (CLI) + AGENTS.md into <project>/ (IDE)",
     }
 
 

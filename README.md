@@ -2,7 +2,7 @@
 
 A multi-provider plugin that wires up production-grade observability for multi-agent Python applications. Detects your agent framework, generates the right integration code for your chosen backend, and enforces the span attributes and context propagation patterns that actually make multi-agent traces useful.
 
-Works with Claude Code, Google Antigravity (CLI + IDE), GitHub Copilot (CLI + IDE), Cursor, Windsurf, Cline, and OpenAI Codex CLI.
+Works with Claude Code, Google Antigravity (CLI + IDE), GitHub Copilot (CLI + IDE), OpenAI Codex (CLI + IDE), Cursor, Windsurf, and Cline.
 
 ## Why observent
 
@@ -42,7 +42,7 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 | **Cursor** | Rule — `.cursor/rules/observent.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
 | **Windsurf** | Rule — `.windsurf/rules/observent.md` | `install.sh` or manual copy |
 | **Cline** | Rule — `.clinerules/observent.md` | `install.sh` or manual copy |
-| **OpenAI Codex CLI** | Extension — `.codex/context.md` injected as context | `install.sh` or manual copy |
+| **OpenAI Codex** (CLI + IDE) | Extension — `.codex/context.md` for the CLI; `AGENTS.md` (shared `~/.codex/config.toml`) for the `openai.chatgpt` VS Code extension | `install.sh` or manual copy |
 
 > **Note:** Google replaced **Gemini CLI** with **Antigravity** (May 2026; Gemini CLI's consumer tiers sunset 2026-06-18). observent ships a single cross-tool `AGENTS.md`, which Antigravity reads natively from both the CLI and the IDE.
 
@@ -225,12 +225,12 @@ skills/observent/
 scripts/
   detect_providers.py        # Detects installed AI coding providers
 antigravity-extension.json   # Antigravity extension manifest (ex-Gemini)
-AGENTS.md                    # Cross-tool context (Antigravity / Copilot / Cursor / Claude Code; mirrors SKILL.md workflow)
+AGENTS.md                    # Cross-tool context (Antigravity / Copilot / Codex / Cursor / Claude Code; mirrors SKILL.md workflow)
 .github/copilot-instructions.md  # GitHub Copilot instructions (IDE + CLI)
 .cursor/rules/               # Cursor rule (auto-attached to *.py)
 .windsurf/rules/             # Windsurf rule
 .clinerules/                 # Cline rule
-.codex/                      # OpenAI Codex CLI context
+.codex/                      # OpenAI Codex CLI context (IDE uses AGENTS.md)
 install.sh              # Cross-platform installer (bash)
 install.ps1             # Cross-platform installer (PowerShell)
 uninstall.sh / .ps1     # Uninstallers

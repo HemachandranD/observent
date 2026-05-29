@@ -1,7 +1,8 @@
 # observent — Multi-Agent Observability (Spec-Driven)
 
 Cross-tool agent rules (the `AGENTS.md` open standard). Read natively by Google
-Antigravity (CLI + IDE), GitHub Copilot, Cursor, and Claude Code.
+Antigravity (CLI + IDE), OpenAI Codex (CLI + IDE), GitHub Copilot, Cursor, and
+Claude Code.
 
 **Invoke when** the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their Python agent app; or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
 
