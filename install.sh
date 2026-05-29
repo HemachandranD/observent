@@ -60,16 +60,25 @@ if is_installed claude_code; then
   fi
 fi
 
-# ── 4. Gemini CLI ──────────────────────────────────────────────────────────────
-if is_installed gemini; then
-  echo "  Detected: Gemini CLI"
-  if ! command -v gemini &>/dev/null; then
-    echo "    ↳ ~/.gemini found but 'gemini' not on PATH — skipping extension install"
+# ── 4. Google Antigravity (CLI + IDE) ────────────────────────────────────────
+if is_installed antigravity; then
+  echo "  Detected: Google Antigravity"
+  # AGENTS.md in the project is read by both the Antigravity CLI and the
+  # desktop IDE. Substitute ${OBSERVENT_HOME} → real path; avoid
+  # wrapping the redirect in `run` (the outer shell honors `>` even in dry-run).
+  if $DRY_RUN; then
+    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/AGENTS.md > $PROJECT_DIR/AGENTS.md"
   else
-    run gemini extensions install "$REPO_DIR"
-    echo "    ✓ Gemini extension installed"
-    INSTALLED+=("Gemini CLI")
+    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/AGENTS.md" > "$PROJECT_DIR/AGENTS.md"
   fi
+  echo "    ✓ AGENTS.md → $PROJECT_DIR/AGENTS.md"
+  if command -v antigravity &>/dev/null; then
+    run antigravity extensions install "$REPO_DIR"
+    echo "    ✓ Antigravity extension installed"
+  else
+    echo "    ↳ 'antigravity' not on PATH — skipped extension install (AGENTS.md still applies)"
+  fi
+  INSTALLED+=("Antigravity")
 fi
 
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
@@ -82,7 +91,7 @@ if is_installed codex; then
   INSTALLED+=("Codex CLI")
 fi
 
-# ── 6. Project-scoped adapters (Cursor / Windsurf / Cline) ────────────────────
+# ── 6. Project-scoped adapters (Cursor / Windsurf / Cline / GitHub Copilot) ───
 _install_rule() {
   local provider="$1" src="$2" dst_dir="$3" dst_file="$4"
   local dst="$PROJECT_DIR/$dst_dir/$dst_file"
@@ -114,6 +123,13 @@ if is_installed cline; then
   _install_rule "Cline" ".clinerules/observent.md" ".clinerules" "observent.md"
 fi
 
+# GitHub Copilot — one instructions file is read by both the IDE extension
+# (VS Code / JetBrains) and GitHub Copilot CLI / coding agent.
+if is_installed copilot; then
+  echo "  Detected: GitHub Copilot"
+  _install_rule "GitHub Copilot" ".github/copilot-instructions.md" ".github" "copilot-instructions.md"
+fi
+
 # ── 7. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
 SHELL_RC="$HOME/.bashrc"
 [[ "${SHELL:-}" == */zsh ]] && SHELL_RC="$HOME/.zshrc"
@@ -130,5 +146,5 @@ if [[ ${#INSTALLED[@]} -gt 0 ]]; then
   echo "  Scripts: $OBSERVENT_HOME/scripts/"
 else
   echo "No supported providers were detected."
-  echo "Install Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
+  echo "Install Claude Code, Antigravity, GitHub Copilot, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
 fi
