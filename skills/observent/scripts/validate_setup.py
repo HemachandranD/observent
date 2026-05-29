@@ -84,6 +84,33 @@ def _check_env(result: Result, var: str, required: bool = True) -> str | None:
     return None
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
+
+def _is_local(host: str | None) -> bool:
+    return (host or "").lower() in _LOCAL_HOSTS
+
+
+def _provision_hint(result: Result, backend: str, host: str | None) -> None:
+    """On an unreachable *local* self-host endpoint, point the user at provisioning.
+
+    LangSmith has no free self-host edition, so it gets the enterprise-license note
+    instead of a Docker offer. See references/self_host.md.
+    """
+    if not _is_local(host):
+        return
+    if backend == "langsmith":
+        result.info(
+            "LangSmith self-host requires an enterprise license - point LANGSMITH_ENDPOINT "
+            "at your licensed deployment, or use LangSmith Cloud with LANGSMITH_API_KEY."
+        )
+    else:
+        result.info(
+            f"{backend} is not reachable locally - run /observent to provision it with Docker, "
+            "or start it yourself (see references/self_host.md)."
+        )
+
+
 def _probe_tcp(result: Result, host: str, port: int, timeout: float = 3.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -132,7 +159,8 @@ def check_phoenix(smoke: bool) -> Result:
         parsed = urlparse(endpoint)
         host = parsed.hostname or "localhost"
         port = parsed.port or 6006
-        _probe_tcp(r, host, port)
+        if not _probe_tcp(r, host, port):
+            _provision_hint(r, "phoenix", host)
 
     if smoke and r.passed:
         _emit_smoke_span(
@@ -152,6 +180,12 @@ def check_langfuse(smoke: bool) -> Result:
     sk = _check_env(r, "LANGFUSE_SECRET_KEY")
     host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
     r.info(f"LANGFUSE_HOST = {host}")
+
+    host_name = urlparse(host).hostname
+    if _is_local(host_name):
+        port = urlparse(host).port or 3000
+        if not _probe_tcp(r, host_name or "localhost", port):
+            _provision_hint(r, "langfuse", host_name)
 
     if pk and sk and _is_installed("langfuse"):
         try:
@@ -201,7 +235,8 @@ def check_signoz(smoke: bool) -> Result:
 
     # Probe the OTLP endpoint root
     root = f"{parsed.scheme}://{parsed.netloc}"
-    _probe_http(r, root, method="GET")
+    if not _probe_http(r, root, method="GET"):
+        _provision_hint(r, "signoz", parsed.hostname)
 
     if smoke and r.passed:
         headers = {}
@@ -236,7 +271,8 @@ def check_elastic_apm(smoke: bool) -> Result:
     else:
         r.info("No auth set — assuming self-host without secret token")
 
-    _probe_http(r, server_url.rstrip("/"), method="GET")
+    if not _probe_http(r, server_url.rstrip("/"), method="GET"):
+        _provision_hint(r, "elastic-apm", urlparse(server_url).hostname)
 
     if smoke and r.passed:
         _emit_elastic_apm_smoke(
@@ -322,7 +358,8 @@ def check_langsmith(smoke: bool) -> Result:
 
     parsed = urlparse(endpoint)
     root = f"{parsed.scheme}://{parsed.netloc}"
-    _probe_http(r, root, method="GET")
+    if not _probe_http(r, root, method="GET"):
+        _provision_hint(r, "langsmith", parsed.hostname)
 
     if smoke and r.passed and api_key:
         headers = {"x-api-key": api_key}

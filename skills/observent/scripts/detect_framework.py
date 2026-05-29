@@ -15,6 +15,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -128,6 +130,43 @@ def _name_match(needle: str, haystack: set[str]) -> bool:
     return False
 
 
+def _docker() -> dict[str, bool]:
+    """Report whether Docker + Compose are usable for local backend provisioning.
+
+    Side-effect-free: probes the daemon with `docker version` and `docker compose
+    version`; never touches containers. Feeds spec.detection.docker_available so the
+    skill knows whether it can offer to provision an unreachable self-host backend.
+    See references/self_host.md.
+    """
+    available = False
+    compose_available = False
+    if shutil.which("docker"):
+        try:
+            available = (
+                subprocess.run(
+                    ["docker", "version"],
+                    capture_output=True,
+                    timeout=10,
+                ).returncode
+                == 0
+            )
+        except (OSError, subprocess.SubprocessError):
+            available = False
+        if available:
+            try:
+                compose_available = (
+                    subprocess.run(
+                        ["docker", "compose", "version"],
+                        capture_output=True,
+                        timeout=10,
+                    ).returncode
+                    == 0
+                )
+            except (OSError, subprocess.SubprocessError):
+                compose_available = False
+    return {"available": available, "compose_available": compose_available}
+
+
 def detect(root: Path) -> dict[str, Any]:
     declared = _gather_declared_deps(root)
     imports, imports_truncated = _gather_imports(root)
@@ -177,6 +216,7 @@ def detect(root: Path) -> dict[str, Any]:
         "backends": backends_found,
         "instrumentors": instrumentors_found,
         "web_frameworks": web_frameworks_found,
+        "docker": _docker(),
         "imports_truncated": imports_truncated,
     }
 

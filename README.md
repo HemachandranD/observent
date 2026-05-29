@@ -180,6 +180,17 @@ For Elastic APM, you get the 3-line native-agent setup (`elasticapm.Client(...)`
 
 For `Custom`, it also writes an `observent_otel.py` helper with typed setters: `with_agent_span()`, `set_llm_attrs()`, `set_tool_attrs()`. The resolved convention is written into the helper as a module-level literal (`_CONVENTION = "oi"` / `"otel-genai"` / `"both"`) at generation time — no env var, no runtime override.
 
+### Local backends
+
+If you pick a self-host backend that isn't already running and Docker is available, observent can spin it up locally — Phoenix, Langfuse, SigNoz, and Elastic APM each get a pinned Docker stack (a generated `docker-compose.observent-<backend>.yml` for Phoenix/Elastic, a pinned upstream clone for Langfuse/SigNoz).
+
+**It never builds or starts a container without asking — twice:**
+
+1. **Opt-in offer.** When a chosen self-host backend is detected unreachable, observent asks `Provision it locally with Docker? (yes / no, I'll start it myself / skip)`. Decline and no Docker task is created at all.
+2. **Confirm before it runs.** Even after you opt in, the exact `docker compose … up -d --wait` command (and, for Phoenix/Elastic, the full generated compose file) appears in the diff preview, and nothing runs until you approve `Apply these changes?`. For Langfuse/SigNoz the preview shows the pinned `git clone … && docker compose up` command rather than the upstream compose contents.
+
+You also get the matching `docker compose … down` command to tear the stack back down. **LangSmith** has no free OSS/Docker edition (self-host is enterprise-licensed), so observent points you at LangSmith Cloud or your licensed `LANGSMITH_ENDPOINT` instead of provisioning it.
+
 ## Repository structure
 
 ```
@@ -197,6 +208,7 @@ skills/observent/
     openinference.md    # Canonical OpenInference attribute reference
     otel_genai.md       # Canonical OTel-GenAI attribute reference
     examples.md         # 8 runnable end-to-end examples
+    self_host.md        # Local-provisioning Docker stacks + image pins
   scripts/
     detect_framework.py # Detects installed frameworks/backends
     validate_setup.py   # Per-backend config + connectivity check

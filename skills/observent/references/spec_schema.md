@@ -36,6 +36,10 @@ detection:
   web_frameworks:      [fastapi]                         # from detect_framework.py: web_frameworks[].name
   existing_setup:                                        # from existing_setup.py: detected[]
     - {name: opentelemetry, kind: instrumentation, imports: [main.py], env_vars_in_files: [], env_files: []}
+  docker_available: true                                 # from detect_framework.py: docker.available
+  docker_compose_available: true                         # from detect_framework.py: docker.compose_available
+  backends_reachable:                                    # one entry per self-host backend in choice.backends; cloud backends omitted
+    phoenix: false                                       # endpoint probed at spec/resume time (false => provisioning may be offered)
   project_fingerprint: sha256:<hex>                      # sha256 of (pyproject.toml + requirements*.txt + poetry.lock) bytes, in that fixed order
 choice:
   framework: langgraph                                   # one of: langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom
@@ -47,6 +51,8 @@ choice:
     langsmith: {mode: cloud,     url: "https://api.smith.langchain.com/otel/v1/traces"}
   env_vars_required: [PHOENIX_API_KEY, LANGSMITH_API_KEY, LANGSMITH_PROJECT]
   fastapi_payload_capture: true                          # true iff detection.web_frameworks contains fastapi or starlette
+  self_host_provision:                                   # per self-host backend: provision a local Docker stack? (see references/self_host.md)
+    phoenix: true                                        # only keys for backends with endpoints.<backend>.mode == self-host; langsmith NEVER appears (no OSS edition)
 ---
 
 # Observability Spec
@@ -74,6 +80,14 @@ The skill writes this field — it is never asked of the user. To change the con
 
 Missing files contribute nothing (not a placeholder). Computed at spec generation and on every resume. A mismatch on resume triggers the drift prompt (§ "Resume mechanics" in SKILL.md).
 
+### Local self-host provisioning (`detection.docker_*`, `detection.backends_reachable`, `choice.self_host_provision`)
+
+When a backend's resolved endpoint `mode` is `self-host`, the skill probes it for reachability and records the result in `detection.backends_reachable.<backend>`. If unreachable **and** Docker is available (`detection.docker_available && detection.docker_compose_available`) **and** the backend is one of `{phoenix, langfuse, signoz, elastic-apm}`, the skill offers to stand it up locally; a `yes` sets `choice.self_host_provision.<backend> = true`. Rules:
+
+- `choice.self_host_provision` only has keys for backends whose `endpoints.<backend>.mode == self-host`. Cloud backends never appear.
+- `langsmith` **never** appears — it has no free OSS/Docker edition (self-host is enterprise-licensed). See `references/self_host.md § LangSmith`.
+- The compose templates / clone commands themselves are **not** stored here — they live in `references/self_host.md`. The spec only records the *decision*; the plan materializes it.
+
 ---
 
 ## 2. `.observent/plan.md`
@@ -88,10 +102,11 @@ schema_version: 1
 generated_from_spec_at: 2026-05-19T10:01:00Z
 spec_fingerprint: sha256:<hex of spec.md frontmatter>
 files:
-  - {path: "observent_otel.py",            op: create, purpose: "TracerProvider + per-backend BatchSpanProcessors"}
-  - {path: "observent_fastapi_payload.py", op: create, purpose: "Request/response capture middleware (redacted)"}
-  - {path: "main.py",                      op: edit,   purpose: "Import observent_otel; register payload middleware"}
-  - {path: ".env",                         op: append, purpose: "Env var stubs (names only, no values)"}
+  - {path: "observent_otel.py",                  op: create, purpose: "TracerProvider + per-backend BatchSpanProcessors"}
+  - {path: "observent_fastapi_payload.py",       op: create, purpose: "Request/response capture middleware (redacted)"}
+  - {path: "docker-compose.observent-phoenix.yml", op: create, purpose: "Local Phoenix stack (vendored-compose provisioning)"}
+  - {path: "main.py",                            op: edit,   purpose: "Import observent_otel; register payload middleware"}
+  - {path: ".env",                               op: append, purpose: "Env var stubs (names only, no values)"}
 pip_install: "pip install opentelemetry-sdk==X.Y.Z openinference-instrumentation-langchain==X.Y.Z arize-phoenix-otel==X.Y.Z ..."
 env_vars:
   phoenix:   [PHOENIX_API_KEY]
@@ -101,6 +116,14 @@ processors:
   - {backend: langsmith, kind: BatchSpanProcessor, exporter: OTLPSpanExporter}
 elastic_apm_native_agent: false                # true iff `elastic-apm` ∈ spec.choice.backends
 openai_agents_native_processors: false         # true iff spec.choice.framework == openai-agents
+provision:                                     # one entry per backend with spec.choice.self_host_provision.<backend> == true; empty list otherwise
+  - backend: phoenix
+    method: vendored-compose                   # vendored-compose | upstream-clone (see references/self_host.md § Provisioning method)
+    compose_file: docker-compose.observent-phoenix.yml   # present for vendored-compose; null for upstream-clone
+    up_command: "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"
+    down_command: "docker compose -f docker-compose.observent-phoenix.yml down"
+    ui_url: "http://localhost:6006"
+    otlp_url: "http://localhost:6006/v1/traces"
 ---
 
 <!-- plan:observent_otel -->
@@ -111,6 +134,13 @@ openai_agents_native_processors: false         # true iff spec.choice.framework 
 <!-- plan:fastapi_payload -->
 ```python
 # full content of observent_fastapi_payload.py
+```
+
+<!-- plan:compose_phoenix -->
+```yaml
+# full content of docker-compose.observent-phoenix.yml — only present for vendored-compose
+# backends (phoenix, elastic-apm); upstream-clone backends (langfuse, signoz) have no anchor,
+# their `provision[].up_command` does the git clone + docker compose up. See references/self_host.md.
 ```
 
 <!-- plan:main_edit -->
@@ -138,8 +168,9 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
 - `pip_install` is **one** line, even when long; the skill quotes pinned versions from `references/matrix.md § Verified Versions`.
 - `env_vars` keys are exactly the entries in `spec.choice.backends`.
 - `processors` lists one entry per OTLP backend in `spec.choice.backends`; Elastic APM in native-agent mode does NOT appear here (it attaches to the global tracer via its OTel bridge — captured by `elastic_apm_native_agent: true` instead).
+- `provision` has one entry per backend with `spec.choice.self_host_provision.<backend> == true` (empty list when no provisioning was requested). For `method: vendored-compose`, `compose_file` names a `files[]` create entry whose content lives in the `<!-- plan:compose_<backend> -->` anchor; for `method: upstream-clone`, `compose_file` is null and `up_command` performs the pinned `git clone` + `docker compose up`. Templates and pinned image tags come from `references/self_host.md` — never inline them anywhere else.
 
----
+```
 
 ## 3. `.observent/tasks.json`
 
@@ -187,6 +218,18 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
     },
     {
       "id": "t06",
+      "kind": "write_file",
+      "payload": {"path": "docker-compose.observent-phoenix.yml", "content_ref": "plan#compose_phoenix"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t07",
+      "kind": "run_command",
+      "payload": {"cmd": "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t08",
       "kind": "validate",
       "payload": {"cmd": "python ${CLAUDE_SKILL_DIR}/scripts/validate_setup.py phoenix,langsmith"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
@@ -224,7 +267,7 @@ After mutating any task, the skill rewrites `tasks.json` to disk before moving t
 
 ### Task ordering
 
-Tasks execute strictly in array order. The first task is always a `confirm` carrying the rendered diff preview (file list + diffs + pip command + env var groups, mechanically derived from `plan.md` — same content the old Step 5 produced). The last task is always `validate`. Between them: `write_file` entries first, then `edit_file`, then `run_command` (pip install). This order ensures the user-visible diff preview matches the order in which files appear on disk.
+Tasks execute strictly in array order. The first task is always a `confirm` carrying the rendered diff preview (file list + diffs + pip command + env var groups + any compose files and `docker compose up` commands, mechanically derived from `plan.md` — same content the old Step 5 produced). The last task is always `validate`. Between them: `write_file` entries first (application files, then any `vendored-compose` files), then `edit_file`, then `run_command` for `pip install`, then the **provisioning** `run_command`(s) — one `docker compose ... up -d --wait` per `plan.provision[]` entry. Provisioning runs *after* pip-install and *before* `validate` so the backend endpoint is live when validation probes it. No new task `kind` is introduced — provisioning reuses `write_file` (for `vendored-compose`) and `run_command` (the `up` / clone+up command).
 
 ---
 
