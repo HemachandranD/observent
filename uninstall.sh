@@ -35,7 +35,9 @@ fi
 for f in \
   ".cursor/rules/observent.mdc" \
   ".windsurf/rules/observent.md" \
-  ".clinerules/observent.md"; do
+  ".clinerules/observent.md" \
+  ".github/copilot-instructions.md" \
+  "AGENTS.md"; do
   target="$PROJECT_DIR/$f"
   if [[ -f "$target" ]]; then
     run rm "$target"
@@ -57,6 +59,6 @@ done
 
 echo ""
 echo "observent uninstalled."
-echo "Note: Claude Code plugin and Gemini extension must be removed via their own CLIs:"
+echo "Note: Claude Code plugin and Antigravity extension must be removed via their own CLIs:"
 echo "  claude plugin remove observent"
-echo "  gemini extensions uninstall observent"
+echo "  antigravity extensions uninstall observent"

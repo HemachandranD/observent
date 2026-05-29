@@ -41,12 +41,32 @@ def _claude_code() -> ProviderInfo:
     }
 
 
-def _gemini() -> ProviderInfo:
+def _antigravity() -> ProviderInfo:
+    # Antigravity replaced Gemini CLI (Google, May 2026). The CLI and the
+    # desktop IDE share infrastructure and both read AGENTS.md;
+    # Antigravity still uses the ~/.gemini home for global config + skills.
     return {
-        "label": "Gemini CLI",
-        "installed": _has_binary("gemini") or _dir_exists("~/.gemini"),
-        "config_dir": str(Path("~/.gemini").expanduser()),
-        "install_cmd": "gemini extensions install https://github.com/HemachandranD/observent --auto-update",
+        "label": "Google Antigravity",
+        "installed": (
+            _has_binary("antigravity")
+            or _dir_exists("~/.antigravity")
+            or _dir_exists("~/.gemini/antigravity-cli")
+        ),
+        "config_dir": str(Path("~/.antigravity").expanduser()),
+        "install_cmd": "antigravity extensions install https://github.com/HemachandranD/observent --auto-update",
+    }
+
+
+def _copilot() -> ProviderInfo:
+    # GitHub Copilot reads the same instruction files from both the CLI
+    # (`copilot` / `gh copilot`) and the IDE extension (VS Code / JetBrains).
+    ext_dirs = ("~/.vscode/extensions", "~/.vscode-insiders/extensions")
+    has_ide = any(_glob_any(d, "github.copilot-*") for d in ext_dirs)
+    return {
+        "label": "GitHub Copilot",
+        "installed": _has_binary("copilot") or _has_binary("gh") or has_ide,
+        "config_dir": str(Path("~/.config/github-copilot").expanduser()),
+        "install_cmd": "copy .github/copilot-instructions.md into <project>/.github/",
     }
 
 
@@ -94,7 +114,8 @@ def _cline() -> ProviderInfo:
 
 DETECTORS: dict[str, Callable[[], ProviderInfo]] = {
     "claude_code": _claude_code,
-    "gemini": _gemini,
+    "antigravity": _antigravity,
+    "copilot": _copilot,
     "codex": _codex,
     "cursor": _cursor,
     "windsurf": _windsurf,

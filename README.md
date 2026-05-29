@@ -2,7 +2,7 @@
 
 A multi-provider plugin that wires up production-grade observability for multi-agent Python applications. Detects your agent framework, generates the right integration code for your chosen backend, and enforces the span attributes and context propagation patterns that actually make multi-agent traces useful.
 
-Works with Claude Code, Gemini CLI, Cursor, Windsurf, Cline, and OpenAI Codex CLI.
+Works with Claude Code, Google Antigravity (CLI + IDE), GitHub Copilot (CLI + IDE), Cursor, Windsurf, Cline, and OpenAI Codex CLI.
 
 ## Why observent
 
@@ -37,11 +37,14 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 | Provider | How observent runs | Install method |
 |---|---|---|
 | **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands | `claude plugin install HemachandranD/observent` |
-| **Gemini CLI** | Extension — loaded via `GEMINI.md` context file | `gemini extensions install https://github.com/HemachandranD/observent --auto-update` |
+| **Google Antigravity** (CLI + IDE) | Extension + `AGENTS.md` context — read by both the CLI and the desktop IDE | `antigravity extensions install https://github.com/HemachandranD/observent --auto-update` |
+| **GitHub Copilot** (CLI + IDE) | Instructions — `.github/copilot-instructions.md`, read by the IDE extension and Copilot CLI | `install.sh` or manual copy |
 | **Cursor** | Rule — `.cursor/rules/observent.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
 | **Windsurf** | Rule — `.windsurf/rules/observent.md` | `install.sh` or manual copy |
 | **Cline** | Rule — `.clinerules/observent.md` | `install.sh` or manual copy |
 | **OpenAI Codex CLI** | Extension — `.codex/context.md` injected as context | `install.sh` or manual copy |
+
+> **Note:** Google replaced **Gemini CLI** with **Antigravity** (May 2026; Gemini CLI's consumer tiers sunset 2026-06-18). observent ships a single cross-tool `AGENTS.md`, which Antigravity reads natively from both the CLI and the IDE.
 
 ## Install
 
@@ -73,15 +76,17 @@ claude plugin install HemachandranD/observent
 
 Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`.
 
-### Gemini CLI (extension)
+### Google Antigravity (extension — CLI + IDE)
 
 ```bash
-gemini extensions install https://github.com/HemachandranD/observent --auto-update
+antigravity extensions install https://github.com/HemachandranD/observent --auto-update
 ```
 
-### Cursor / Windsurf / Cline (project-scoped rules)
+The installer also drops an `AGENTS.md` into your project root, which both the Antigravity CLI and the desktop IDE read automatically.
 
-Run the installer from your project root — it copies the rule file for each detected IDE into the project:
+### Cursor / Windsurf / Cline / GitHub Copilot (project-scoped rules)
+
+Run the installer from your project root — it copies the rule / instructions file for each detected IDE into the project:
 
 ```bash
 cd /your/agent/project
@@ -102,6 +107,10 @@ cp /tmp/observent/.windsurf/rules/observent.md .windsurf/rules/
 # Cline
 mkdir -p .clinerules
 cp /tmp/observent/.clinerules/observent.md .clinerules/
+
+# GitHub Copilot (IDE + CLI)
+mkdir -p .github
+cp /tmp/observent/.github/copilot-instructions.md .github/
 ```
 
 Then set `OBSERVENT_HOME` to where the scripts live (default after `install.sh`: `~/.observent`):
@@ -148,7 +157,7 @@ bash /tmp/observent/uninstall.sh          # macOS / Linux
 
 The convention emitted by generated code is **mechanically resolved from the chosen backend set** — Phoenix → OpenInference; Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI; mixed (Phoenix + at least one of Langfuse / SigNoz / Elastic APM / LangSmith) → both. There's no runtime override; to switch conventions, re-run `/observent` with a different backend(s).
 
-### Gemini CLI / Cursor / Windsurf / Cline / Codex
+### Antigravity / GitHub Copilot / Cursor / Windsurf / Cline / Codex
 
 Ask your agent to set up observability. For example:
 
@@ -156,7 +165,7 @@ Ask your agent to set up observability. For example:
 > "Wire up Langfuse observability for this CrewAI app"
 > "Set up SigNoz monitoring for my agent"
 
-The rule / context file is auto-loaded and tells the agent to run the observent workflow.
+The rule / instructions / context file is auto-loaded and tells the agent to run the observent workflow. For Antigravity and GitHub Copilot this works identically from both the CLI and the IDE.
 
 ---
 
@@ -214,13 +223,14 @@ skills/observent/
     validate_setup.py   # Per-backend config + connectivity check
     existing_setup.py   # Detects pre-existing observability config
 scripts/
-  detect_providers.py   # Detects installed AI coding providers
-gemini-extension.json   # Gemini CLI extension manifest
-GEMINI.md               # Gemini context file (mirrors SKILL.md workflow)
-.cursor/rules/          # Cursor rule (auto-attached to *.py)
-.windsurf/rules/        # Windsurf rule
-.clinerules/            # Cline rule
-.codex/                 # OpenAI Codex CLI context
+  detect_providers.py        # Detects installed AI coding providers
+antigravity-extension.json   # Antigravity extension manifest (ex-Gemini)
+AGENTS.md                    # Cross-tool context (Antigravity / Copilot / Cursor / Claude Code; mirrors SKILL.md workflow)
+.github/copilot-instructions.md  # GitHub Copilot instructions (IDE + CLI)
+.cursor/rules/               # Cursor rule (auto-attached to *.py)
+.windsurf/rules/             # Windsurf rule
+.clinerules/                 # Cline rule
+.codex/                      # OpenAI Codex CLI context
 install.sh              # Cross-platform installer (bash)
 install.ps1             # Cross-platform installer (PowerShell)
 uninstall.sh / .ps1     # Uninstallers

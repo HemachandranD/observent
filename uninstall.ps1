@@ -27,7 +27,7 @@ if (Test-Path $ObserventHome) {
 }
 
 # Remove project-scoped adapter files
-foreach ($rel in @(".cursor\rules\observent.mdc", ".windsurf\rules\observent.md", ".clinerules\observent.md")) {
+foreach ($rel in @(".cursor\rules\observent.mdc", ".windsurf\rules\observent.md", ".clinerules\observent.md", ".github\copilot-instructions.md", "AGENTS.md")) {
     $target = Join-Path $ProjectDir $rel
     if (Test-Path $target) {
         Invoke-Step { Remove-Item -Force $target } "rm $target"
@@ -43,6 +43,6 @@ if (-not $DryRun) {
 
 Write-Host ""
 Write-Host "observent uninstalled."
-Write-Host "Note: Claude Code plugin and Gemini extension must be removed via their own CLIs:"
+Write-Host "Note: Claude Code plugin and Antigravity extension must be removed via their own CLIs:"
 Write-Host "  claude plugin remove observent"
-Write-Host "  gemini extensions uninstall observent"
+Write-Host "  antigravity extensions uninstall observent"

@@ -53,16 +53,22 @@ if (Is-Installed "claude_code") {
     }
 }
 
-# ── 4. Gemini CLI ──────────────────────────────────────────────────────────────
-if (Is-Installed "gemini") {
-    Write-Host "  Detected: Gemini CLI"
-    if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) {
-        Write-Host "    ↳ ~/.gemini found but 'gemini' not on PATH — skipping extension install"
+# ── 4. Google Antigravity (CLI + IDE) ─────────────────────────────────────────
+if (Is-Installed "antigravity") {
+    Write-Host "  Detected: Google Antigravity"
+    # AGENTS.md in the project is read by both the Antigravity CLI and the
+    # desktop IDE. Substitute ${OBSERVENT_HOME} → real path.
+    $agentsContent = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
+    $agentsOut = Join-Path $ProjectDir "AGENTS.md"
+    Invoke-Step { Set-Content -Path $agentsOut -Value $agentsContent -Encoding utf8 } "write $agentsOut"
+    Write-Host "    ✓ AGENTS.md → $agentsOut"
+    if (Get-Command antigravity -ErrorAction SilentlyContinue) {
+        Invoke-Step { antigravity extensions install $RepoDir } "antigravity extensions install $RepoDir"
+        Write-Host "    ✓ Antigravity extension installed"
     } else {
-        Invoke-Step { gemini extensions install $RepoDir } "gemini extensions install $RepoDir"
-        Write-Host "    ✓ Gemini extension installed"
-        $Installed += "Gemini CLI"
+        Write-Host "    ↳ 'antigravity' not on PATH — skipped extension install (AGENTS.md still applies)"
     }
+    $Installed += "Antigravity"
 }
 
 # ── 5. OpenAI Codex CLI ───────────────────────────────────────────────────────
@@ -102,6 +108,13 @@ if (Is-Installed "cline") {
     Install-Rule "Cline" ".clinerules\observent.md" ".clinerules" "observent.md"
 }
 
+# GitHub Copilot — one instructions file is read by both the IDE extension
+# (VS Code / JetBrains) and GitHub Copilot CLI / coding agent.
+if (Is-Installed "copilot") {
+    Write-Host "  Detected: GitHub Copilot"
+    Install-Rule "GitHub Copilot" ".github\copilot-instructions.md" ".github" "copilot-instructions.md"
+}
+
 # ── 7. Persist OBSERVENT_HOME in user environment ────────────────────────────────
 if (-not $DryRun) {
     [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $ObserventHome, "User")
@@ -115,5 +128,5 @@ if ($Installed.Count -gt 0) {
     Write-Host "  Scripts: $ObserventHome\scripts\"
 } else {
     Write-Host "No supported providers were detected."
-    Write-Host "Install Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
+    Write-Host "Install Claude Code, Antigravity, GitHub Copilot, Codex CLI, Cursor, Windsurf, or Cline, then re-run."
 }
