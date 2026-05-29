@@ -1,4 +1,4 @@
-# observent installer — detects installed providers and wires up each one.
+# observent installer - detects installed providers and wires up each one.
 # Usage: .\install.ps1 [-ProjectDir <path>] [-DryRun]
 [CmdletBinding()]
 param(
@@ -22,12 +22,12 @@ Write-Host "  Project:      $ProjectDir"
 if ($DryRun) { Write-Host "  Mode:         dry-run" }
 Write-Host ""
 
-# ── 1. Copy core skill files to OBSERVENT_HOME ──────────────────────────────────
+# --- 1. Copy core skill files to OBSERVENT_HOME ---
 Invoke-Step { New-Item -ItemType Directory -Force -Path $ObserventHome | Out-Null } "mkdir $ObserventHome"
-Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\skills\observent\*" "$ObserventHome\" } "cp skills/observent → $ObserventHome"
-Write-Host "✓ Skill files → $ObserventHome"
+Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\skills\observent\*" "$ObserventHome\" } "cp skills/observent -> $ObserventHome"
+Write-Host "[ok] Skill files -> $ObserventHome"
 
-# ── 2. Detect providers ────────────────────────────────────────────────────────
+# --- 2. Detect providers ---
 $ProviderJson = python "$RepoDir\scripts\detect_providers.py" | ConvertFrom-Json
 $Installed = @()
 
@@ -35,72 +35,72 @@ function Is-Installed([string]$Id) {
     return $ProviderJson.providers.$Id.installed -eq $true
 }
 
-# ── 3. Claude Code ─────────────────────────────────────────────────────────────
+# --- 3. Claude Code ---
 if (Is-Installed "claude_code") {
     Write-Host "  Detected: Claude Code"
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-        Write-Host "    ↳ ~/.claude found but 'claude' not on PATH — skipping plugin install"
+        Write-Host "    -> ~/.claude found but 'claude' not on PATH - skipping plugin install"
     } else {
         $alreadyInstalled = $false
         try { $alreadyInstalled = (claude plugin list 2>$null) -match "observent" } catch {}
         if ($alreadyInstalled) {
-            Write-Host "    ↳ already installed — skipping"
+            Write-Host "    -> already installed - skipping"
         } elseif ($DryRun) {
             Write-Host "[dry-run] claude plugin install HemachandranD/observent (fallback: claude plugin install $RepoDir)"
         } else {
             # Prefer the marketplace form (self-contained, supports `claude
             # plugin update`, survives deleting this clone). Fall back to the
-            # local repo path only if it fails — e.g. offline.
+            # local repo path only if it fails - e.g. offline.
             $marketplaceOk = $false
             try { claude plugin install HemachandranD/observent; $marketplaceOk = $? } catch { $marketplaceOk = $false }
             if ($marketplaceOk) {
-                Write-Host "    ✓ Claude Code plugin installed (marketplace)"
+                Write-Host "    [ok] Claude Code plugin installed (marketplace)"
             } else {
-                Write-Host "    ↳ marketplace install failed — falling back to local path"
+                Write-Host "    -> marketplace install failed - falling back to local path"
                 claude plugin install $RepoDir
-                Write-Host "    ✓ Claude Code plugin installed (local path)"
+                Write-Host "    [ok] Claude Code plugin installed (local path)"
             }
         }
         $Installed += "Claude Code"
     }
 }
 
-# ── 4. Google Antigravity (CLI + IDE) ─────────────────────────────────────────
+# --- 4. Google Antigravity (CLI + IDE) ---
 if (Is-Installed "antigravity") {
     Write-Host "  Detected: Google Antigravity"
     # AGENTS.md in the project is read by both the Antigravity CLI and the
-    # desktop IDE. Substitute ${OBSERVENT_HOME} → real path.
+    # desktop IDE. Substitute ${OBSERVENT_HOME} -> real path.
     $agentsContent = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
     $agentsOut = Join-Path $ProjectDir "AGENTS.md"
     Invoke-Step { Set-Content -Path $agentsOut -Value $agentsContent -Encoding utf8 } "write $agentsOut"
-    Write-Host "    ✓ AGENTS.md → $agentsOut"
+    Write-Host "    [ok] AGENTS.md -> $agentsOut"
     if (Get-Command antigravity -ErrorAction SilentlyContinue) {
         Invoke-Step { antigravity extensions install $RepoDir } "antigravity extensions install $RepoDir"
-        Write-Host "    ✓ Antigravity extension installed"
+        Write-Host "    [ok] Antigravity extension installed"
     } else {
-        Write-Host "    ↳ 'antigravity' not on PATH — skipped extension install (AGENTS.md still applies)"
+        Write-Host "    -> 'antigravity' not on PATH - skipped extension install (AGENTS.md still applies)"
     }
     $Installed += "Antigravity"
 }
 
-# ── 5. OpenAI Codex (CLI + IDE) ───────────────────────────────────────────────
+# --- 5. OpenAI Codex (CLI + IDE) ---
 if (Is-Installed "codex") {
     Write-Host "  Detected: OpenAI Codex (CLI + IDE)"
     # CLI: the .codex/ extension is loaded from ~/.codex/extensions/observent.
     $CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\observent"
     Invoke-Step { New-Item -ItemType Directory -Force -Path $CodexExt | Out-Null } "mkdir $CodexExt"
-    Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\.codex\*" "$CodexExt\" } "cp .codex → $CodexExt"
-    Write-Host "    ✓ Codex extension → $CodexExt"
+    Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\.codex\*" "$CodexExt\" } "cp .codex -> $CodexExt"
+    Write-Host "    [ok] Codex extension -> $CodexExt"
     # IDE (openai.chatgpt VS Code extension) shares ~/.codex/config.toml and
-    # reads AGENTS.md from the project — drop it so the editor surface is covered.
+    # reads AGENTS.md from the project - drop it so the editor surface is covered.
     $codexAgents = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
     $codexAgentsOut = Join-Path $ProjectDir "AGENTS.md"
     Invoke-Step { Set-Content -Path $codexAgentsOut -Value $codexAgents -Encoding utf8 } "write $codexAgentsOut"
-    Write-Host "    ✓ AGENTS.md → $codexAgentsOut"
+    Write-Host "    [ok] AGENTS.md -> $codexAgentsOut"
     $Installed += "Codex (CLI + IDE)"
 }
 
-# ── 6. Project-scoped adapters ─────────────────────────────────────────────────
+# --- 6. Project-scoped adapters ---
 function Install-Rule([string]$Provider, [string]$Src, [string]$DstDir, [string]$DstFile) {
     $dstPath = Join-Path $ProjectDir $DstDir
     Invoke-Step { New-Item -ItemType Directory -Force -Path $dstPath | Out-Null } "mkdir $dstPath"
@@ -108,7 +108,7 @@ function Install-Rule([string]$Provider, [string]$Src, [string]$DstDir, [string]
     $content = $content -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
     $outFile = Join-Path $dstPath $DstFile
     Invoke-Step { Set-Content -Path $outFile -Value $content -Encoding utf8 } "write $outFile"
-    Write-Host "    ✓ $Provider rule → $outFile"
+    Write-Host "    [ok] $Provider rule -> $outFile"
     $script:Installed += $Provider
 }
 
@@ -127,20 +127,20 @@ if (Is-Installed "cline") {
     Install-Rule "Cline" ".clinerules\observent.md" ".clinerules" "observent.md"
 }
 
-# GitHub Copilot — one instructions file is read by both the IDE extension
+# GitHub Copilot - one instructions file is read by both the IDE extension
 # (VS Code / JetBrains) and GitHub Copilot CLI / coding agent.
 if (Is-Installed "copilot") {
     Write-Host "  Detected: GitHub Copilot"
     Install-Rule "GitHub Copilot" ".github\copilot-instructions.md" ".github" "copilot-instructions.md"
 }
 
-# ── 7. Persist OBSERVENT_HOME in user environment ────────────────────────────────
+# --- 7. Persist OBSERVENT_HOME in user environment ---
 if (-not $DryRun) {
     [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $ObserventHome, "User")
-    Write-Host "  ✓ OBSERVENT_HOME set in user environment (restart terminal to apply)"
+    Write-Host "  [ok] OBSERVENT_HOME set in user environment (restart terminal to apply)"
 }
 
-# ── 8. Summary ─────────────────────────────────────────────────────────────────
+# --- 8. Summary ---
 Write-Host ""
 if ($Installed.Count -gt 0) {
     Write-Host "observent installed for: $($Installed -join ', ')"

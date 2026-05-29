@@ -1,4 +1,4 @@
-# observent uninstaller — removes OBSERVENT_HOME and project-scoped adapter files.
+# observent uninstaller - removes OBSERVENT_HOME and project-scoped adapter files.
 # Usage: .\uninstall.ps1 [-ProjectDir <path>] [-DryRun]
 [CmdletBinding()]
 param(
@@ -21,9 +21,9 @@ Write-Host ""
 # Remove OBSERVENT_HOME
 if (Test-Path $ObserventHome) {
     Invoke-Step { Remove-Item -Recurse -Force $ObserventHome } "rm -rf $ObserventHome"
-    Write-Host "✓ Removed $ObserventHome"
+    Write-Host "[ok] Removed $ObserventHome"
 } else {
-    Write-Host "  $ObserventHome not found — skipping"
+    Write-Host "  $ObserventHome not found - skipping"
 }
 
 # Remove project-scoped adapter files
@@ -31,14 +31,14 @@ foreach ($rel in @(".cursor\rules\observent.mdc", ".windsurf\rules\observent.md"
     $target = Join-Path $ProjectDir $rel
     if (Test-Path $target) {
         Invoke-Step { Remove-Item -Force $target } "rm $target"
-        Write-Host "✓ Removed $target"
+        Write-Host "[ok] Removed $target"
     }
 }
 
 # Remove OBSERVENT_HOME from user environment
 if (-not $DryRun) {
     [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $null, "User")
-    Write-Host "✓ Removed OBSERVENT_HOME from user environment"
+    Write-Host "[ok] Removed OBSERVENT_HOME from user environment"
 }
 
 Write-Host ""
