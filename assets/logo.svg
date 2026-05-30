@@ -1,4 +1,4 @@
-<svg width="1000" height="340" viewBox="0 0 1000 340" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="observent skills">
+<svg width="1000" height="340" viewBox="0 0 1000 340" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="observent">
   <defs>
     <radialGradient id="glow" cx="50%" cy="100%" r="75%">
       <stop offset="0" stop-color="#CC785C" stop-opacity="0.45"/>
@@ -12,7 +12,6 @@
   <rect x="1" y="1" width="998" height="338" rx="31" fill="none" stroke="#CC785C" stroke-opacity="0.18" stroke-width="2"/>
 
   <!-- OBSERVENT -->
-  
   <rect x="169.5" y="65.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
   <rect x="182.5" y="65.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
   <rect x="195.5" y="65.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
@@ -161,9 +160,6 @@
   <rect x="806.5" y="117.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
   <rect x="806.5" y="130.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
   <rect x="806.5" y="143.0" width="11" height="11" rx="2.5" fill="#F5F4EE"/>
-
-  <!-- SKILLS -->
-  
 
   <!-- timeline -->
   <line x1="250" y1="211" x2="750" y2="211" stroke="#CC785C" stroke-opacity="0.35" stroke-width="2"/>
