@@ -1,0 +1,29 @@
+<svg width="820" height="200" viewBox="0 0 820 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="observent">
+  <defs>
+    <linearGradient id="spark" x1="56" y1="54" x2="148" y2="146" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E8956B"/>
+      <stop offset="1" stop-color="#CC785C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- warm dark canvas, Claude Code style -->
+  <rect x="0" y="0" width="820" height="200" rx="28" fill="#1F1E1D"/>
+
+  <!-- observation rings -->
+  <circle cx="102" cy="100" r="74" fill="none" stroke="#CC785C" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="102" cy="100" r="60" fill="none" stroke="#CC785C" stroke-opacity="0.28" stroke-width="2"/>
+
+  <!-- span / trace ticks along the outer ring -->
+  <circle cx="102" cy="26" r="3.5" fill="#CC785C" fill-opacity="0.55"/>
+  <circle cx="176" cy="100" r="3.5" fill="#CC785C" fill-opacity="0.55"/>
+  <circle cx="102" cy="174" r="3.5" fill="#CC785C" fill-opacity="0.55"/>
+
+  <!-- Claude-style sparkle mark (the watching eye / spark) -->
+  <path d="M102 54 Q108.4 93.6 148 100 Q108.4 106.4 102 146 Q95.6 106.4 56 100 Q95.6 93.6 102 54 Z" fill="url(#spark)"/>
+
+  <!-- wordmark -->
+  <text x="210" y="98" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="84" font-weight="600" letter-spacing="-2" fill="#F5F4EE">observent</text>
+
+  <!-- tagline -->
+  <text x="212" y="140" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="400" letter-spacing="0.2" fill="#C89078">observability for multi-agent apps</text>
+</svg>
