@@ -453,7 +453,7 @@ Multi-agent traces only work if context flows correctly across every boundary.
 
 **Standard.** All wire-level context propagation in observent uses OTel SDK defaults, which implement **W3C Trace Context Level 1** (`traceparent` + `tracestate` per https://www.w3.org/TR/trace-context/) plus W3C Baggage (`baggage` header). The OI / OTel-GenAI semantic conventions govern *span attributes*; W3C TC governs the *cross-process context wire format* — the two are orthogonal. **Never call `set_global_textmap()`** with a non-W3C propagator (legacy B3, Jaeger `uber-trace-id`, etc.) — observent's exporters and all 5 backends assume W3C `traceparent` / `tracestate` on the wire. If interop with a B3-only service is required, use `CompositePropagator([TraceContextTextMapPropagator(), B3Format(), W3CBaggagePropagator()])` so W3C remains primary.
 
-**Sources:** W3C Trace Context — https://www.w3.org/TR/trace-context/ · OTel context API (Python) — https://opentelemetry.io/docs/languages/python/instrumentation/#context-propagation · `BaggageSpanProcessor` (PyPI `opentelemetry-processor-baggage`) — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/processor/opentelemetry-processor-baggage · FastAPI / Starlette inbound middleware — see `fastapi_payload.md`
+**Sources:** W3C Trace Context — https://www.w3.org/TR/trace-context/ · OTel context API (Python) — https://opentelemetry.io/docs/languages/python/instrumentation/#context-propagation · `BaggageSpanProcessor` (PyPI `opentelemetry-processor-baggage`) — https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/processor/opentelemetry-processor-baggage · AI-boundary input/output capture (transport-agnostic) — see `capture.md`
 
 ### Sync execution
 
@@ -519,9 +519,11 @@ Outgoing HTTP requests will carry W3C `traceparent` (TC §3.2) and `tracestate` 
 
 **Sampling-flag note.** When an upstream caller sends `traceparent` with the `sampled` bit (TC §3.2.2.5) cleared, OTel's default `ParentBased(ALWAYS_ON)` sampler propagates the bit unchanged downstream. If you replace the global sampler, keep it parent-aware so cross-service trace integrity holds.
 
-### Inbound HTTP payload capture (FastAPI / Starlette)
+### AI-boundary input/output capture (any transport)
 
-When the user's agent app is a FastAPI or Starlette service, observent generates an additional middleware that captures the inbound request (headers, query, body) and the outbound response body as `http.request.*` / `http.response.*` span attributes — with sensitive keys (auth credentials, session/CSRF, PII) redacted at the value level. Full payloads are attached without truncation. See **`references/fastapi_payload.md`** for the canonical middleware body, the redaction key list, and registration steps.
+observent captures the input/output that crosses the **AI-system boundary** — the prompt, request state, run config, and result — as `input.*` / `output.*` attributes on the agent run's existing root span, and sets the run's status (OK / ERROR). This is **transport-agnostic**: it works identically whether the agent is triggered by HTTP, a CLI, a queue worker, or a script, because it enriches whatever span is already recording (the framework instrumentor's root, or the HTTP server span) rather than opening its own. Sensitive keys are redacted at the value level; a baggage whitelist promotes correlation keys onto child spans.
+
+When the raw HTTP wire payload is *also* needed (a header or envelope field the agent never receives as an argument), an **optional** ASGI adapter enriches the existing server span with `http.request.*` / `http.response.*` — it adds no span and does not buffer streaming responses. See **`references/capture.md`** for the canonical engine, the per-framework wrap points, the redaction key list, and the optional HTTP adapter.
 
 ### Agent handoffs
 

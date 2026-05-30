@@ -50,7 +50,7 @@ choice:
     phoenix:   {mode: self-host, url: "http://localhost:6006/v1/traces"}
     langsmith: {mode: cloud,     url: "https://api.smith.langchain.com/otel/v1/traces"}
   env_vars_required: [PHOENIX_API_KEY, LANGSMITH_API_KEY, LANGSMITH_PROJECT]
-  fastapi_payload_capture: true                          # true iff detection.web_frameworks contains fastapi or starlette
+  http_body_capture: true                                # OPTIONAL raw-HTTP-body adapter; true iff detection.web_frameworks contains fastapi/starlette AND raw wire payload is wanted. AI-boundary capture (observent_capture.py) is always generated regardless.
   self_host_provision:                                   # per self-host backend: provision a local Docker stack? (see references/self_host.md)
     phoenix: true                                        # only keys for backends with endpoints.<backend>.mode == self-host; langsmith NEVER appears (no OSS edition)
 ---
@@ -103,9 +103,10 @@ generated_from_spec_at: 2026-05-19T10:01:00Z
 spec_fingerprint: sha256:<hex of spec.md frontmatter>
 files:
   - {path: "observent_otel.py",                  op: create, purpose: "TracerProvider + per-backend BatchSpanProcessors"}
-  - {path: "observent_fastapi_payload.py",       op: create, purpose: "Request/response capture middleware (redacted)"}
+  - {path: "observent_capture.py",               op: create, purpose: "Transport-agnostic AI-boundary input/output/status capture (redacted)"}
+  - {path: "observent_http.py",                  op: create, purpose: "OPTIONAL raw-HTTP-body adapter (only if http_body_capture)"}
   - {path: "docker-compose.observent-phoenix.yml", op: create, purpose: "Local Phoenix stack (vendored-compose provisioning)"}
-  - {path: "main.py",                            op: edit,   purpose: "Import observent_otel; register payload middleware"}
+  - {path: "main.py",                            op: edit,   purpose: "Import observent_otel; wrap agent invocation with capture_run"}
   - {path: ".env",                               op: append, purpose: "Env var stubs (names only, no values)"}
 pip_install: "pip install opentelemetry-sdk==X.Y.Z openinference-instrumentation-langchain==X.Y.Z arize-phoenix-otel==X.Y.Z ..."
 env_vars:
@@ -131,9 +132,14 @@ provision:                                     # one entry per backend with spec
 # full content of observent_otel.py — emitted verbatim into the user's project at task execution
 ```
 
-<!-- plan:fastapi_payload -->
+<!-- plan:observent_capture -->
 ```python
-# full content of observent_fastapi_payload.py
+# full content of observent_capture.py
+```
+
+<!-- plan:observent_http -->
+```python
+# full content of observent_http.py (only when http_body_capture: true)
 ```
 
 <!-- plan:compose_phoenix -->
@@ -201,7 +207,7 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
     {
       "id": "t03",
       "kind": "write_file",
-      "payload": {"path": "observent_fastapi_payload.py", "content_ref": "plan#fastapi_payload"},
+      "payload": {"path": "observent_capture.py", "content_ref": "plan#observent_capture"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {

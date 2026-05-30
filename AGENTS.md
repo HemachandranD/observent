@@ -42,6 +42,6 @@ observent persists state in the **user's project** under `.observent/`:
 - **OpenAI Agents SDK** uses the SDK's native `set_trace_processors()` API (not `openinference-instrumentation-openai`).
 - **Elastic APM** uses the native `elasticapm.Client(...)` + `elasticapm.instrument()` (its OTel bridge picks up framework instrumentors), not OTLP.
 - **LangSmith** is pure OTLP HTTP to `${LANGSMITH_ENDPOINT}/otel/v1/traces` with `x-api-key: ${LANGSMITH_API_KEY}`.
-- **FastAPI** detected ⇒ generate `observent_fastapi_payload.py` from `${OBSERVENT_HOME}/references/fastapi_payload.md`.
+- **AI-boundary capture** (always) ⇒ generate `observent_capture.py` from `${OBSERVENT_HOME}/references/capture.md`; wrap the agent invocation with `capture_run` so input/output/status are captured on the existing root span for any transport (HTTP, CLI, worker). Optional raw HTTP bodies via `observent_http.py` only when needed.
 
-References: `${OBSERVENT_HOME}/SKILL.md` · `${OBSERVENT_HOME}/references/spec_schema.md` · `${OBSERVENT_HOME}/references/matrix.md` · `${OBSERVENT_HOME}/references/openinference.md` · `${OBSERVENT_HOME}/references/otel_genai.md` · `${OBSERVENT_HOME}/references/examples.md` · `${OBSERVENT_HOME}/references/fastapi_payload.md`.
+References: `${OBSERVENT_HOME}/SKILL.md` · `${OBSERVENT_HOME}/references/spec_schema.md` · `${OBSERVENT_HOME}/references/matrix.md` · `${OBSERVENT_HOME}/references/openinference.md` · `${OBSERVENT_HOME}/references/otel_genai.md` · `${OBSERVENT_HOME}/references/examples.md` · `${OBSERVENT_HOME}/references/capture.md`.

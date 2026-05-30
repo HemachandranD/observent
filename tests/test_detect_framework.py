@@ -49,7 +49,11 @@ def test_imports_detected_from_source(tmp_path):
     assert "fastapi" in _names(report["web_frameworks"])
 
 
-def test_empty_project_detects_nothing(tmp_path):
+def test_empty_project_detects_nothing(tmp_path, monkeypatch):
+    # Pin installed-package probing off so the test is deterministic regardless
+    # of what happens to be pip-installed in the runner (declared/imported
+    # detection is what an empty project should surface — i.e. nothing).
+    monkeypatch.setattr(detect_framework, "_is_installed", lambda module: False)
     report = detect(tmp_path)
     assert report["frameworks"] == []
     assert report["backends"] == []

@@ -31,6 +31,8 @@ skills/observent/
     openinference.md    # Canonical OpenInference attribute reference (Phoenix path)
     otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz / Elastic APM / LangSmith path)
     examples.md         # 8 runnable examples covering all frameworks + multi-backend fan-out
+    capture.md          # transport-agnostic AI-boundary input/output/status capture engine
+                        # (observent_capture.py) + optional observent_http.py raw-body adapter
     self_host.md        # local-provisioning reference: pinned Docker compose / clone commands
                         # per self-hostable backend + image-tag pin table
   scripts/
