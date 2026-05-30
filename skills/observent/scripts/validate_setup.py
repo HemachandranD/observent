@@ -28,10 +28,9 @@ import os
 import socket
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 from urllib.parse import urlparse
-
 
 # Per-backend convention preference. See references/matrix.md § Convention resolution.
 # Phoenix is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith consume OTel-GenAI.
@@ -42,6 +41,31 @@ BACKEND_CONVENTION: dict[str, str] = {
     "elastic-apm": "otel-genai",
     "langsmith": "otel-genai",
 }
+
+
+def resolve_convention(backends: list[str]) -> str:
+    """Derive the span-attribute convention for a *set* of backends.
+
+    Mechanical rule, mirroring references/matrix.md § Convention resolution and
+    SKILL.md Phase 1 § 1.4 — not a free choice:
+
+      - ``{phoenix}``                                   -> "oi"
+      - any non-empty subset of the OTel-GenAI backends -> "otel-genai"
+      - phoenix *and* >=1 OTel-GenAI backend            -> "both"
+
+    Phoenix renders its native UI from OpenInference keys; Langfuse / SigNoz /
+    Elastic APM / LangSmith consume OTel-GenAI. "both" is justified only when a
+    fan-out spans Phoenix and at least one of the others, so each UI lights up.
+    """
+    has_phoenix = "phoenix" in backends
+    has_otel_genai = any(BACKEND_CONVENTION.get(b) == "otel-genai" for b in backends)
+    if has_phoenix and has_otel_genai:
+        return "both"
+    if has_phoenix:
+        return "oi"
+    if has_otel_genai:
+        return "otel-genai"
+    raise ValueError(f"cannot resolve convention for backends: {backends!r}")
 
 
 @dataclass
@@ -511,6 +535,7 @@ def main() -> int:
             overall_pass = False
 
     print("\n=== Summary ===")
+    print(f"  Resolved convention: {resolve_convention(backends)}")
     print(f"  {'PASS' if overall_pass else 'FAIL'}")
     return 0 if overall_pass else 1
 
