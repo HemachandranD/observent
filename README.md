@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="observent" width="760">
+</p>
+
+<p align="center">
+  Detect &rarr; Spec &rarr; Plan &rarr; Tasks &rarr; Implement &rarr; Validate &rarr; more&hellip;
+</p>
+
 # observent
 
 A multi-provider plugin that wires up production-grade observability for multi-agent Python applications. Detects your agent framework, generates the right integration code for your chosen backend, and enforces the span attributes and context propagation patterns that actually make multi-agent traces useful.
