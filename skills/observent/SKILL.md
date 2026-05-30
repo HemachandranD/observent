@@ -121,8 +121,9 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
 
 - **Files to generate** — typically:
   - `observent_otel.py` (always — backend init + framework instrumentation).
-  - `observent_fastapi_payload.py` (only if `spec.choice.fastapi_payload_capture: true`).
-  - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel` and register middleware.
+  - `observent_capture.py` (always — transport-agnostic input/output/status capture at the AI boundary; see `references/capture.md`).
+  - `observent_http.py` (only if `spec.choice.http_body_capture: true` — optional raw HTTP body/header capture; enriches the existing server span, adds no span).
+  - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
   - `.env` append with required env var names.
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
@@ -147,9 +148,15 @@ Every `observent_otel.py` template must include:
 - **OTLP HTTP** (not gRPC) for all OTLP backends.
 - **Convention as a generation-time literal** — for the Custom path, write `_CONVENTION = "<oi|otel-genai|both>"` as a literal in `observent_otel.py`. Do **not** make it read an env var; convention is a generation-time decision.
 
-### Step 2.3 — FastAPI payload capture
+### Step 2.3 — AI-boundary input/output/status capture
 
-If `spec.choice.fastapi_payload_capture: true`, generate `observent_fastapi_payload.py` from the canonical template in `references/fastapi_payload.md` and add `app.add_middleware(ObserventPayloadMiddleware)` to the user's FastAPI app. Sensitive keys (auth credentials, session/CSRF, PII) are redacted at the value level; the key stays so the attribute shape is stable. No truncation. The redaction list is a **generation-time literal** in the generated file.
+observent's prime directive is **never miss any input or output that crosses the AI-system boundary**, regardless of how the agent is triggered (HTTP, CLI, queue worker, cron, notebook). This capture is **transport-agnostic** and is generated for **every** framework — not just web apps.
+
+- **Always** generate `observent_capture.py` from the canonical engine in `references/capture.md` and wrap the agent invocation with `capture_run` / `capture_run_async` (or call `enrich_current_span(...)` + `capture_output(...)` directly). See `references/capture.md § Per-framework wrap points` for where each framework's invoke call sits.
+- **Enrich in place, never duplicate the root span.** The engine writes `input.*` / `output.*` / status onto the span that is **already recording** (the framework instrumentor's root span, or the HTTP server span). It opens its own `agent.run` span **only** as a fallback when nothing is recording (e.g. a bare CLI), so input is never lost. Do not add a second observent root span when one already exists.
+- **Span status is set at the AI boundary** by the engine: `StatusCode.OK` on success; `record_exception()` + `StatusCode.ERROR` + `error.type` on failure. Status no longer depends on whether a transport instrumentor happens to be present.
+- Sensitive keys (auth credentials, session/CSRF, PII) are redacted at the value level (key preserved so the attribute shape is stable); a baggage whitelist promotes correlation keys onto child spans. Both are **generation-time literals** in the generated file — same rule as `_CONVENTION`. No truncation.
+- **Optional raw HTTP capture** — only if `spec.choice.http_body_capture: true`, also generate `observent_http.py` (an ASGI middleware that enriches the **existing** server span with `http.request.*` / `http.response.*`; adds no span, does not buffer streaming responses). Generate this only when the agent's logical input — already captured by `capture_run` — is insufficient and the raw wire payload (a header/envelope field) is also needed.
 
 ### Step 2.4 — Context propagation rules
 
@@ -271,7 +278,7 @@ Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block b
 - `references/openinference.md` — canonical OpenInference semantic conventions reference (Phoenix-native; used when convention=`oi` or `both`).
 - `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith; used when convention=`otel-genai` or `both`).
 - `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
-- `references/fastapi_payload.md` — canonical FastAPI / Starlette middleware that captures inbound request + outbound response payloads as redacted span attributes.
+- `references/capture.md` — canonical transport-agnostic engine (`observent_capture.py`) that captures AI-boundary input/output + run status by enriching the existing root span, plus the optional `observent_http.py` raw-HTTP-body adapter.
 - `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
 - `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
