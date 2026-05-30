@@ -62,8 +62,10 @@ NOTICE                  # Apache-2.0 attribution notice
 
 - **Language:** Python 3.10+ (CI matrix: 3.10 / 3.11 / 3.12 on Ubuntu + Windows).
 - **Skill scripts:** zero external dependencies — only stdlib + optional dynamic imports.
-- **Lint:** `ruff`.
-- **Type check:** `mypy --strict`.
+- **Tooling config:** centralized in `pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]`). CI installs **pinned** `ruff` / `mypy` / `pytest` versions so a floating release can't redden an unrelated PR — bump the pins in `.github/workflows/ci.yml` deliberately.
+- **Lint:** `ruff` (rule set in `pyproject.toml`).
+- **Type check:** `mypy --strict` (config in `pyproject.toml`).
+- **Tests:** `pytest` — unit tests for the four scripts + the convention rule, plus a docs-consistency suite that enforces the § Documentation Hygiene invariants (framework×backend grid and version pins agree across files). `tests/` is **not** shipped in the plugin.
 
 ## Commands
 
@@ -91,9 +93,12 @@ python skills/observent/scripts/validate_setup.py phoenix,langfuse,signoz,elasti
 python skills/observent/scripts/validate_setup.py phoenix --smoke-test
 python skills/observent/scripts/validate_setup.py phoenix,langsmith --smoke-test
 
-# Lint + type-check
-ruff check skills/observent/scripts/
-mypy --strict skills/observent/scripts/
+# Run the test suite (unit tests + docs-consistency checks)
+pytest
+
+# Lint + type-check (config lives in pyproject.toml)
+ruff check skills/observent/scripts/ scripts/ tests/
+mypy skills/observent/scripts/ scripts/
 ```
 
 ## How to Extend
@@ -115,13 +120,14 @@ Update in this order:
 
 Update in this order:
 
-1. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`.
+1. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`, **and** add the backend to `BACKEND_CONVENTION` (`oi` for an OpenInference-native backend, `otel-genai` otherwise) so `resolve_convention()` and its tests pick it up.
 2. `skills/observent/scripts/detect_framework.py` — add an entry to `BACKENDS`.
 3. `skills/observent/SKILL.md` — update the description, the backend-options list in Phase 1 § Step 1.3, the convention-derivation table (if applicable), and the endpoints table in Phase 2 § Step 2.5.
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
 7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack or `upstream-clone` when the stack needs repo-mounted config files), add a row to the § Image Versions table with the exact image tag(s), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
+8. `tests/` — extend `test_docs_consistency.py`'s `BACKEND_COLUMNS` (and `FRAMEWORKS` when adding a framework) so the cross-file grid check covers the new option, then run `pytest` to confirm the matrix/README/code stay in sync.
 
 ### Adding a new provider
 

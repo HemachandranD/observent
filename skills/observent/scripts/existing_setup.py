@@ -76,7 +76,10 @@ ENV_VAR_PATTERNS: dict[str, re.Pattern[str]] = {
     "opentelemetry": re.compile(r"\bOTEL_(?:EXPORTER_OTLP_ENDPOINT|SERVICE_NAME|RESOURCE_ATTRIBUTES)\b"),
 }
 
-EXCLUDE_PARTS = {".git", ".venv", "venv", "env", "__pycache__", "node_modules", ".tox", ".mypy_cache", ".ruff_cache", ".claude"}
+EXCLUDE_PARTS = {
+    ".git", ".venv", "venv", "env", "__pycache__", "node_modules",
+    ".tox", ".mypy_cache", ".ruff_cache", ".claude",
+}
 SCAN_SUFFIXES = {".py", ".env", ".sh", ".yaml", ".yml", ".toml", ".cfg", ".ini"}
 
 

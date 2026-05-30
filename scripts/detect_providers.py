@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 
 def _has_binary(cmd: str) -> bool:
@@ -53,7 +53,10 @@ def _antigravity() -> ProviderInfo:
             or _dir_exists("~/.gemini/antigravity-cli")
         ),
         "config_dir": str(Path("~/.antigravity").expanduser()),
-        "install_cmd": "antigravity extensions install https://github.com/HemachandranD/observent --auto-update",
+        "install_cmd": (
+            "antigravity extensions install "
+            "https://github.com/HemachandranD/observent --auto-update"
+        ),
     }
 
 
@@ -79,7 +82,10 @@ def _codex() -> ProviderInfo:
         "label": "OpenAI Codex (CLI + IDE)",
         "installed": _has_binary("codex") or _dir_exists("~/.codex") or has_ide,
         "config_dir": str(Path("~/.codex").expanduser()),
-        "install_cmd": "copy .codex/ into ~/.codex/extensions/observent/ (CLI) + AGENTS.md into <project>/ (IDE)",
+        "install_cmd": (
+            "copy .codex/ into ~/.codex/extensions/observent/ (CLI) "
+            "+ AGENTS.md into <project>/ (IDE)"
+        ),
     }
 
 
