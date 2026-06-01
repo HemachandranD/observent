@@ -10,5 +10,22 @@
   },
   "worktree": {
     "bgIsolation": "none"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/docs_consistency.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/lint_typecheck.py"
+          }
+        ]
+      }
+    ]
   }
 }
