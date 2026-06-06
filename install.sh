@@ -20,6 +20,22 @@ run() {
   if $DRY_RUN; then echo "[dry-run] $*"; else "$@"; fi
 }
 
+# Write the canonical cross-tool AGENTS.md into the project (substituting
+# ${OBSERVENT_HOME}). Idempotent — several providers read AGENTS.md natively,
+# so the first one to need it writes it and the rest are no-ops.
+AGENTS_WRITTEN=false
+write_agents_md() {
+  $AGENTS_WRITTEN && { echo "    ↳ AGENTS.md already written this run"; return; }
+  # Avoid wrapping the redirect in `run` (the outer shell honors `>` even in dry-run).
+  if $DRY_RUN; then
+    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/AGENTS.md > $PROJECT_DIR/AGENTS.md"
+  else
+    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/AGENTS.md" > "$PROJECT_DIR/AGENTS.md"
+  fi
+  echo "    ✓ AGENTS.md → $PROJECT_DIR/AGENTS.md"
+  AGENTS_WRITTEN=true
+}
+
 echo "observent installer"
 echo "  Repo:         $REPO_DIR"
 echo "  OBSERVENT_HOME: $OBSERVENT_HOME"
@@ -74,14 +90,8 @@ fi
 if is_installed antigravity; then
   echo "  Detected: Google Antigravity"
   # AGENTS.md in the project is read by both the Antigravity CLI and the
-  # desktop IDE. Substitute ${OBSERVENT_HOME} → real path; avoid
-  # wrapping the redirect in `run` (the outer shell honors `>` even in dry-run).
-  if $DRY_RUN; then
-    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/AGENTS.md > $PROJECT_DIR/AGENTS.md"
-  else
-    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/AGENTS.md" > "$PROJECT_DIR/AGENTS.md"
-  fi
-  echo "    ✓ AGENTS.md → $PROJECT_DIR/AGENTS.md"
+  # desktop IDE.
+  write_agents_md
   if command -v antigravity &>/dev/null; then
     run antigravity extensions install "$REPO_DIR"
     echo "    ✓ Antigravity extension installed"
@@ -94,23 +104,33 @@ fi
 # ── 5. OpenAI Codex (CLI + IDE) ───────────────────────────────────────────────
 if is_installed codex; then
   echo "  Detected: OpenAI Codex (CLI + IDE)"
-  # CLI: the .codex/ extension is loaded from ~/.codex/extensions/observent.
-  CODEX_EXT="$HOME/.codex/extensions/observent"
-  run mkdir -p "$CODEX_EXT"
-  run cp -r "$REPO_DIR/.codex/." "$CODEX_EXT/"
-  echo "    ✓ Codex extension → $CODEX_EXT"
-  # IDE (openai.chatgpt VS Code extension) shares ~/.codex/config.toml and reads
-  # AGENTS.md from the project — drop it so the editor surface is covered too.
-  if $DRY_RUN; then
-    echo "[dry-run] sed 's|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g' $REPO_DIR/AGENTS.md > $PROJECT_DIR/AGENTS.md"
-  else
-    sed "s|\${OBSERVENT_HOME}|$OBSERVENT_HOME|g" "$REPO_DIR/AGENTS.md" > "$PROJECT_DIR/AGENTS.md"
-  fi
-  echo "    ✓ AGENTS.md → $PROJECT_DIR/AGENTS.md"
+  # Both the Codex CLI (`codex` / ~/.codex) and the IDE extension
+  # (openai.chatgpt) read the project-root AGENTS.md natively — no separate
+  # extension/context file is needed.
+  write_agents_md
   INSTALLED+=("Codex (CLI + IDE)")
 fi
 
-# ── 6. Project-scoped adapters (Cursor / Windsurf / Cline / GitHub Copilot) ───
+# ── 6. Providers that read AGENTS.md natively (Windsurf / GitHub Copilot) ──────
+if is_installed windsurf; then
+  echo "  Detected: Windsurf"
+  # Windsurf/Cascade auto-discovers the project-root AGENTS.md and feeds it into
+  # the same rules engine as the legacy .windsurf/rules/.
+  write_agents_md
+  INSTALLED+=("Windsurf")
+fi
+
+# GitHub Copilot agent mode reads the project-root AGENTS.md (IDE + CLI).
+if is_installed copilot; then
+  echo "  Detected: GitHub Copilot"
+  write_agents_md
+  INSTALLED+=("GitHub Copilot")
+fi
+
+# ── 7. Tools needing their own scoped rule file (Cursor / Cline) ──────────────
+# These are thin pointers to ${OBSERVENT_HOME}/SKILL.md, not duplicated bodies:
+#   • Cursor — keeps its `globs: **/*.py` auto-attach scoping.
+#   • Cline  — does not auto-read project-root AGENTS.md, so it needs a rule file.
 _install_rule() {
   local provider="$1" src="$2" dst_dir="$3" dst_file="$4"
   local dst="$PROJECT_DIR/$dst_dir/$dst_file"
@@ -132,24 +152,12 @@ if is_installed cursor; then
   _install_rule "Cursor" ".cursor/rules/observent.mdc" ".cursor/rules" "observent.mdc"
 fi
 
-if is_installed windsurf; then
-  echo "  Detected: Windsurf"
-  _install_rule "Windsurf" ".windsurf/rules/observent.md" ".windsurf/rules" "observent.md"
-fi
-
 if is_installed cline; then
   echo "  Detected: Cline"
   _install_rule "Cline" ".clinerules/observent.md" ".clinerules" "observent.md"
 fi
 
-# GitHub Copilot — one instructions file is read by both the IDE extension
-# (VS Code / JetBrains) and GitHub Copilot CLI / coding agent.
-if is_installed copilot; then
-  echo "  Detected: GitHub Copilot"
-  _install_rule "GitHub Copilot" ".github/copilot-instructions.md" ".github" "copilot-instructions.md"
-fi
-
-# ── 7. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
+# ── 8. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
 SHELL_RC="$HOME/.bashrc"
 [[ "${SHELL:-}" == */zsh ]] && SHELL_RC="$HOME/.zshrc"
 if ! grep -q "OBSERVENT_HOME" "$SHELL_RC" 2>/dev/null; then
@@ -158,7 +166,7 @@ if ! grep -q "OBSERVENT_HOME" "$SHELL_RC" 2>/dev/null; then
   echo "  ✓ OBSERVENT_HOME exported in $SHELL_RC (run: source $SHELL_RC)"
 fi
 
-# ── 8. Summary ─────────────────────────────────────────────────────────────────
+# ── 9. Summary ─────────────────────────────────────────────────────────────────
 echo ""
 if [[ ${#INSTALLED[@]} -gt 0 ]]; then
   echo "observent installed for: ${INSTALLED[*]}"

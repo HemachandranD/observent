@@ -31,7 +31,16 @@ else
   echo "  $OBSERVENT_HOME not found — skipping"
 fi
 
-# Remove project-scoped adapter files
+# Remove the retired Codex CLI extension dir from older installs (≤ the AGENTS.md
+# consolidation — Codex now reads the project-root AGENTS.md directly).
+CODEX_EXT="$HOME/.codex/extensions/observent"
+if [[ -d "$CODEX_EXT" ]]; then
+  run rm -rf "$CODEX_EXT"
+  echo "✓ Removed $CODEX_EXT"
+fi
+
+# Remove project-scoped adapter files (the .windsurf / .github entries clean up
+# artifacts written by older installs; current installs use AGENTS.md for those).
 for f in \
   ".cursor/rules/observent.mdc" \
   ".windsurf/rules/observent.md" \
