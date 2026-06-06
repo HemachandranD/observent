@@ -150,9 +150,10 @@ Do **not** add a per-tool file for a provider that reads `AGENTS.md` natively (W
 Update in this order:
 
 1. `scripts/detect_providers.py` — add a `_<provider>()` detector function and register it in `DETECTORS`; set `install_cmd` to the real hint.
-2. `install.sh` + `install.ps1` — add a detection block.
-   - **If the provider reads `AGENTS.md` natively:** call `write_agents_md` / `Write-AgentsMd` (idempotent — it writes the project `AGENTS.md` once per run). No new file.
-   - **If it needs its own rule file** (no native `AGENTS.md` support, or you want tool-specific scoping): add a **thin-pointer** file under `.<provider>/…`, copy it via `_install_rule` / `Install-Rule`, and have the body route to `${OBSERVENT_HOME}/SKILL.md`. Don't duplicate the workflow.
+2. `install.sh` + `install.ps1` — wire up the provider.
+   - **If the provider reads `AGENTS.md` natively (the common case):** add one line to the `agents_native` / `Add-AgentsNative` helper list (`agents_native <id> "<Label>"`). The helper detects, writes the project `AGENTS.md` once per run (idempotent via `write_agents_md` / `Write-AgentsMd`), and records the install. No new file, no new block.
+   - **If it needs its own rule file** (no native `AGENTS.md` support, or you want tool-specific scoping like Cursor's): add a **thin-pointer** file under `.<provider>/…`, copy it via `_install_rule` / `Install-Rule`, and have the body route to `${OBSERVENT_HOME}/SKILL.md`. Don't duplicate the workflow.
+   - **If it has a bespoke install mechanism** (e.g. Claude Code's `claude plugin install`, Antigravity's `antigravity extensions install`): keep its own block — these can't be reduced to the shared helper.
 3. `README.md` — add a row to the Supported providers table and document the install command.
 4. CI passes (detect_providers.py smoke test, lint, type-check).
 

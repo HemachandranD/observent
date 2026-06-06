@@ -256,7 +256,7 @@ Adding a framework or backend requires updates in five places — see `CLAUDE.md
 Adding a provider requires updates in three places (see `CLAUDE.md` § Adapter strategy):
 
 1. `scripts/detect_providers.py` — add a `_<provider>()` detector function.
-2. `install.sh` + `install.ps1` — add a detection block: call `write_agents_md` if the tool reads `AGENTS.md` natively, otherwise ship a **thin-pointer** rule file routing to `${OBSERVENT_HOME}/SKILL.md`.
+2. `install.sh` + `install.ps1` — if the tool reads `AGENTS.md` natively, add one line to the `agents_native` / `Add-AgentsNative` helper list; otherwise ship a **thin-pointer** rule file routing to `${OBSERVENT_HOME}/SKILL.md`.
 3. `README.md` — add a row to the Supported providers table.
 
 CI validates plugin manifests, command TOML files, script imports, SKILL.md frontmatter, lint, and type-check on Ubuntu + Windows for Python 3.10 / 3.11 / 3.12.

@@ -101,33 +101,22 @@ if is_installed antigravity; then
   INSTALLED+=("Antigravity")
 fi
 
-# ── 5. OpenAI Codex (CLI + IDE) ───────────────────────────────────────────────
-if is_installed codex; then
-  echo "  Detected: OpenAI Codex (CLI + IDE)"
-  # Both the Codex CLI (`codex` / ~/.codex) and the IDE extension
-  # (openai.chatgpt) read the project-root AGENTS.md natively — no separate
-  # extension/context file is needed.
-  write_agents_md
-  INSTALLED+=("Codex (CLI + IDE)")
-fi
+# ── 5. Providers that read the project-root AGENTS.md natively ────────────────
+# Codex (CLI + IDE), Windsurf, and GitHub Copilot (IDE + CLI) all consume the
+# project-root AGENTS.md directly — no per-tool file. One helper, one AGENTS.md
+# (written once via the idempotent write_agents_md).
+agents_native() {  # $1=provider-id  $2=label
+  if is_installed "$1"; then
+    echo "  Detected: $2"
+    write_agents_md
+    INSTALLED+=("$2")
+  fi
+}
+agents_native codex    "Codex (CLI + IDE)"
+agents_native windsurf "Windsurf"
+agents_native copilot  "GitHub Copilot"
 
-# ── 6. Providers that read AGENTS.md natively (Windsurf / GitHub Copilot) ──────
-if is_installed windsurf; then
-  echo "  Detected: Windsurf"
-  # Windsurf/Cascade auto-discovers the project-root AGENTS.md and feeds it into
-  # the same rules engine as the legacy .windsurf/rules/.
-  write_agents_md
-  INSTALLED+=("Windsurf")
-fi
-
-# GitHub Copilot agent mode reads the project-root AGENTS.md (IDE + CLI).
-if is_installed copilot; then
-  echo "  Detected: GitHub Copilot"
-  write_agents_md
-  INSTALLED+=("GitHub Copilot")
-fi
-
-# ── 7. Tools needing their own scoped rule file (Cursor / Cline) ──────────────
+# ── 6. Tools needing their own scoped rule file (Cursor / Cline) ──────────────
 # These are thin pointers to ${OBSERVENT_HOME}/SKILL.md, not duplicated bodies:
 #   • Cursor — keeps its `globs: **/*.py` auto-attach scoping.
 #   • Cline  — does not auto-read project-root AGENTS.md, so it needs a rule file.
@@ -157,7 +146,7 @@ if is_installed cline; then
   _install_rule "Cline" ".clinerules/observent.md" ".clinerules" "observent.md"
 fi
 
-# ── 8. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
+# ── 7. Export OBSERVENT_HOME in shell profile ────────────────────────────────────
 SHELL_RC="$HOME/.bashrc"
 [[ "${SHELL:-}" == */zsh ]] && SHELL_RC="$HOME/.zshrc"
 if ! grep -q "OBSERVENT_HOME" "$SHELL_RC" 2>/dev/null; then
@@ -166,7 +155,7 @@ if ! grep -q "OBSERVENT_HOME" "$SHELL_RC" 2>/dev/null; then
   echo "  ✓ OBSERVENT_HOME exported in $SHELL_RC (run: source $SHELL_RC)"
 fi
 
-# ── 9. Summary ─────────────────────────────────────────────────────────────────
+# ── 8. Summary ─────────────────────────────────────────────────────────────────
 echo ""
 if [[ ${#INSTALLED[@]} -gt 0 ]]; then
   echo "observent installed for: ${INSTALLED[*]}"

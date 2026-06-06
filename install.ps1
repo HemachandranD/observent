@@ -93,33 +93,22 @@ if (Is-Installed "antigravity") {
     $Installed += "Antigravity"
 }
 
-# --- 5. OpenAI Codex (CLI + IDE) ---
-if (Is-Installed "codex") {
-    Write-Host "  Detected: OpenAI Codex (CLI + IDE)"
-    # Both the Codex CLI (`codex` / ~/.codex) and the IDE extension
-    # (openai.chatgpt) read the project-root AGENTS.md natively - no separate
-    # extension/context file is needed.
-    Write-AgentsMd
-    $Installed += "Codex (CLI + IDE)"
+# --- 5. Providers that read the project-root AGENTS.md natively ---
+# Codex (CLI + IDE), Windsurf, and GitHub Copilot (IDE + CLI) all consume the
+# project-root AGENTS.md directly - no per-tool file. One helper, one AGENTS.md
+# (written once via the idempotent Write-AgentsMd).
+function Add-AgentsNative([string]$Id, [string]$Label) {
+    if (Is-Installed $Id) {
+        Write-Host "  Detected: $Label"
+        Write-AgentsMd
+        $script:Installed += $Label
+    }
 }
+Add-AgentsNative "codex"    "Codex (CLI + IDE)"
+Add-AgentsNative "windsurf" "Windsurf"
+Add-AgentsNative "copilot"  "GitHub Copilot"
 
-# --- 6. Providers that read AGENTS.md natively (Windsurf / GitHub Copilot) ---
-if (Is-Installed "windsurf") {
-    Write-Host "  Detected: Windsurf"
-    # Windsurf/Cascade auto-discovers the project-root AGENTS.md and feeds it
-    # into the same rules engine as the legacy .windsurf/rules/.
-    Write-AgentsMd
-    $Installed += "Windsurf"
-}
-
-# GitHub Copilot agent mode reads the project-root AGENTS.md (IDE + CLI).
-if (Is-Installed "copilot") {
-    Write-Host "  Detected: GitHub Copilot"
-    Write-AgentsMd
-    $Installed += "GitHub Copilot"
-}
-
-# --- 7. Tools needing their own scoped rule file (Cursor / Cline) ---
+# --- 6. Tools needing their own scoped rule file (Cursor / Cline) ---
 # Thin pointers to ${OBSERVENT_HOME}/SKILL.md, not duplicated bodies:
 #   * Cursor - keeps its `globs: **/*.py` auto-attach scoping.
 #   * Cline  - does not auto-read project-root AGENTS.md, so it needs a rule file.
@@ -144,13 +133,13 @@ if (Is-Installed "cline") {
     Install-Rule "Cline" ".clinerules\observent.md" ".clinerules" "observent.md"
 }
 
-# --- 8. Persist OBSERVENT_HOME in user environment ---
+# --- 7. Persist OBSERVENT_HOME in user environment ---
 if (-not $DryRun) {
     [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $ObserventHome, "User")
     Write-Host "  [ok] OBSERVENT_HOME set in user environment (restart terminal to apply)"
 }
 
-# --- 9. Summary ---
+# --- 8. Summary ---
 Write-Host ""
 if ($Installed.Count -gt 0) {
     Write-Host "observent installed for: $($Installed -join ', ')"
