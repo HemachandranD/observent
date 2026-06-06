@@ -1,5 +1,6 @@
 # --- Agent frameworks ---
 crewai>=0.80
+litellm==1.86.2
 langgraph>=0.2.50
 langchain-core>=0.3
 
