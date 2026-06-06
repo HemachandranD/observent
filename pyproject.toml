@@ -16,4 +16,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# tests/test_workflows/ is a manual test bed (runnable demo agent apps), not a
+# pytest suite — exclude it from collection.
+addopts = "-ra --ignore=tests/test_workflows"
