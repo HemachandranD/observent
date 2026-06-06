@@ -45,13 +45,15 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 | Provider | How observent runs | Install method |
 |---|---|---|
 | **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands | `claude plugin install HemachandranD/observent` |
-| **Google Antigravity** (CLI + IDE) | Extension + `AGENTS.md` context — read by both the CLI and the desktop IDE | `antigravity extensions install https://github.com/HemachandranD/observent --auto-update` |
-| **GitHub Copilot** (CLI + IDE) | Instructions — `.github/copilot-instructions.md`, read by the IDE extension and Copilot CLI | `install.sh` or manual copy |
-| **Cursor** | Rule — `.cursor/rules/observent.mdc` auto-attached to `*.py` files | `install.sh` or manual copy |
-| **Windsurf** | Rule — `.windsurf/rules/observent.md` | `install.sh` or manual copy |
-| **Cline** | Rule — `.clinerules/observent.md` | `install.sh` or manual copy |
-| **OpenAI Codex** (CLI + IDE) | Extension — `.codex/context.md` for the CLI; `AGENTS.md` (shared `~/.codex/config.toml`) for the `openai.chatgpt` VS Code extension | `install.sh` or manual copy |
+| **Google Antigravity** (CLI + IDE) | Reads project-root `AGENTS.md` (+ extension) — CLI and desktop IDE | `antigravity extensions install https://github.com/HemachandranD/observent --auto-update` |
+| **GitHub Copilot** (CLI + IDE) | Reads project-root `AGENTS.md` (agent mode, IDE + CLI) | `install.sh` or manual copy |
+| **OpenAI Codex** (CLI + IDE) | Reads project-root `AGENTS.md` (CLI + `openai.chatgpt` IDE extension) | `install.sh` or manual copy |
+| **Windsurf** | Reads project-root `AGENTS.md` (Cascade auto-discovers it) | `install.sh` or manual copy |
+| **Cursor** | Reads `AGENTS.md`; ships a thin `.cursor/rules/observent.mdc` pointer auto-attached to `*.py` for Python-scoped loading | `install.sh` or manual copy |
+| **Cline** | Thin `.clinerules/observent.md` pointer — Cline does **not** auto-read project-root `AGENTS.md` | `install.sh` or manual copy |
 
+> **Single source of truth:** the full workflow lives in `skills/observent/SKILL.md` (installed to `${OBSERVENT_HOME}/`). The root **`AGENTS.md`** is the canonical cross-tool summary that mirrors it — Antigravity, Copilot, Codex, Windsurf, and Cursor read it natively. The only per-tool files are thin pointers: Cursor's `.mdc` (for `*.py` scoping) and Cline's `.clinerules` (Cline can't auto-read `AGENTS.md`).
+>
 > **Note:** Google replaced **Gemini CLI** with **Antigravity** (May 2026; Gemini CLI's consumer tiers sunset 2026-06-18). observent ships a single cross-tool `AGENTS.md`, which Antigravity reads natively from both the CLI and the IDE.
 
 ## Install
@@ -92,24 +94,21 @@ antigravity extensions install https://github.com/HemachandranD/observent --auto
 
 The installer also drops an `AGENTS.md` into your project root, which both the Antigravity CLI and the desktop IDE read automatically.
 
-### OpenAI Codex (extension — CLI + IDE)
+### OpenAI Codex / Windsurf / GitHub Copilot (read `AGENTS.md` natively)
 
-The installer wires up both surfaces. To do it manually:
+These tools read the project-root `AGENTS.md` directly — the installer just drops it in. To do it manually:
 
 ```bash
-# CLI: load the context extension from ~/.codex/extensions/
-mkdir -p ~/.codex/extensions/observent
-cp -r /tmp/observent/.codex/. ~/.codex/extensions/observent/
-
-# IDE (openai.chatgpt VS Code extension): reads AGENTS.md from the project root
+# Reads project-root AGENTS.md (Codex CLI + openai.chatgpt IDE extension;
+# Windsurf/Cascade; GitHub Copilot agent mode — IDE + CLI)
 cp /tmp/observent/AGENTS.md ./AGENTS.md
 ```
 
-The CLI loads `.codex/context.md`; the VS Code extension shares `~/.codex/config.toml` with the CLI and reads the project-root `AGENTS.md`. Both surfaces then run the same observent workflow.
+`AGENTS.md` is the canonical cross-tool summary; it points each tool at `${OBSERVENT_HOME}/SKILL.md` for the full workflow.
 
-### Cursor / Windsurf / Cline / GitHub Copilot (project-scoped rules)
+### Cursor / Cline (project-scoped pointer rules)
 
-Run the installer from your project root — it copies the rule / instructions file for each detected IDE into the project:
+Run the installer from your project root — it copies a thin pointer rule for each detected IDE into the project (Cursor's is scoped to `*.py`; both route to `${OBSERVENT_HOME}/SKILL.md`):
 
 ```bash
 cd /your/agent/project
@@ -123,17 +122,9 @@ Or copy manually:
 mkdir -p .cursor/rules
 cp /tmp/observent/.cursor/rules/observent.mdc .cursor/rules/
 
-# Windsurf
-mkdir -p .windsurf/rules
-cp /tmp/observent/.windsurf/rules/observent.md .windsurf/rules/
-
 # Cline
 mkdir -p .clinerules
 cp /tmp/observent/.clinerules/observent.md .clinerules/
-
-# GitHub Copilot (IDE + CLI)
-mkdir -p .github
-cp /tmp/observent/.github/copilot-instructions.md .github/
 ```
 
 Then set `OBSERVENT_HOME` to where the scripts live (default after `install.sh`: `~/.observent`):
@@ -188,7 +179,7 @@ Ask your agent to set up observability. For example:
 > "Wire up Langfuse observability for this CrewAI app"
 > "Set up SigNoz monitoring for my agent"
 
-The rule / instructions / context file is auto-loaded and tells the agent to run the observent workflow. For Antigravity and GitHub Copilot this works identically from both the CLI and the IDE.
+`AGENTS.md` (or, for Cursor/Cline, the thin pointer rule) is auto-loaded and tells the agent to run the observent workflow from `${OBSERVENT_HOME}/SKILL.md`. For Antigravity, Codex, and GitHub Copilot this works identically from both the CLI and the IDE.
 
 ---
 
@@ -248,12 +239,10 @@ skills/observent/
 scripts/
   detect_providers.py        # Detects installed AI coding providers
 antigravity-extension.json   # Antigravity extension manifest (ex-Gemini)
-AGENTS.md                    # Cross-tool context (Antigravity / Copilot / Codex / Cursor / Claude Code; mirrors SKILL.md workflow)
-.github/copilot-instructions.md  # GitHub Copilot instructions (IDE + CLI)
-.cursor/rules/               # Cursor rule (auto-attached to *.py)
-.windsurf/rules/             # Windsurf rule
-.clinerules/                 # Cline rule
-.codex/                      # OpenAI Codex CLI context (IDE uses AGENTS.md)
+AGENTS.md                    # Canonical cross-tool surface — read natively by
+                             #   Antigravity / Copilot / Codex / Windsurf / Cursor; mirrors SKILL.md
+.cursor/rules/observent.mdc  # Thin pointer → SKILL.md (scoped to *.py)
+.clinerules/observent.md     # Thin pointer → SKILL.md (Cline can't auto-read AGENTS.md)
 install.sh              # Cross-platform installer (bash)
 install.ps1             # Cross-platform installer (PowerShell)
 uninstall.sh / .ps1     # Uninstallers
@@ -264,12 +253,11 @@ uninstall.sh / .ps1     # Uninstallers
 
 Adding a framework or backend requires updates in five places — see `CLAUDE.md` for the ordered checklist.
 
-Adding a provider requires updates in four places:
+Adding a provider requires updates in three places (see `CLAUDE.md` § Adapter strategy):
 
 1. `scripts/detect_providers.py` — add a `_<provider>()` detector function.
-2. `install.sh` + `install.ps1` — add detection + install block.
-3. Provider adapter files (rule / context / extension manifest).
-4. `README.md` — add a row to the Supported providers table.
+2. `install.sh` + `install.ps1` — add a detection block: call `write_agents_md` if the tool reads `AGENTS.md` natively, otherwise ship a **thin-pointer** rule file routing to `${OBSERVENT_HOME}/SKILL.md`.
+3. `README.md` — add a row to the Supported providers table.
 
 CI validates plugin manifests, command TOML files, script imports, SKILL.md frontmatter, lint, and type-check on Ubuntu + Windows for Python 3.10 / 3.11 / 3.12.
 

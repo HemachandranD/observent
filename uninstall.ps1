@@ -26,7 +26,16 @@ if (Test-Path $ObserventHome) {
     Write-Host "  $ObserventHome not found - skipping"
 }
 
-# Remove project-scoped adapter files
+# Remove the retired Codex CLI extension dir from older installs (Codex now
+# reads the project-root AGENTS.md directly).
+$CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\observent"
+if (Test-Path $CodexExt) {
+    Invoke-Step { Remove-Item -Recurse -Force $CodexExt } "rm -rf $CodexExt"
+    Write-Host "[ok] Removed $CodexExt"
+}
+
+# Remove project-scoped adapter files (the .windsurf / .github entries clean up
+# artifacts written by older installs; current installs use AGENTS.md for those).
 foreach ($rel in @(".cursor\rules\observent.mdc", ".windsurf\rules\observent.md", ".clinerules\observent.md", ".github\copilot-instructions.md", "AGENTS.md")) {
     $target = Join-Path $ProjectDir $rel
     if (Test-Path $target) {

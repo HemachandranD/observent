@@ -15,6 +15,19 @@ function Invoke-Step {
     if ($DryRun) { Write-Host "[dry-run] $Label" } else { & $Action }
 }
 
+# Write the canonical cross-tool AGENTS.md into the project (substituting
+# ${OBSERVENT_HOME}). Idempotent - several providers read AGENTS.md natively,
+# so the first one to need it writes it and the rest are no-ops.
+$script:AgentsWritten = $false
+function Write-AgentsMd {
+    if ($script:AgentsWritten) { Write-Host "    -> AGENTS.md already written this run"; return }
+    $content = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
+    $out = Join-Path $ProjectDir "AGENTS.md"
+    Invoke-Step { Set-Content -Path $out -Value $content -Encoding utf8 } "write $out"
+    Write-Host "    [ok] AGENTS.md -> $out"
+    $script:AgentsWritten = $true
+}
+
 Write-Host "observent installer"
 Write-Host "  Repo:         $RepoDir"
 Write-Host "  OBSERVENT_HOME: $ObserventHome"
@@ -69,11 +82,8 @@ if (Is-Installed "claude_code") {
 if (Is-Installed "antigravity") {
     Write-Host "  Detected: Google Antigravity"
     # AGENTS.md in the project is read by both the Antigravity CLI and the
-    # desktop IDE. Substitute ${OBSERVENT_HOME} -> real path.
-    $agentsContent = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
-    $agentsOut = Join-Path $ProjectDir "AGENTS.md"
-    Invoke-Step { Set-Content -Path $agentsOut -Value $agentsContent -Encoding utf8 } "write $agentsOut"
-    Write-Host "    [ok] AGENTS.md -> $agentsOut"
+    # desktop IDE.
+    Write-AgentsMd
     if (Get-Command antigravity -ErrorAction SilentlyContinue) {
         Invoke-Step { antigravity extensions install $RepoDir } "antigravity extensions install $RepoDir"
         Write-Host "    [ok] Antigravity extension installed"
@@ -86,21 +96,33 @@ if (Is-Installed "antigravity") {
 # --- 5. OpenAI Codex (CLI + IDE) ---
 if (Is-Installed "codex") {
     Write-Host "  Detected: OpenAI Codex (CLI + IDE)"
-    # CLI: the .codex/ extension is loaded from ~/.codex/extensions/observent.
-    $CodexExt = Join-Path $env:USERPROFILE ".codex\extensions\observent"
-    Invoke-Step { New-Item -ItemType Directory -Force -Path $CodexExt | Out-Null } "mkdir $CodexExt"
-    Invoke-Step { Copy-Item -Recurse -Force "$RepoDir\.codex\*" "$CodexExt\" } "cp .codex -> $CodexExt"
-    Write-Host "    [ok] Codex extension -> $CodexExt"
-    # IDE (openai.chatgpt VS Code extension) shares ~/.codex/config.toml and
-    # reads AGENTS.md from the project - drop it so the editor surface is covered.
-    $codexAgents = (Get-Content "$RepoDir\AGENTS.md" -Raw) -replace '\$\{OBSERVENT_HOME\}', $ObserventHome
-    $codexAgentsOut = Join-Path $ProjectDir "AGENTS.md"
-    Invoke-Step { Set-Content -Path $codexAgentsOut -Value $codexAgents -Encoding utf8 } "write $codexAgentsOut"
-    Write-Host "    [ok] AGENTS.md -> $codexAgentsOut"
+    # Both the Codex CLI (`codex` / ~/.codex) and the IDE extension
+    # (openai.chatgpt) read the project-root AGENTS.md natively - no separate
+    # extension/context file is needed.
+    Write-AgentsMd
     $Installed += "Codex (CLI + IDE)"
 }
 
-# --- 6. Project-scoped adapters ---
+# --- 6. Providers that read AGENTS.md natively (Windsurf / GitHub Copilot) ---
+if (Is-Installed "windsurf") {
+    Write-Host "  Detected: Windsurf"
+    # Windsurf/Cascade auto-discovers the project-root AGENTS.md and feeds it
+    # into the same rules engine as the legacy .windsurf/rules/.
+    Write-AgentsMd
+    $Installed += "Windsurf"
+}
+
+# GitHub Copilot agent mode reads the project-root AGENTS.md (IDE + CLI).
+if (Is-Installed "copilot") {
+    Write-Host "  Detected: GitHub Copilot"
+    Write-AgentsMd
+    $Installed += "GitHub Copilot"
+}
+
+# --- 7. Tools needing their own scoped rule file (Cursor / Cline) ---
+# Thin pointers to ${OBSERVENT_HOME}/SKILL.md, not duplicated bodies:
+#   * Cursor - keeps its `globs: **/*.py` auto-attach scoping.
+#   * Cline  - does not auto-read project-root AGENTS.md, so it needs a rule file.
 function Install-Rule([string]$Provider, [string]$Src, [string]$DstDir, [string]$DstFile) {
     $dstPath = Join-Path $ProjectDir $DstDir
     Invoke-Step { New-Item -ItemType Directory -Force -Path $dstPath | Out-Null } "mkdir $dstPath"
@@ -117,30 +139,18 @@ if (Is-Installed "cursor") {
     Install-Rule "Cursor" ".cursor\rules\observent.mdc" ".cursor\rules" "observent.mdc"
 }
 
-if (Is-Installed "windsurf") {
-    Write-Host "  Detected: Windsurf"
-    Install-Rule "Windsurf" ".windsurf\rules\observent.md" ".windsurf\rules" "observent.md"
-}
-
 if (Is-Installed "cline") {
     Write-Host "  Detected: Cline"
     Install-Rule "Cline" ".clinerules\observent.md" ".clinerules" "observent.md"
 }
 
-# GitHub Copilot - one instructions file is read by both the IDE extension
-# (VS Code / JetBrains) and GitHub Copilot CLI / coding agent.
-if (Is-Installed "copilot") {
-    Write-Host "  Detected: GitHub Copilot"
-    Install-Rule "GitHub Copilot" ".github\copilot-instructions.md" ".github" "copilot-instructions.md"
-}
-
-# --- 7. Persist OBSERVENT_HOME in user environment ---
+# --- 8. Persist OBSERVENT_HOME in user environment ---
 if (-not $DryRun) {
     [System.Environment]::SetEnvironmentVariable("OBSERVENT_HOME", $ObserventHome, "User")
     Write-Host "  [ok] OBSERVENT_HOME set in user environment (restart terminal to apply)"
 }
 
-# --- 8. Summary ---
+# --- 9. Summary ---
 Write-Host ""
 if ($Installed.Count -gt 0) {
     Write-Host "observent installed for: $($Installed -join ', ')"

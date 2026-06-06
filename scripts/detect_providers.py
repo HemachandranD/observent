@@ -61,31 +61,28 @@ def _antigravity() -> ProviderInfo:
 
 
 def _copilot() -> ProviderInfo:
-    # GitHub Copilot reads the same instruction files from both the CLI
-    # (`copilot` / `gh copilot`) and the IDE extension (VS Code / JetBrains).
+    # GitHub Copilot agent mode reads the project-root AGENTS.md from both the
+    # CLI (`copilot` / `gh copilot`) and the IDE extension (VS Code / JetBrains).
     ext_dirs = ("~/.vscode/extensions", "~/.vscode-insiders/extensions")
     has_ide = any(_glob_any(d, "github.copilot-*") for d in ext_dirs)
     return {
         "label": "GitHub Copilot",
         "installed": _has_binary("copilot") or _has_binary("gh") or has_ide,
         "config_dir": str(Path("~/.config/github-copilot").expanduser()),
-        "install_cmd": "copy .github/copilot-instructions.md into <project>/.github/",
+        "install_cmd": "copy AGENTS.md into <project>/",
     }
 
 
 def _codex() -> ProviderInfo:
     # Codex CLI (`codex` binary / ~/.codex) and the VS Code IDE extension
-    # (`openai.chatgpt`) share ~/.codex/config.toml and both read AGENTS.md.
+    # (`openai.chatgpt`) both read the project-root AGENTS.md natively.
     ext_dirs = ("~/.vscode/extensions", "~/.vscode-insiders/extensions")
     has_ide = any(_glob_any(d, "openai.chatgpt-*") for d in ext_dirs)
     return {
         "label": "OpenAI Codex (CLI + IDE)",
         "installed": _has_binary("codex") or _dir_exists("~/.codex") or has_ide,
         "config_dir": str(Path("~/.codex").expanduser()),
-        "install_cmd": (
-            "copy .codex/ into ~/.codex/extensions/observent/ (CLI) "
-            "+ AGENTS.md into <project>/ (IDE)"
-        ),
+        "install_cmd": "copy AGENTS.md into <project>/ (CLI + IDE)",
     }
 
 
@@ -99,11 +96,12 @@ def _cursor() -> ProviderInfo:
 
 
 def _windsurf() -> ProviderInfo:
+    # Windsurf/Cascade auto-discovers the project-root AGENTS.md.
     return {
         "label": "Windsurf",
         "installed": _has_binary("windsurf") or _dir_exists("~/.codeium/windsurf"),
         "config_dir": str(Path("~/.codeium/windsurf").expanduser()),
-        "install_cmd": "copy .windsurf/rules/observent.md into <project>/.windsurf/rules/",
+        "install_cmd": "copy AGENTS.md into <project>/",
     }
 
 
