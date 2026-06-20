@@ -41,8 +41,13 @@ npx skills add HemachandranD/observent
 ### Claude Code (plugin)
 
 ```bash
-claude plugin install HemachandranD/observent
+# 1. Register this repo as a plugin marketplace
+claude plugin marketplace add HemachandranD/observent
+# 2. Install the plugin from it (plugin@marketplace — both are "observent")
+claude plugin install observent@observent
 ```
+
+Or interactively inside Claude Code: `/plugin marketplace add HemachandranD/observent`, then `/plugin` → **Discover** → install **observent** (run `/reload-plugins` after).
 
 Adds seven slash commands: `/observent` (the full spec→plan→tasks→implement lifecycle), the four lifecycle stages it drives — `/observent-spec`, `/observent-plan`, `/observent-tasks`, `/observent-implement` — plus `/observent-detect` and `/observent-validate`. Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.
 
@@ -117,7 +122,7 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 
 | Provider | How observent runs | Install |
 |---|---|---|
-| **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands. (Or skill-only via npx skills.) | `claude plugin install HemachandranD/observent` |
+| **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands. (Or skill-only via npx skills.) | `claude plugin marketplace add HemachandranD/observent` then `claude plugin install observent@observent` |
 | **Cursor · Windsurf · Cline · GitHub Copilot · OpenAI Codex · Google Antigravity** (CLI + IDE) | The `observent` skill is loaded from the agent's own skills directory | `npx skills add HemachandranD/observent` |
 
 > **Single source of truth:** the full workflow lives in `skills/observent/SKILL.md`, alongside its `references/` and `scripts/`. [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills) copies that **self-contained** skill folder into each detected agent's skills directory (`.claude/skills/`, `.agents/skills/`, …) — auto-detecting which of 70+ coding agents you have installed. No per-tool rule files, no `AGENTS.md` mirror to keep in sync.

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **observent** is a Claude Code plugin that wires up observability for multi-agent Python applications. It supports 8 frameworks × 5 backends (Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith) — a full grid of 40 integration paths.
 
-The repo *is* the plugin: skill files live under `skills/observent/`, plugin manifests under `.claude-plugin/`, and slash commands under `commands/`. Users install it via `claude plugin install HemachandranD/observent`.
+The repo *is* the plugin: skill files live under `skills/observent/`, plugin manifests under `.claude-plugin/`, and slash commands under `commands/`. Users install it by adding the repo as a marketplace then installing the plugin: `claude plugin marketplace add HemachandranD/observent` followed by `claude plugin install observent@observent`.
 
 ## Repository Layout
 
@@ -136,7 +136,7 @@ Update in this order:
 
 `skills/observent/SKILL.md` (with its `references/` and `scripts/`) is the **single content surface** for every tool. There is no condensed `AGENTS.md` mirror and no per-tool rule files to keep in sync — that multi-copy machinery (`install.sh`/`install.ps1`, `AGENTS.md`, `.cursor/rules/`, `.clinerules/`, `scripts/detect_providers.py`, the Antigravity extension manifest) was retired in favour of `npx skills`.
 
-- **Claude Code** loads the skill directly as a plugin (`claude plugin install HemachandranD/observent`), with the `commands/*.toml` slash commands on top.
+- **Claude Code** loads the skill directly as a plugin (`claude plugin marketplace add HemachandranD/observent` then `claude plugin install observent@observent`), with the `commands/*.toml` slash commands on top.
 - **Every other agent** receives the same **self-contained** skill folder via [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills): `npx skills add HemachandranD/observent` copies `skills/observent/` into the agent's skills directory (`.claude/skills/`, `.agents/skills/`, …). Discovery works two ways — the flat `skills/observent/SKILL.md` layout, **and** the `"skills": ["./skills/observent"]` array in `.claude-plugin/marketplace.json` (CI asserts that array resolves to a real `SKILL.md`).
 
 Keep the skill **self-contained and relative** so it runs wherever it lands: `references/*` are referenced by plain relative path; scripts are invoked via the agent-agnostic `<skill-dir>/scripts/…` placeholder, with the SKILL.md § Step 1.1 portability note telling each agent how to resolve `<skill-dir>` (Claude Code's `${CLAUDE_SKILL_DIR}`, or the skill's own folder for everyone else). Never reintroduce `${OBSERVENT_HOME}`, an `AGENTS.md` workflow mirror, or per-tool pointer files.
