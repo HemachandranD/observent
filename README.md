@@ -11,9 +11,9 @@
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python 3.10–3.12">
   <a href=".github/workflows/ci.yml"><img src="https://github.com/HemachandranD/observent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%2B%2070%2B%20via%20npx%20skills-CC785C.svg" alt="Works in 70+ agents">
-  <a href="https://skills.sh/HemachandranD/observent"><img src="https://img.shields.io/badge/skills.sh-observent-000000.svg" alt="Listed on skills.sh"></a>
 </p>
 
+[![skills.sh](https://skills.sh/HemachandranD/observent)](https://skills.sh/HemachandranD/observent)
 
 ---
 
@@ -44,7 +44,7 @@ npx skills add HemachandranD/observent
 claude plugin install HemachandranD/observent
 ```
 
-Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`. Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.
+Adds seven slash commands: `/observent` (the full spec→plan→tasks→implement lifecycle), the four lifecycle stages it drives — `/observent-spec`, `/observent-plan`, `/observent-tasks`, `/observent-implement` — plus `/observent-detect` and `/observent-validate`. Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.
 
 ## Use a Skill Without Installing
 
@@ -206,9 +206,13 @@ You also get the matching `docker compose … down` command to tear the stack ba
   marketplace.json      # Marketplace listing — also declares the npx-skills
                         #   discovery path: plugins[0].skills = ["./skills/observent"]
 commands/
-  observent.toml          # /observent [framework] [backend|backend,...]
-  observent-detect.toml   # /observent-detect
-  observent-validate.toml # /observent-validate <backend|backend,...> [--smoke-test]
+  observent.toml            # /observent [framework] [backend|backend,...] — full SDD lifecycle
+  observent-spec.toml       # /observent-spec — produce .observent/spec.md
+  observent-plan.toml       # /observent-plan — produce .observent/plan.md
+  observent-tasks.toml      # /observent-tasks — decompose plan.md into tasks.json
+  observent-implement.toml  # /observent-implement — execute (or resume) tasks.json
+  observent-detect.toml     # /observent-detect
+  observent-validate.toml   # /observent-validate <backend|backend,...> [--smoke-test]
 skills/observent/         # The skill folder npx skills installs into each agent
   SKILL.md              # Skill entry point (8-step workflow)
   references/
