@@ -1,0 +1,55 @@
+{
+  "name": "observent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-grade observability for multi-agent Python apps. Detects your framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex) and wires up Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes. Installs into 70+ coding agents via `npx skills`.",
+  "keywords": [
+    "agent-skill",
+    "agent-skills",
+    "skills",
+    "claude-code",
+    "claude-skill",
+    "observability",
+    "opentelemetry",
+    "otel",
+    "otel-genai",
+    "openinference",
+    "llm-observability",
+    "llm-tracing",
+    "tracing",
+    "ai-agents",
+    "multi-agent",
+    "agents",
+    "langgraph",
+    "crewai",
+    "agent-framework",
+    "openai-agents",
+    "anthropic-agents",
+    "smolagents",
+    "llama-index",
+    "arize-phoenix",
+    "langfuse",
+    "signoz",
+    "elastic-apm",
+    "langsmith",
+    "cursor",
+    "windsurf",
+    "cline",
+    "copilot",
+    "codex",
+    "antigravity"
+  ],
+  "homepage": "https://github.com/HemachandranD/observent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HemachandranD/observent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HemachandranD/observent/issues"
+  },
+  "skills": [
+    "./skills/observent"
+  ],
+  "license": "Apache-2.0",
+  "author": "Hemachandran Dhinakaran (https://github.com/HemachandranD)"
+}
