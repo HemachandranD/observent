@@ -14,13 +14,10 @@
   <a href="https://skills.sh/HemachandranD/observent"><img src="https://img.shields.io/badge/skills.sh-observent-000000.svg" alt="Listed on skills.sh"></a>
 </p>
 
-<p align="center">
-  8 frameworks &times; 5 backends &middot; correct span hierarchy &middot; context propagation &middot; cost columns that aren&rsquo;t&nbsp;$0
-</p>
 
 ---
 
-**observent** wires up production-grade observability for multi-agent Python apps. It detects your agent framework, generates the right integration code for the backend you pick, and enforces the span attributes and context-propagation patterns that make multi-agent traces actually useful — across **8 frameworks × 5 backends**, in Claude Code and 70+ other coding agents. One command, a diff to approve, and your traces map to your agent topology with real costs attached.
+**observent** wires up production-grade observability for multi-agent Python apps. It detects your agent framework, generates the right integration code for the backend you pick, and enforces the span attributes and context-propagation patterns that make multi-agent traces actually useful across **8 frameworks × 5 backends**, in Claude Code and 70+ other coding agents. One command, a diff to approve, and your traces map to your agent topology with real costs attached.
 
 ## Install via — `npx skills`
 
@@ -48,6 +45,17 @@ claude plugin install HemachandranD/observent
 ```
 
 Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`. Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.
+
+## Use a Skill Without Installing
+
+Generate a prompt for one skill, or start a supported coding agent interactively:
+
+```bash
+npx skills use HemachandranD/observent | claude
+npx skills use HemachandranD/observent --skill observent --agent claude-code
+```
+
+`skills use` resolves sources the same way as `skills add`, writes the selected skill files to a temporary directory, and prints only the generated prompt to stdout unless `--agent` is provided. With `--agent`, it starts one supported agent interactively with the generated prompt.
 
 ## Try it
 
