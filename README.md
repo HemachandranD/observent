@@ -3,18 +3,42 @@
 </p>
 
 <p align="center">
-  Detect &rarr; Spec &rarr; Plan &rarr; Tasks &rarr; Implement &rarr; Validate &rarr; more&hellip;
+  <b>Production-grade observability for multi-agent Python apps — in one command.</b>
 </p>
 
-# observent
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python 3.10–3.12">
+  <a href=".github/workflows/ci.yml"><img src="https://github.com/HemachandranD/observent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/agents-Claude%20Code%20%2B%2070%2B%20via%20npx%20skills-CC785C.svg" alt="Works in 70+ agents">
+</p>
 
-A multi-provider plugin that wires up production-grade observability for multi-agent Python applications. Detects your agent framework, generates the right integration code for your chosen backend, and enforces the span attributes and context propagation patterns that actually make multi-agent traces useful.
+<p align="center">
+  8 frameworks &times; 5 backends &middot; correct span hierarchy &middot; context propagation &middot; cost columns that aren&rsquo;t&nbsp;$0
+</p>
 
-Works with Claude Code, Google Antigravity (CLI + IDE), GitHub Copilot (CLI + IDE), OpenAI Codex (CLI + IDE), Cursor, Windsurf, and Cline.
+---
+
+## The problem
+
+You bolt OpenTelemetry onto your agent app and the traces show up — but they're useless. The cost column reads **$0**. The trace tree is **flat** instead of `Crew → Agent → LLM call`. Agent **handoffs are invisible**. Half the spans are missing token counts, and nothing groups by session. Generic LLM tracing was never built for multi-agent topologies, and getting the attributes right by hand means reading three spec docs per backend.
+
+**observent generates the integration code that gets it right the first time** — for *your* framework, *your* backend, with the exact span attributes and context-propagation patterns each one actually needs. Run one command, approve a diff, and your traces map to your agent topology with real costs attached.
 
 ## Why observent
 
-Generic LLM tracing isn't enough for multi-agent apps. You need:
+- **🎯 One command, correct the first time.** No hand-rolling OTel boilerplate across 40 framework × backend combinations and praying you got the attribute keys right.
+- **🌳 Multi-agent-aware, not generic LLM tracing.** The span tree mirrors your topology (`Crew → Agent → LLM`, `Workflow → Step → Tool`); handoffs, sessions, and tool calls are first-class spans — not flat noise.
+- **💸 Cost columns that aren't $0.** Model, provider, prompt + completion + cache tokens, tool calls, and finish reasons are mandatory in every generated template, so your backend's cost view actually populates.
+- **🔌 The right convention, derived — not guessed.** Phoenix → OpenInference, Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI, mixed → both. Mechanically resolved from the backends you pick; no flags to fumble.
+- **🤝 Works in 70+ coding agents, not just Claude Code.** The same skill ships to Cursor, Windsurf, Cline, Copilot, Codex, Antigravity, and the rest via [`npx skills`](https://github.com/vercel-labs/skills) — one source of truth, zero per-tool config.
+- **🛡️ Safe by construction.** Diff preview before every edit, even when auto-invoked. Spec-driven and resumable across sessions. It writes a `.env.example` — never your real secrets.
+- **🐳 Local backends in one step.** Pick a self-host backend that isn't running and observent offers to stand it up with a pinned Docker stack — Phoenix, Langfuse, SigNoz, Elastic APM — behind a double opt-in.
+- **📦 Zero-dependency core.** Detection and validation run on the Python standard library; the whole skill works with nothing but `Bash`. MCPs, when present, only *add* confidence — they're never required.
+
+## What a useful multi-agent trace actually needs
+
+observent bakes all of this into the code it generates:
 
 - **Span hierarchy** — `Crew → Agent → LLM call`, `Workflow → Step → Tool` — so the trace tree maps to your agent topology.
 - **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, Microsoft Agent Framework) as first-class spans.
@@ -22,8 +46,6 @@ Generic LLM tracing isn't enough for multi-agent apps. You need:
 - **Session grouping** — multi-turn conversations grouped under one `session.id`.
 - **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM / LangSmith; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
 - **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
-
-observent generates code that does all of this correctly the first time.
 
 ## Supported frameworks × backends
 
@@ -51,9 +73,9 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 >
 > **Claude Code gets a choice:** the native plugin (above) adds the `/observent*` slash commands; `npx skills add HemachandranD/observent -a claude-code` installs the same skill into `.claude/skills/` without the slash commands. Both run the identical workflow.
 
-## Install
+## Install the observent skill using — `npx skills`
 
-### Every agent except Claude Code's plugin — `npx skills`
+Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [68 more](#supported-agents).
 
 ```bash
 npx skills add HemachandranD/observent
@@ -121,12 +143,14 @@ The `observent` skill — installed into the agent's skills directory by `npx sk
 
 ---
 
-The workflow observent follows:
+## How it works
 
-1. Detect your framework and any pre-existing observability config.
-2. Show a diff preview of the changes it will make.
-3. After you approve, generate the integration code, list the `pip install` command, and produce a `.env.example`.
-4. Run a validation check (and optionally emit a synthetic span to confirm end-to-end ingestion).
+1. **Detect** your framework and any pre-existing observability config.
+2. **Preview** a diff of every change it will make — nothing is written silently.
+3. **Generate** the integration code after you approve, list the `pip install` command, and produce a `.env.example`.
+4. **Validate** the setup (and optionally emit a synthetic span to confirm end-to-end ingestion).
+
+Under the hood it's a spec-driven lifecycle (Spec → Plan → Tasks → Implement) that persists its state in `.observent/` in your project, so a run interrupted by a session break resumes exactly where it stopped.
 
 ## What it generates
 
