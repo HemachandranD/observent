@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%2B%2070%2B%20via%20npx%20skills-CC785C.svg" alt="Works in 70+ agents">
 </p>
 
-[![skills.sh](https://skills.sh/HemachandranD/observent)](https://skills.sh/HemachandranD/observent)
+[![skills.sh](https://skills.sh/b/hemachandrand/observent)](https://skills.sh/hemachandrand/observent)
 
 ---
 
