@@ -23,5 +23,44 @@
   "author": {
     "name": "Hemachandran Dhinakaran",
     "url": "https://github.com/HemachandranD"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/skills/observent/scripts/session_start_detect.py\"",
+            "timeout": 15,
+            "statusMessage": "observent: detecting frameworks & backends..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/skills/observent/scripts/prompt_nudge.py\"",
+            "timeout": 5,
+            "statusMessage": "observent: checking for observability intent..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/skills/observent/scripts/posttooluse_validate.py\"",
+            "timeout": 10,
+            "statusMessage": "observent: syntax-checking generated file..."
+          }
+        ]
+      }
+    ]
   }
 }
