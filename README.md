@@ -78,7 +78,7 @@ Adds three slash commands: `/observent`, `/observent-detect`, `/observent-valida
 
 The convention emitted by generated code is **mechanically resolved from the chosen backend set** — Phoenix → OpenInference; Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI; mixed (Phoenix + at least one of Langfuse / SigNoz / Elastic APM / LangSmith) → both. There's no runtime override; to switch conventions, re-run `/observent` with a different backend(s).
 
-### Antigravity / GitHub Copilot / Cursor / Windsurf / Cline / Codex
+### Cursor / Codex / GitHub Copilot / Windsurf / Antigravity/ Cline / 
 
 Ask your agent to set up observability. For example:
 
@@ -86,7 +86,7 @@ Ask your agent to set up observability. For example:
 > "Wire up Langfuse observability for this CrewAI app"
 > "Set up SigNoz monitoring for my agent"
 
-The `observent` skill — installed into the agent's skills directory by `npx skills` — is loaded on demand and runs the full workflow from its own `SKILL.md`. This works identically from each tool's CLI and IDE.
+The `observent` skill — installed into the agent's skills directory by `npx skills` — is loaded on demand and runs the full workflow from its own `SKILL.md`. This works identically from each tool's **CLI** and **IDE**.
 
 ---
 
@@ -134,12 +134,6 @@ Elastic APM uses the native `elastic-apm` Python agent by default (its OTel brid
 …and 60+ more. Run `npx skills add HemachandranD/observent --list` to see every agent detected on your machine; each agent's exact skills directory is resolved automatically. The [vercel-labs/skills agent table](https://github.com/vercel-labs/skills#supported-agents) is the canonical list with per-agent install paths.
 
 ---
-
-## The problem
-
-You bolt OpenTelemetry onto your agent app and the traces show up — but they're useless. The cost column reads **$0**. The trace tree is **flat** instead of `Crew → Agent → LLM call`. Agent **handoffs are invisible**. Half the spans are missing token counts, and nothing groups by session. Generic LLM tracing was never built for multi-agent topologies, and getting the attributes right by hand means reading three spec docs per backend.
-
-**observent generates the integration code that gets it right the first time** — for *your* framework, *your* backend, with the exact span attributes and context-propagation patterns each one actually needs. Run one command, approve a diff, and your traces map to your agent topology with real costs attached.
 
 ## Why observent
 
