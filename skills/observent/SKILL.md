@@ -128,7 +128,7 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
   - `observent_capture.py` (always — transport-agnostic input/output/status capture at the AI boundary; see `references/capture.md`).
   - `observent_http.py` (only if `spec.choice.http_body_capture: true` — optional raw HTTP body/header capture; enriches the existing server span, adds no span).
   - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
-  - `.env` append with required env var names.
+  - `.env.example` append with required env var names and notify user to fill in with exact values.
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
 - **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
