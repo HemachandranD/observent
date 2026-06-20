@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python 3.10–3.12">
   <a href=".github/workflows/ci.yml"><img src="https://github.com/HemachandranD/observent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%2B%2070%2B%20via%20npx%20skills-CC785C.svg" alt="Works in 70+ agents">
+  <a href="https://skills.sh/HemachandranD/observent"><img src="https://img.shields.io/badge/skills.sh-observent-000000.svg" alt="Listed on skills.sh"></a>
 </p>
 
 <p align="center">
@@ -19,61 +20,9 @@
 
 ---
 
-## The problem
+**observent** wires up production-grade observability for multi-agent Python apps. It detects your agent framework, generates the right integration code for the backend you pick, and enforces the span attributes and context-propagation patterns that make multi-agent traces actually useful — across **8 frameworks × 5 backends**, in Claude Code and 70+ other coding agents. One command, a diff to approve, and your traces map to your agent topology with real costs attached.
 
-You bolt OpenTelemetry onto your agent app and the traces show up — but they're useless. The cost column reads **$0**. The trace tree is **flat** instead of `Crew → Agent → LLM call`. Agent **handoffs are invisible**. Half the spans are missing token counts, and nothing groups by session. Generic LLM tracing was never built for multi-agent topologies, and getting the attributes right by hand means reading three spec docs per backend.
-
-**observent generates the integration code that gets it right the first time** — for *your* framework, *your* backend, with the exact span attributes and context-propagation patterns each one actually needs. Run one command, approve a diff, and your traces map to your agent topology with real costs attached.
-
-## Why observent
-
-- **🎯 One command, correct the first time.** No hand-rolling OTel boilerplate across 40 framework × backend combinations and praying you got the attribute keys right.
-- **🌳 Multi-agent-aware, not generic LLM tracing.** The span tree mirrors your topology (`Crew → Agent → LLM`, `Workflow → Step → Tool`); handoffs, sessions, and tool calls are first-class spans — not flat noise.
-- **💸 Cost columns that aren't $0.** Model, provider, prompt + completion + cache tokens, tool calls, and finish reasons are mandatory in every generated template, so your backend's cost view actually populates.
-- **🔌 The right convention, derived — not guessed.** Phoenix → OpenInference, Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI, mixed → both. Mechanically resolved from the backends you pick; no flags to fumble.
-- **🤝 Works in 70+ coding agents, not just Claude Code.** The same skill ships to Cursor, Windsurf, Cline, Copilot, Codex, Antigravity, and the rest via [`npx skills`](https://github.com/vercel-labs/skills) — one source of truth, zero per-tool config.
-- **🛡️ Safe by construction.** Diff preview before every edit, even when auto-invoked. Spec-driven and resumable across sessions. It writes a `.env.example` — never your real secrets.
-- **🐳 Local backends in one step.** Pick a self-host backend that isn't running and observent offers to stand it up with a pinned Docker stack — Phoenix, Langfuse, SigNoz, Elastic APM — behind a double opt-in.
-- **📦 Zero-dependency core.** Detection and validation run on the Python standard library; the whole skill works with nothing but `Bash`. MCPs, when present, only *add* confidence — they're never required.
-
-## What a useful multi-agent trace actually needs
-
-observent bakes all of this into the code it generates:
-
-- **Span hierarchy** — `Crew → Agent → LLM call`, `Workflow → Step → Tool` — so the trace tree maps to your agent topology.
-- **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, Microsoft Agent Framework) as first-class spans.
-- **Identity attributes** — `agent.name`, `agent.role`, `agent.framework` on every span for filtering.
-- **Session grouping** — multi-turn conversations grouped under one `session.id`.
-- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM / LangSmith; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
-- **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
-
-## Supported frameworks × backends
-
-| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith |
-|---|:---:|:---:|:---:|:---:|:---:|
-| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ |
-| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Microsoft Agent Framework (`agent-framework`) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
-| OpenAI Agents SDK *(native trace processor)* | ✓ | ✓ | ✓ | ✓ | ✓ |
-| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
-| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Custom (no framework) | ✓ | ✓ | ✓ | ✓ | ✓ |
-
-Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. Microsoft Agent Framework uses its built-in OpenTelemetry support — observent layers `OpenAIInstrumentor` on top for raw model-call spans. observent does not support AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into `agent-framework`; migrate to MAF or use the Custom path.
-
-## Supported providers
-
-| Provider | How observent runs | Install |
-|---|---|---|
-| **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands. (Or skill-only via npx skills.) | `claude plugin install HemachandranD/observent` |
-| **Cursor · Windsurf · Cline · GitHub Copilot · OpenAI Codex · Google Antigravity** (CLI + IDE) | The `observent` skill is loaded from the agent's own skills directory | `npx skills add HemachandranD/observent` |
-
-> **Single source of truth:** the full workflow lives in `skills/observent/SKILL.md`, alongside its `references/` and `scripts/`. [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills) copies that **self-contained** skill folder into each detected agent's skills directory (`.claude/skills/`, `.agents/skills/`, …) — auto-detecting which of 70+ coding agents you have installed. No per-tool rule files, no `AGENTS.md` mirror to keep in sync.
->
-> **Claude Code gets a choice:** the native plugin (above) adds the `/observent*` slash commands; `npx skills add HemachandranD/observent -a claude-code` installs the same skill into `.claude/skills/` without the slash commands. Both run the identical workflow.
-
-## Install the observent skill using — `npx skills`
+## Install via — `npx skills`
 
 Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [68 more](#supported-agents).
 
@@ -81,16 +30,16 @@ Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [68 more](#su
 npx skills add HemachandranD/observent
 ```
 
-`npx skills` auto-detects the coding agents installed on your machine and copies the self-contained `observent` skill into each one's skills directory. Useful flags:
+`npx skills` auto-detects the coding agents installed on your machine and copies the self-contained `observent` skill into each one's skills directory. `references/` and `scripts/` travel inside the skill folder, so there are no environment variables to set and nothing to keep in sync. To remove it, run `npx skills` again (or delete the skill folder from the agent's skills directory).
 
-```bash
-npx skills add HemachandranD/observent --list            # show the skill, don't install
-npx skills add HemachandranD/observent -a cursor -a cline # target specific agents
-npx skills add HemachandranD/observent -g                 # install to your home dir, not the project
-npx skills add HemachandranD/observent -y                 # skip prompts
-```
+### Options
 
-No environment variables to set and nothing to keep in sync — `references/` and `scripts/` travel inside the skill folder. To remove it, use `npx skills` (or delete the skill folder from the agent's skills directory).
+| Flag | Effect |
+|---|---|
+| `--list` | Show the skill without installing |
+| `-a <agent>` | Target specific agents — repeatable, e.g. `-a cursor -a cline` |
+| `-g` | Install into your home directory instead of the project |
+| `-y` | Skip prompts |
 
 ### Claude Code (plugin)
 
@@ -98,11 +47,9 @@ No environment variables to set and nothing to keep in sync — `references/` an
 claude plugin install HemachandranD/observent
 ```
 
-Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`. (Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.)
+Adds three slash commands: `/observent`, `/observent-detect`, `/observent-validate`. Prefer the skill-only install? `npx skills add HemachandranD/observent -a claude-code` drops it into `.claude/skills/` instead — same workflow, no slash commands.
 
----
-
-## Usage
+## Try it
 
 ### Claude Code
 
@@ -142,6 +89,79 @@ Ask your agent to set up observability. For example:
 The `observent` skill — installed into the agent's skills directory by `npx skills` — is loaded on demand and runs the full workflow from its own `SKILL.md`. This works identically from each tool's CLI and IDE.
 
 ---
+
+## Supported frameworks × backends
+
+| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith |
+|---|:---:|:---:|:---:|:---:|:---:|
+| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Microsoft Agent Framework (`agent-framework`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OpenAI Agents SDK *(native trace processor)* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
+| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Custom (no framework) | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. Microsoft Agent Framework uses its built-in OpenTelemetry support — observent layers `OpenAIInstrumentor` on top for raw model-call spans. observent does not support AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into `agent-framework`; migrate to MAF or use the Custom path.
+
+## Supported providers
+
+| Provider | How observent runs | Install |
+|---|---|---|
+| **Claude Code** | Plugin — `/observent`, `/observent-detect`, `/observent-validate` slash commands. (Or skill-only via npx skills.) | `claude plugin install HemachandranD/observent` |
+| **Cursor · Windsurf · Cline · GitHub Copilot · OpenAI Codex · Google Antigravity** (CLI + IDE) | The `observent` skill is loaded from the agent's own skills directory | `npx skills add HemachandranD/observent` |
+
+> **Single source of truth:** the full workflow lives in `skills/observent/SKILL.md`, alongside its `references/` and `scripts/`. [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills) copies that **self-contained** skill folder into each detected agent's skills directory (`.claude/skills/`, `.agents/skills/`, …) — auto-detecting which of 70+ coding agents you have installed. No per-tool rule files, no `AGENTS.md` mirror to keep in sync.
+>
+> **Claude Code gets a choice:** the native plugin (above) adds the `/observent*` slash commands; `npx skills add HemachandranD/observent -a claude-code` installs the same skill into `.claude/skills/` without the slash commands. Both run the identical workflow.
+
+## Supported agents
+
+`npx skills` installs `observent` into any of the **70+ coding agents** it detects — the skill folder is self-contained, so it runs identically everywhere. Common ones:
+
+| Agent | `-a` value |
+|---|---|
+| Claude Code | `claude-code` |
+| Cursor | `cursor` |
+| Windsurf | `windsurf` |
+| Cline | `cline` |
+| GitHub Copilot | `copilot` |
+| OpenAI Codex | `codex` |
+| Google Antigravity | `antigravity` |
+| OpenCode | `opencode` |
+
+…and 60+ more. Run `npx skills add HemachandranD/observent --list` to see every agent detected on your machine; each agent's exact skills directory is resolved automatically. The [vercel-labs/skills agent table](https://github.com/vercel-labs/skills#supported-agents) is the canonical list with per-agent install paths.
+
+---
+
+## The problem
+
+You bolt OpenTelemetry onto your agent app and the traces show up — but they're useless. The cost column reads **$0**. The trace tree is **flat** instead of `Crew → Agent → LLM call`. Agent **handoffs are invisible**. Half the spans are missing token counts, and nothing groups by session. Generic LLM tracing was never built for multi-agent topologies, and getting the attributes right by hand means reading three spec docs per backend.
+
+**observent generates the integration code that gets it right the first time** — for *your* framework, *your* backend, with the exact span attributes and context-propagation patterns each one actually needs. Run one command, approve a diff, and your traces map to your agent topology with real costs attached.
+
+## Why observent
+
+- **One command, correct the first time.** No hand-rolling OTel boilerplate across 40 framework × backend combinations and praying you got the attribute keys right.
+- **Multi-agent-aware, not generic LLM tracing.** The span tree mirrors your topology (`Crew → Agent → LLM`, `Workflow → Step → Tool`); handoffs, sessions, and tool calls are first-class spans — not flat noise.
+- **Cost columns that aren't $0.** Model, provider, prompt + completion + cache tokens, tool calls, and finish reasons are mandatory in every generated template, so your backend's cost view actually populates.
+- **The right convention, derived — not guessed.** Phoenix → OpenInference, Langfuse / SigNoz / Elastic APM / LangSmith → OpenTelemetry GenAI, mixed → both. Mechanically resolved from the backends you pick; no flags to fumble.
+- **Works in 70+ coding agents, not just Claude Code.** The same skill ships to Cursor, Windsurf, Cline, Copilot, Codex, Antigravity, and the rest via [`npx skills`](https://github.com/vercel-labs/skills) — one source of truth, zero per-tool config.
+- **Safe by construction.** Diff preview before every edit, even when auto-invoked. Spec-driven and resumable across sessions. It writes a `.env.example` — never your real secrets.
+- **Local backends in one step.** Pick a self-host backend that isn't running and observent offers to stand it up with a pinned Docker stack — Phoenix, Langfuse, SigNoz, Elastic APM — behind a double opt-in.
+- **Zero-dependency core.** Detection and validation run on the Python standard library; the whole skill works with nothing but `Bash`. MCPs, when present, only *add* confidence — they're never required.
+
+## What a useful multi-agent trace actually needs
+
+observent bakes all of this into the code it generates:
+
+- **Span hierarchy** — `Crew → Agent → LLM call`, `Workflow → Step → Tool` — so the trace tree maps to your agent topology.
+- **Handoff visibility** — agent-to-agent transfers (OpenAI Agents SDK, Microsoft Agent Framework) as first-class spans.
+- **Identity attributes** — `agent.name`, `agent.role`, `agent.framework` on every span for filtering.
+- **Session grouping** — multi-turn conversations grouped under one `session.id`.
+- **Mandatory attributes** — model, provider, prompt + completion + cache tokens, tool calls, finish reasons — captured per the convention each backend prefers (OpenInference for Phoenix, OpenTelemetry GenAI for Langfuse / SigNoz / Elastic APM / LangSmith; both when fanning out across Phoenix and any of them) so cost columns aren't $0.
+- **Context propagation** — across async, threads, subprocesses, and HTTP boundaries.
 
 ## How it works
 
