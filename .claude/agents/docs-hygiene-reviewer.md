@@ -47,13 +47,13 @@ anything.
 7. **If self-hostable:** `skills/observent/references/self_host.md` — a provisioning section (`vendored-compose` or `upstream-clone`), an § Image Versions row with exact image tag(s), "Last verified" bumped, and the backend added to the provisionable set in `SKILL.md` Phase 1 §1.5. If it has no free self-host edition (like LangSmith), it must instead be in the "not provisioned" note and left out of the set.
 8. `tests/test_docs_consistency.py` — `BACKEND_COLUMNS` extended.
 
-## Checklist — adding a new provider (order matters)
+## Checklist — adding a new provider
 
-1. `scripts/detect_providers.py` — `_<provider>()` detector added **and** registered in `DETECTORS`.
-2. `install.sh` **and** `install.ps1` — detection block + install logic (copy adapter files, substitute `${OBSERVENT_HOME}`).
-3. Provider adapter files present (extension manifest + context file, or a rule file under `.<provider>/rules/`). Prefer extending root `AGENTS.md` for tools that read the cross-tool standard.
-4. `README.md` — a row in the Supported providers table + install command.
-5. Path-placeholder rule respected: `${CLAUDE_SKILL_DIR}` only in `commands/*.toml` + `SKILL.md`; `${OBSERVENT_HOME}` in every other adapter. They must not be mixed.
+Cross-tool distribution is handled by [`npx skills`](https://github.com/vercel-labs/skills), which copies the self-contained `skills/observent/` folder into each agent's skills directory. There is **no** per-provider repo wiring (the old `install.sh`/`install.ps1` + `detect_providers.py` + `AGENTS.md` + per-tool rule files were retired). So for a new provider, verify only:
+
+1. The skill stays **self-contained**: `references/*` referenced by relative path; scripts via `${CLAUDE_SKILL_DIR}/scripts/…` for Claude Code, with the § Step 1.1 portability note for other agents. **No `${OBSERVENT_HOME}`** anywhere, **no** reintroduced `AGENTS.md` workflow mirror or per-tool pointer file.
+2. `.claude-plugin/marketplace.json` — `plugins[0].skills` still lists `./skills/observent` (the npx discovery link CI asserts).
+3. `README.md` — optionally, a row in the Supported providers table calling out the new agent.
 
 ## Checklist — version-pin bump
 

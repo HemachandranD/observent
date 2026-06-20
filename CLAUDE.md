@@ -13,7 +13,8 @@ The repo *is* the plugin: skill files live under `skills/observent/`, plugin man
 ```
 .claude-plugin/
   plugin.json           # Claude Code plugin manifest — name, version, author
-  marketplace.json      # Marketplace listing for `claude plugin install`
+  marketplace.json      # Marketplace listing for `claude plugin install`; also
+                        # declares skills:["./skills/observent"] for npx skills discovery
 commands/
   observent.toml            # /observent [framework] [backend|backend,...] — full SDD lifecycle (spec→plan→tasks→implement) with resume
   observent-spec.toml       # /observent-spec — produce .observent/spec.md only
@@ -67,7 +68,7 @@ NOTICE                  # Apache-2.0 attribution notice
 - **Tooling config:** centralized in `pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]`). CI installs **pinned** `ruff` / `mypy` / `pytest` versions so a floating release can't redden an unrelated PR — bump the pins in `.github/workflows/ci.yml` deliberately.
 - **Lint:** `ruff` (rule set in `pyproject.toml`).
 - **Type check:** `mypy --strict` (config in `pyproject.toml`).
-- **Tests:** `pytest` — unit tests for the four scripts + the convention rule, plus a docs-consistency suite that enforces the § Documentation Hygiene invariants (framework×backend grid and version pins agree across files). `tests/` is **not** shipped in the plugin.
+- **Tests:** `pytest` — unit tests for the three skill scripts + the convention rule, plus a docs-consistency suite that enforces the § Documentation Hygiene invariants (framework×backend grid and version pins agree across files). `tests/` is **not** shipped in the plugin.
 
 ## Commands
 
@@ -99,8 +100,8 @@ python skills/observent/scripts/validate_setup.py phoenix,langsmith --smoke-test
 pytest
 
 # Lint + type-check (config lives in pyproject.toml)
-ruff check skills/observent/scripts/ scripts/ tests/
-mypy skills/observent/scripts/ scripts/
+ruff check skills/observent/scripts/ tests/
+mypy skills/observent/scripts/
 ```
 
 ## How to Extend
@@ -131,38 +132,24 @@ Update in this order:
 7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack or `upstream-clone` when the stack needs repo-mounted config files), add a row to the § Image Versions table with the exact image tag(s), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
 8. `tests/` — extend `test_docs_consistency.py`'s `BACKEND_COLUMNS` (and `FRAMEWORKS` when adding a framework) so the cross-file grid check covers the new option, then run `pytest` to confirm the matrix/README/code stay in sync.
 
-### Adapter strategy (read this first)
+### Cross-tool distribution (read this first)
 
-There are exactly **two** content surfaces for non-Claude-Code tools, and everything else points at them:
+`skills/observent/SKILL.md` (with its `references/` and `scripts/`) is the **single content surface** for every tool. There is no condensed `AGENTS.md` mirror and no per-tool rule files to keep in sync — that multi-copy machinery (`install.sh`/`install.ps1`, `AGENTS.md`, `.cursor/rules/`, `.clinerules/`, `scripts/detect_providers.py`, the Antigravity extension manifest) was retired in favour of `npx skills`.
 
-- **`skills/observent/SKILL.md` (+ `references/`)** is the single source of truth, installed to `${OBSERVENT_HOME}/` by the installer. Claude Code loads it directly as a plugin skill.
-- **`AGENTS.md`** (repo root) is the canonical **cross-tool** condensed summary. It is read natively by Antigravity, OpenAI Codex, GitHub Copilot, Windsurf, and Cursor, and the installer drops it into the user's project for them. It must mirror `SKILL.md`'s workflow (see § Documentation Hygiene).
+- **Claude Code** loads the skill directly as a plugin (`claude plugin install HemachandranD/observent`), with the `commands/*.toml` slash commands on top.
+- **Every other agent** receives the same **self-contained** skill folder via [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills): `npx skills add HemachandranD/observent` copies `skills/observent/` into the agent's skills directory (`.claude/skills/`, `.agents/skills/`, …). Discovery works two ways — the flat `skills/observent/SKILL.md` layout, **and** the `"skills": ["./skills/observent"]` array in `.claude-plugin/marketplace.json` (CI asserts that array resolves to a real `SKILL.md`).
 
-Per-tool rule files exist **only** where a tool needs its own file, and they are **thin pointers** (frontmatter + a few lines routing to `${OBSERVENT_HOME}/SKILL.md`), never a duplicated workflow body:
-
-- `.cursor/rules/observent.mdc` — kept for Cursor's `globs: **/*.py` auto-attach scoping (loads observent only when editing Python).
-- `.clinerules/observent.md` — kept because Cline does **not** auto-read the project-root `AGENTS.md` (as of 2026-06; see [cline#5033](https://github.com/cline/cline/issues/5033)).
-
-Do **not** add a per-tool file for a provider that reads `AGENTS.md` natively (Windsurf, Copilot, Codex, Antigravity) — that reintroduces the multi-copy drift this layout removed.
+Keep the skill **self-contained and relative** so it runs wherever it lands: `references/*` are referenced by plain relative path; scripts are invoked via `${CLAUDE_SKILL_DIR}/scripts/…` for Claude Code, with the SKILL.md § Step 1.1 portability note telling other agents to resolve them from the skill's own folder. Never reintroduce `${OBSERVENT_HOME}`, an `AGENTS.md` workflow mirror, or per-tool pointer files.
 
 ### Adding a new provider
 
-Update in this order:
-
-1. `scripts/detect_providers.py` — add a `_<provider>()` detector function and register it in `DETECTORS`; set `install_cmd` to the real hint.
-2. `install.sh` + `install.ps1` — wire up the provider.
-   - **If the provider reads `AGENTS.md` natively (the common case):** add one line to the `agents_native` / `Add-AgentsNative` helper list (`agents_native <id> "<Label>"`). The helper detects, writes the project `AGENTS.md` once per run (idempotent via `write_agents_md` / `Write-AgentsMd`), and records the install. No new file, no new block.
-   - **If it needs its own rule file** (no native `AGENTS.md` support, or you want tool-specific scoping like Cursor's): add a **thin-pointer** file under `.<provider>/…`, copy it via `_install_rule` / `Install-Rule`, and have the body route to `${OBSERVENT_HOME}/SKILL.md`. Don't duplicate the workflow.
-   - **If it has a bespoke install mechanism** (e.g. Claude Code's `claude plugin install`, Antigravity's `antigravity extensions install`): keep its own block — these can't be reduced to the shared helper.
-3. `README.md` — add a row to the Supported providers table and document the install command.
-4. CI passes (detect_providers.py smoke test, lint, type-check).
+Usually **nothing to do in this repo** — `npx skills` already maps 70+ coding agents to their skills directories, so a newly supported agent picks up `skills/observent/` automatically as long as the skill stays self-contained. Optionally add a row to the README § Supported providers table to call it out. (Only an agent with a bespoke install mechanism — the way Claude Code's plugin works — would need its own handling; document that separately if it ever arises.)
 
 #### Which path placeholder to use
 
-- **Claude Code plugin** (`commands/*.toml`, `skills/observent/SKILL.md`): use `${CLAUDE_SKILL_DIR}`. Claude Code injects this at runtime; the files are loaded directly from the cloned plugin repo, not from `OBSERVENT_HOME`.
-- **All other adapters** (`AGENTS.md`, `.cursor/rules/*.mdc`, `.clinerules/*.md`): use `${OBSERVENT_HOME}`. The installer literal-substitutes this at copy time so the files reference the absolute `~/.observent/` path on the user's machine.
-
-Don't mix them — `${CLAUDE_SKILL_DIR}` is empty outside Claude Code, and `${OBSERVENT_HOME}` is only resolved by the installer for files it copies.
+- **Script paths** in `skills/observent/SKILL.md`, `references/*`, and `commands/*.toml`: use `${CLAUDE_SKILL_DIR}/scripts/…` — Claude Code injects `${CLAUDE_SKILL_DIR}` at runtime. Non-Claude agents resolve scripts relative to the skill folder they loaded `SKILL.md` from (see SKILL.md § Step 1.1).
+- **`references/*`** are referenced by plain relative path (no placeholder).
+- **Never use `${OBSERVENT_HOME}`** — it was resolved only by the retired installer and means nothing under `npx skills`.
 
 ## Design Constraints
 
@@ -188,7 +175,7 @@ The 8×5 matrix in `references/matrix.md` is canonical. If you change a row or c
 - `README.md` (Supported matrix)
 - `references/examples.md` (if a removed combination had an example)
 
-**`AGENTS.md` is the single cross-tool mirror of `SKILL.md`** (the source of truth). It is the *only* condensed copy of the workflow — every other editor (Antigravity, Codex, Copilot, Windsurf, Cursor) reads it natively, and the per-tool files (`.cursor/rules/observent.mdc`, `.clinerules/observent.md`) are thin pointers with no workflow body. When you change `SKILL.md`'s lifecycle, phases, convention rules, generated-code invariants, or provisioning flow, mirror the change into `AGENTS.md`. Do **not** re-introduce a condensed workflow body into any per-tool pointer file.
+**`skills/observent/SKILL.md` is the single source of truth — there is no cross-tool mirror to keep in sync.** `npx skills` distributes the skill folder verbatim to every agent, so the old condensed `AGENTS.md` copy (and the per-tool pointer files) were removed. When you change the lifecycle, phases, convention rules, generated-code invariants, or provisioning flow, edit `SKILL.md` directly — no second copy needs updating. Do **not** reintroduce an `AGENTS.md` workflow mirror or per-tool rule files.
 
 `references/openinference.md` and `references/otel_genai.md` are the canonical attribute references. `references/matrix.md` § Mandatory Span Attributes only carries a per-kind summary table — full attribute lists live in those two files. When the upstream specs change, update these files (and bump their `Last verified` footers); don't re-inline attributes back into `references/matrix.md`.
 

@@ -939,7 +939,7 @@ For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `lang
 [ ] No credentials hardcoded; .env is in .gitignore
 ```
 
-Or just run:
+Or just run (`${CLAUDE_SKILL_DIR}` is the skill directory in Claude Code; on other agents run from this skill's own folder — see SKILL.md § Step 1.1):
 
 ```bash
 # single backend

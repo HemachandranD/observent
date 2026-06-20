@@ -52,6 +52,16 @@ jobs:
           assert "plugins" in m and len(m["plugins"]) >= 1, "marketplace.json: no plugins listed"
           print("OK: .claude-plugin/marketplace.json")
 
+          # npx skills (vercel-labs/skills) discovers the skill via this `skills`
+          # array; every entry must resolve to a real SKILL.md.
+          import os
+          skills = m["plugins"][0].get("skills", [])
+          assert skills, "marketplace.json: plugins[0] needs a 'skills' array for npx skills discovery"
+          for s in skills:
+              skill_md = os.path.join(s, "SKILL.md")
+              assert os.path.isfile(skill_md), f"marketplace.json skills entry missing SKILL.md: {skill_md}"
+          print("OK: marketplace.json skills -> SKILL.md")
+
       - name: Validate command TOML files
         shell: python {0}
         run: |
@@ -76,7 +86,6 @@ jobs:
               "skills/observent/scripts/detect_framework.py",
               "skills/observent/scripts/validate_setup.py",
               "skills/observent/scripts/existing_setup.py",
-              "scripts/detect_providers.py",
           ]:
               spec = importlib.util.spec_from_file_location("m", path)
               assert spec and spec.loader, path
@@ -105,26 +114,14 @@ jobs:
       - name: Run existing_setup.py against this repo
         run: python skills/observent/scripts/existing_setup.py
 
-      - name: Run detect_providers.py (smoke test)
-        run: python scripts/detect_providers.py
-
       - name: validate_setup.py argparse smoke test
         run: python skills/observent/scripts/validate_setup.py --help
-
-      - name: Installer dry-run (bash)
-        if: runner.os == 'Linux'
-        run: bash install.sh --dry-run --project-dir /tmp/observent-test
-
-      - name: Installer dry-run (PowerShell)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: .\install.ps1 -DryRun -ProjectDir "$env:RUNNER_TEMP\observent-test"
 
       - name: Unit tests + docs-consistency checks
         run: python -m pytest
 
       - name: Lint with ruff
-        run: ruff check skills/observent/scripts/ scripts/ tests/
+        run: ruff check skills/observent/scripts/ tests/
 
       - name: Type-check with mypy
-        run: mypy skills/observent/scripts/ scripts/
+        run: mypy skills/observent/scripts/

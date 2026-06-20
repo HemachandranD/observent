@@ -52,6 +52,8 @@ Run both detectors **in parallel** — they're independent deterministic scripts
 - `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
 - `python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
 
+> **Resolving the skill directory.** The `scripts/` and `references/` folders ship *inside* this skill, beside `SKILL.md`. In Claude Code that directory is exposed as `${CLAUDE_SKILL_DIR}` (used above). Other agents (Cursor, Copilot, Codex, Cline, Windsurf, etc.) receive the same self-contained folder via `npx skills` — for them, run the scripts from **this skill's own directory** (the folder you loaded `SKILL.md` from, e.g. `.agents/skills/observent/scripts/…` or `~/.config/<agent>/skills/observent/scripts/…`). Same relative layout, no `${CLAUDE_SKILL_DIR}` dependency.
+
 Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`. `detect_framework.py` also reports a `docker` block (`{available, compose_available}`) — capture it into `spec.detection.docker_available` / `docker_compose_available` for the provisioning offer in Step 1.6.
 
 For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files` as existing observability. Entries with `kind: "instrumentation"` alone don't count — they may belong to an unrelated tracing setup.
