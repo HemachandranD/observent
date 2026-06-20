@@ -34,7 +34,7 @@ Re-verify each section against the upstream artifacts listed under it (per-subse
 **OpenInference instrumentors (PyPI):**
 - https://github.com/Arize-ai/openinference/tree/main/python — canonical Python monorepo; each per-instrumentor README has install + usage.
 
-Last reviewed: 2026-05-17.
+Last reviewed: 2026-06-20.
 
 ---
 
@@ -61,7 +61,7 @@ Last reviewed: 2026-05-17.
 
 ## Verified Versions
 
-Last verified: 2026-05-17 against Python 3.12.
+Last verified: 2026-06-20 against Python 3.12.
 
 | Package | Pinned version |
 |---|---|

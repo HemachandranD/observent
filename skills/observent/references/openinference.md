@@ -17,7 +17,7 @@ Every span-kind / attribute table below derives from the OpenInference spec — 
 - OTel baggage API (Cross-cutting) — https://opentelemetry.io/docs/specs/otel/baggage/api/
 - OTel exception attributes (Exception handling) — https://opentelemetry.io/docs/specs/semconv/exceptions/
 
-Last reviewed: 2026-05-17.
+Last reviewed: 2026-06-20.
 
 ---
 
@@ -128,7 +128,7 @@ Flattened — e.g. `llm.input_messages.0.message.contents.0.message_content.type
 | `llm.cost.prompt` | float | Input cost |
 | `llm.cost.completion` | float | Output cost |
 | `llm.cost.total` | float | Combined |
-| `llm.cost.prompt_details.{input,cache_write,cache_read}` | float | Detail breakdown |
+| `llm.cost.prompt_details.{input,cache_write,cache_read,cache_input,audio}` | float | Detail breakdown (`cache_input` = cost of the tokens written to cache on this call; `cache_read` = cost of cache hits) |
 | `llm.cost.completion_details.{output,reasoning,audio}` | float | Detail breakdown |
 
 ### Prompt templates
