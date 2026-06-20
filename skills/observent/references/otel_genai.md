@@ -2,7 +2,7 @@
 
 Canonical attribute reference for the OTel-GenAI spec — the convention Langfuse, SigNoz, Elastic APM, and LangSmith consume. observent emits these keys when the resolved convention is `otel-genai` or `both` (see `../SKILL.md` Step 3).
 
-**Status:** This spec is in development upstream; attribute names may shift. Re-verify before bumping the floor.
+**Status:** This spec is in development (experimental) upstream; attribute names may shift. As of 2026-06, the GenAI conventions are being split out of the main `open-telemetry/semantic-conventions` repo into a dedicated `open-telemetry/semantic-conventions-genai` repo (the registry entries are marked *Moved*); the rendered `docs/gen-ai/` paths below still resolve. Re-verify the source URLs, and the floor, before bumping.
 
 ---
 
@@ -22,7 +22,7 @@ Every table below derives from the OTel-GenAI spec, which lives in two places (r
 - OTel sampling — https://opentelemetry.io/docs/concepts/sampling/ (§ Sampling-decision attributes)
 - OTel error attributes — https://opentelemetry.io/docs/specs/semconv/general/attributes/#error-attributes (§ Errors)
 
-Last reviewed: 2026-05-17.
+Last reviewed: 2026-06-20.
 
 ---
 

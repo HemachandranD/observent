@@ -1,11 +1,11 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications using a spec-driven lifecycle (spec → plan → tasks → implement) with project-local persistent state in .observent/. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with complete integration code, environment variables, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation across async/thread/handoff boundaries, and validation. The .observent/tasks.json checkpoint makes the workflow resumable across session breaks. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-# observent — Multi-Agent Observability (Spec-Driven)
+# observent — Multi-Agent Observability
 
 You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: produce three artifacts under `.observent/` in the user's project, then execute the task list.
 
@@ -117,7 +117,7 @@ Construct the YAML frontmatter per `references/spec_schema.md § 1`. Compute `de
 
 ## Phase 2 — Plan
 
-**Goal:** read `spec.md` and produce `.observent/plan.md` with the full generated content embedded in fenced blocks behind anchor comments. Deterministic from spec — no user questions in this phase except the diff-preview confirm in Phase 4.
+**Goal:** read `.observent/spec.md` and produce `.observent/plan.md` with the full generated content embedded in fenced blocks behind anchor comments. Deterministic from spec — no user questions in this phase except the diff-preview confirm in Phase 4.
 
 ### Step 2.1 — Decide structure
 
@@ -128,7 +128,7 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
   - `observent_capture.py` (always — transport-agnostic input/output/status capture at the AI boundary; see `references/capture.md`).
   - `observent_http.py` (only if `spec.choice.http_body_capture: true` — optional raw HTTP body/header capture; enriches the existing server span, adds no span).
   - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
-  - `.env` append with required env var names.
+  - `.env.example` append with required env var names and notify user to fill in with exact values.
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
 - **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
@@ -258,6 +258,27 @@ Once all tasks are terminal, report back:
   - LangSmith US: `https://smith.langchain.com` · EU: `https://eu.smith.langchain.com`
 - For any locally provisioned stack (from `plan.provision[]`): note that it's now running under Docker and give the matching `down_command` to stop it (e.g. `docker compose -f docker-compose.observent-phoenix.yml down`).
 - One-line next step — set the env vars, run the app, refresh each UI.
+
+---
+
+## Optional MCP enrichment (implementation phase)
+
+Everything above runs with **no MCP at all** — the bundled zero-dependency scripts (`detect_framework.py`, `existing_setup.py`, `validate_setup.py`) are the floor, and the skill must always work with just `Bash`. When the host agent *also* exposes one of the MCP servers below, use it as **progressive enhancement** to make Phase 4 stronger — never as a prerequisite.
+
+**Rules for every MCP use (all agents):**
+
+- **Optional + detected, never assumed.** Use an MCP only if the running agent actually exposes its tools. If it's absent, silently fall back to the documented script/Bash path — same task outcome, no error. The skill ships verbatim to 70+ agents via `npx skills`; most users will have none of these connected.
+- **The fallback path stays canonical.** The MCP only *adds* confidence; the script path remains the source of truth for whether a task is `done` or `failed`. Never let a missing or failing MCP block a task.
+- **Same confirm discipline.** Sending user code, traces, or environment to an external MCP is subject to the same diff-preview/confirm gate as a file write — never silently exfiltrate, and never pass secret *values*.
+- **Claude Code:** add the relevant MCP tool names to this skill's `allowed-tools` frontmatter (or approve them at run time); other agents enable them via their own MCP config.
+
+| MCP (any provider) | Lifecycle slot | What it adds over the script floor | Fallback when absent |
+|---|---|---|---|
+| **IDE / language-server** (e.g. `getDiagnostics`, in-kernel code execution) | after each `write_file` / `edit_file` in Phase 4 | Confirm the generated `observent_otel.py` / `observent_capture.py` actually imports and type-checks (correct instrumentor names, no missing symbols) before marking the task `done`; optionally run the validation span in-kernel | mark `done` on successful write; rely on the final `validate` task to surface runtime errors |
+| **Observability-backend** (Phoenix / Langfuse / SigNoz / Datadog / Grafana query MCP) | Phase 4 `validate` task and § 4.2 smoke test | Confirm the synthetic span **actually landed** in the backend with the expected attributes (`llm.token_count.*`, the resolved convention keys) — closes the loop past mere endpoint reachability | `validate_setup.py <backends>` (env + reachability + span emission only) |
+| **Container / Docker** | Phase 1 § 1.5 and each `plan.provision[]` `run_command` | Inspect container **health + logs** after `docker compose … up` (did the stack come up serving, or crash-loop?) rather than trusting the `--wait` exit code alone | the `docker compose … up -d --wait` exit code |
+
+> Context7 (the library-docs MCP) is intentionally **not** in this table — it's an authoring/maintenance aid for refreshing the `references/` files, not part of instrumenting a user's project.
 
 ---
 

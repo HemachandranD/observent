@@ -34,7 +34,7 @@ CREAM = "#F5F4EE"
 CORAL = "#CC785C"
 CORAL_HI = "#E8956B"
 WORD = "OBSERVENT"
-TAGLINE = "observability for multi-agent apps"
+TAGLINE = "Observability for Multi-Agent Apps"
 
 
 def word_width(word):

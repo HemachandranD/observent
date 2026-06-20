@@ -23,7 +23,7 @@ This page is the canonical reference for that engine. SKILL.md § Step 2.3 links
 **OTel SDK knobs cited under § Truncation:**
 - `OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT` / `OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT` — https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
 
-Last reviewed: 2026-05-30.
+Last reviewed: 2026-06-20.
 
 ---
 
@@ -441,4 +441,4 @@ app.add_middleware(ObserventHTTPMiddleware)
 
 ---
 
-*Last verified: 2026-05-30 with Python 3.12, OpenTelemetry API/SDK 1.41, Starlette 0.40.*
+*Last verified: 2026-06-20 with Python 3.12, OpenTelemetry API/SDK 1.41, Starlette 0.40.*

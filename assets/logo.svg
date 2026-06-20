@@ -170,5 +170,5 @@
   <circle cx="583.3" cy="211" r="5" fill="#E8956B"/>
   <circle cx="666.7" cy="211" r="5" fill="#E8956B"/>
   <circle cx="750.0" cy="211" r="5" fill="#E8956B"/>
-  <text x="500.0" y="249" text-anchor="middle" font-family="ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace" font-size="22" letter-spacing="1" fill="#C89078">observability for multi-agent apps</text>
+  <text x="500.0" y="249" text-anchor="middle" font-family="ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace" font-size="22" letter-spacing="1" fill="#C89078">Observability for Multi-Agent Apps</text>
 </svg>
