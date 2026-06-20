@@ -51,7 +51,7 @@ anything.
 
 Cross-tool distribution is handled by [`npx skills`](https://github.com/vercel-labs/skills), which copies the self-contained `skills/observent/` folder into each agent's skills directory. There is **no** per-provider repo wiring (the old `install.sh`/`install.ps1` + `detect_providers.py` + `AGENTS.md` + per-tool rule files were retired). So for a new provider, verify only:
 
-1. The skill stays **self-contained**: `references/*` referenced by relative path; scripts via `${CLAUDE_SKILL_DIR}/scripts/…` for Claude Code, with the § Step 1.1 portability note for other agents. **No `${OBSERVENT_HOME}`** anywhere, **no** reintroduced `AGENTS.md` workflow mirror or per-tool pointer file.
+1. The skill stays **self-contained**: `references/*` referenced by relative path; scripts via the agent-agnostic `<skill-dir>/scripts/…` placeholder in `SKILL.md` (and `references/*`), with the § Step 1.1 portability note explaining `<skill-dir>` resolution (Claude Code's `${CLAUDE_SKILL_DIR}`, else the skill's own folder). `commands/*.toml` keep literal `${CLAUDE_SKILL_DIR}` (Claude-plugin-only). **No `${OBSERVENT_HOME}`** anywhere, **no** reintroduced `AGENTS.md` workflow mirror or per-tool pointer file.
 2. `.claude-plugin/marketplace.json` — `plugins[0].skills` still lists `./skills/observent` (the npx discovery link CI asserts).
 3. `README.md` — optionally, a row in the Supported providers table calling out the new agent.
 

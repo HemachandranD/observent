@@ -237,7 +237,7 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
     {
       "id": "t08",
       "kind": "validate",
-      "payload": {"cmd": "python ${CLAUDE_SKILL_DIR}/scripts/validate_setup.py phoenix,langsmith"},
+      "payload": {"cmd": "python <skill-dir>/scripts/validate_setup.py phoenix,langsmith"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     }
   ]

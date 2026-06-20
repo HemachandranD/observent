@@ -139,7 +139,7 @@ Update in this order:
 - **Claude Code** loads the skill directly as a plugin (`claude plugin install HemachandranD/observent`), with the `commands/*.toml` slash commands on top.
 - **Every other agent** receives the same **self-contained** skill folder via [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills): `npx skills add HemachandranD/observent` copies `skills/observent/` into the agent's skills directory (`.claude/skills/`, `.agents/skills/`, …). Discovery works two ways — the flat `skills/observent/SKILL.md` layout, **and** the `"skills": ["./skills/observent"]` array in `.claude-plugin/marketplace.json` (CI asserts that array resolves to a real `SKILL.md`).
 
-Keep the skill **self-contained and relative** so it runs wherever it lands: `references/*` are referenced by plain relative path; scripts are invoked via `${CLAUDE_SKILL_DIR}/scripts/…` for Claude Code, with the SKILL.md § Step 1.1 portability note telling other agents to resolve them from the skill's own folder. Never reintroduce `${OBSERVENT_HOME}`, an `AGENTS.md` workflow mirror, or per-tool pointer files.
+Keep the skill **self-contained and relative** so it runs wherever it lands: `references/*` are referenced by plain relative path; scripts are invoked via the agent-agnostic `<skill-dir>/scripts/…` placeholder, with the SKILL.md § Step 1.1 portability note telling each agent how to resolve `<skill-dir>` (Claude Code's `${CLAUDE_SKILL_DIR}`, or the skill's own folder for everyone else). Never reintroduce `${OBSERVENT_HOME}`, an `AGENTS.md` workflow mirror, or per-tool pointer files.
 
 ### Adding a new provider
 
@@ -147,7 +147,8 @@ Usually **nothing to do in this repo** — `npx skills` already maps 70+ coding 
 
 #### Which path placeholder to use
 
-- **Script paths** in `skills/observent/SKILL.md`, `references/*`, and `commands/*.toml`: use `${CLAUDE_SKILL_DIR}/scripts/…` — Claude Code injects `${CLAUDE_SKILL_DIR}` at runtime. Non-Claude agents resolve scripts relative to the skill folder they loaded `SKILL.md` from (see SKILL.md § Step 1.1).
+- **Script paths in `skills/observent/SKILL.md`**: use the agent-agnostic `<skill-dir>/scripts/…` placeholder, with the § Step 1.1 note explaining that Claude Code substitutes its built-in `${CLAUDE_SKILL_DIR}` while other agents use the absolute path of the skill folder they loaded `SKILL.md` from. Don't hard-code `${CLAUDE_SKILL_DIR}` as the only form in `SKILL.md` — it resolves only in Claude Code, but `npx skills` ships the same `SKILL.md` to every agent.
+- **Script paths in `commands/*.toml`**: use literal `${CLAUDE_SKILL_DIR}/scripts/…` — those TOMLs load **only** under the Claude Code plugin, where the variable always resolves.
 - **`references/*`** are referenced by plain relative path (no placeholder).
 - **Never use `${OBSERVENT_HOME}`** — it was resolved only by the retired installer and means nothing under `npx skills`.
 

@@ -47,12 +47,14 @@ If invoked with `$1`/`$2` args, capture them as the user's framework/backend pre
 
 ### Step 1.1 — Detect environment
 
-Run both detectors **in parallel** — they're independent deterministic scripts that emit JSON, so issue them as two Bash tool calls in a **single message**, not sequentially:
+Run both detectors **in parallel** — they're independent deterministic scripts that emit JSON, so issue them as two Bash tool calls in a **single message**, not sequentially. Both scripts ship in this skill's own `scripts/` directory (beside `SKILL.md`); resolve that directory to an absolute path (see note below) and run:
 
-- `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
-- `python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
+- `python "<skill-dir>/scripts/detect_framework.py"`
+- `python "<skill-dir>/scripts/existing_setup.py"`
 
-> **Resolving the skill directory.** The `scripts/` and `references/` folders ship *inside* this skill, beside `SKILL.md`. In Claude Code that directory is exposed as `${CLAUDE_SKILL_DIR}` (used above). Other agents (Cursor, Copilot, Codex, Cline, Windsurf, etc.) receive the same self-contained folder via `npx skills` — for them, run the scripts from **this skill's own directory** (the folder you loaded `SKILL.md` from, e.g. `.agents/skills/observent/scripts/…` or `~/.config/<agent>/skills/observent/scripts/…`). Same relative layout, no `${CLAUDE_SKILL_DIR}` dependency.
+> **Resolving `<skill-dir>`.** `<skill-dir>` is the folder this `SKILL.md` was loaded from — its `scripts/` and `references/` subfolders ship *inside* the skill, so the path is always relative to the skill, never to the user's project cwd.
+> - **In Claude Code**, substitute the built-in `${CLAUDE_SKILL_DIR}` variable — e.g. `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`. (This is the only place that variable applies; it resolves automatically.)
+> - **Every other agent** (Cursor, Copilot, Codex, Cline, Windsurf, …) receives the same self-contained folder via `npx skills` and has **no** `${CLAUDE_SKILL_DIR}` variable. Use the absolute path of the skill folder you loaded `SKILL.md` from — the exact directory varies by agent (project-level `.agents/skills/observent/` for many CLIs; a global dir such as `~/.cursor/skills/observent/`, `~/.codeium/windsurf/skills/observent/`, or `~/.config/<agent>/skills/observent/` when installed with `-g`). Same `scripts/` + `references/` layout either way.
 
 Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`. `detect_framework.py` also reports a `docker` block (`{available, compose_available}`) — capture it into `spec.detection.docker_available` / `docker_compose_available` for the provisioning offer in Step 1.6.
 
@@ -210,7 +212,7 @@ Strict order:
 3. One `edit_file` task per `files[].op == edit`, with `diff_ref: "plan#<slug>"`.
 4. One `run_command` task for `pip_install`.
 5. One `run_command` task per `plan.provision[]` entry, with `cmd` set to that entry's `up_command` (`docker compose … up -d --wait`, or the pinned clone+up for `upstream-clone`). These come **after** pip-install and **before** `validate` so the endpoint is live when validation runs.
-6. One `validate` task — final — calling `validate_setup.py` with the comma-separated backend list from `spec.choice.backends`.
+6. One `validate` task — final — calling `<skill-dir>/scripts/validate_setup.py` (resolve `<skill-dir>` as in Step 1.1) with the comma-separated backend list from `spec.choice.backends`.
 
 ### Step 3.2 — Write `.observent/tasks.json`
 
@@ -232,7 +234,7 @@ For each task whose status is not terminal (`done` / `skipped`):
 | `write_file` | Resolve `content_ref` against `plan.md`; `Write` the file. | `done` | `failed` with short error |
 | `edit_file` | Resolve `diff_ref` against `plan.md`; apply via `Edit`. | `done` | `failed` with short error |
 | `run_command` | Run via Bash. | `done` if exit 0 | `failed` |
-| `validate` | Run `validate_setup.py <backend-list>` via Bash; surface output verbatim. | `done` if exit 0 | `failed`; suggest the likely cause (missing env var, unreachable endpoint, package not installed) |
+| `validate` | Run `<skill-dir>/scripts/validate_setup.py <backend-list>` via Bash (resolve `<skill-dir>` as in Step 1.1); surface output verbatim. | `done` if exit 0 | `failed`; suggest the likely cause (missing env var, unreachable endpoint, package not installed) |
 
 After mutating any task: rewrite `tasks.json` to disk before moving to the next task. Set `started_at` when work begins, `finished_at` when it ends. On `failed`, the next invocation will offer to retry that task.
 

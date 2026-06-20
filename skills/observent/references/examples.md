@@ -939,13 +939,13 @@ For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `lang
 [ ] No credentials hardcoded; .env is in .gitignore
 ```
 
-Or just run (`${CLAUDE_SKILL_DIR}` is the skill directory in Claude Code; on other agents run from this skill's own folder — see SKILL.md § Step 1.1):
+Or just run (`<skill-dir>` is this skill's own folder — in Claude Code substitute `${CLAUDE_SKILL_DIR}`; other agents use the skill folder they loaded `SKILL.md` from — see SKILL.md § Step 1.1):
 
 ```bash
 # single backend
-python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" <backend> --smoke-test
+python "<skill-dir>/scripts/validate_setup.py" <backend> --smoke-test
 # multi-backend fan-out (comma-separated)
-python "${CLAUDE_SKILL_DIR}/scripts/validate_setup.py" phoenix,signoz --smoke-test
+python "<skill-dir>/scripts/validate_setup.py" phoenix,signoz --smoke-test
 ```
 
 ---
