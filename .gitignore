@@ -219,3 +219,7 @@ __marimo__/
 
 # Claude Code local settings (machine-specific permission allowlists)
 .claude/settings.local.json
+
+# Maintainer-only skills — kept locally for repo development, not shipped to
+# users via `npx skills` (which would otherwise discover every SKILL.md).
+.claude/skills/
