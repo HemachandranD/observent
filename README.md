@@ -118,6 +118,20 @@ The `observent` skill — installed into the agent's skills directory by `npx sk
 
 Elastic APM uses the native `elastic-apm` Python agent by default (its OTel bridge picks up the OpenInference instrumentors), giving you transaction tracing and infrastructure metrics in Kibana alongside LLM spans. LangSmith uses pure OTLP HTTP to its OTel ingest endpoint (cloud US/EU or enterprise self-host) with OTel-GenAI conventions on the wire — no `langsmith` SDK code is generated. Microsoft Agent Framework uses its built-in OpenTelemetry support — observent layers `OpenAIInstrumentor` on top for raw model-call spans. observent does not support AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into `agent-framework`; migrate to MAF or use the Custom path.
 
+## Works with any LLM provider
+
+observent instruments the **LLM call**, not the model vendor — so it works with whatever provider your agent talks to: OpenAI, Azure OpenAI, Anthropic, **OpenRouter**, **Ollama** (local), **HuggingFace** (Inference Providers / TGI), vLLM, LiteLLM, and more. This is orthogonal to the 8×5 grid above — every combination works regardless of which model endpoint you hit.
+
+Because OpenRouter, Ollama, and HuggingFace's router/TGI all expose an **OpenAI-compatible API**, you point the standard `openai` client at their `base_url` and the existing OpenAI instrumentation captures the spans automatically — nothing extra to wire up:
+
+| Provider | `base_url` | Key |
+|---|---|---|
+| OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| Ollama (local) | `http://localhost:11434/v1` | none (placeholder) |
+| HuggingFace | `https://router.huggingface.co/v1` | `HF_TOKEN` |
+
+**Caveat:** a provider's *native* SDK that isn't OpenAI-compatible (e.g. `huggingface_hub.InferenceClient`) is **not** auto-traced — use the OpenAI-compatible path above, or observent's **Custom** path to emit spans manually. Non-standard model slugs (`anthropic/claude-sonnet-4-6`, `llama3.1`) may show **$0 cost** in the backend UI if its price table doesn't recognise them (token counts still land).
+
 ## Supported providers
 
 | Provider | How observent runs | Install |
