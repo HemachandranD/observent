@@ -62,6 +62,26 @@ jobs:
               assert os.path.isfile(skill_md), f"marketplace.json skills entry missing SKILL.md: {skill_md}"
           print("OK: marketplace.json skills -> SKILL.md")
 
+          # Hook commands embed ${CLAUDE_PLUGIN_ROOT}/... script paths; a rename
+          # silently breaks the hook for every user. Assert each one resolves.
+          import re
+          commands = [
+              hook["command"]
+              for groups in p.get("hooks", {}).values()
+              for group in groups
+              for hook in group.get("hooks", [])
+              if hook.get("type") == "command"
+          ]
+          referenced = [
+              mt.group(1)
+              for cmd in commands
+              for mt in re.finditer(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"']+)", cmd)
+          ]
+          assert referenced, "plugin.json: no ${CLAUDE_PLUGIN_ROOT} hook script paths found"
+          for rel in referenced:
+              assert os.path.isfile(rel), f"plugin.json hook references missing file: {rel}"
+          print("OK: plugin.json hook commands -> scripts")
+
       - name: Validate command TOML files
         shell: python {0}
         run: |
@@ -86,6 +106,9 @@ jobs:
               "skills/observent/scripts/detect_framework.py",
               "skills/observent/scripts/validate_setup.py",
               "skills/observent/scripts/existing_setup.py",
+              "skills/observent/scripts/session_start_detect.py",
+              "skills/observent/scripts/prompt_nudge.py",
+              "skills/observent/scripts/posttooluse_validate.py",
           ]:
               spec = importlib.util.spec_from_file_location("m", path)
               assert spec and spec.loader, path
