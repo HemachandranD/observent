@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python 3.10–3.12">
+  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg" alt="Python 3.10–3.14">
   <a href=".github/workflows/ci.yml"><img src="https://github.com/HemachandranD/observent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%2B%2070%2B%20via%20npx%20skills-CC785C.svg" alt="Works in 70+ agents">
 </p>
@@ -176,7 +176,7 @@ LangSmith is not auto-provisioned (no free OSS Docker edition).
 name: observent
 repo: HemachandranD/observent
 language: python
-python_versions: ["3.10", "3.11", "3.12"]
+python_versions: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 frameworks:
   - langgraph
   - crewai
