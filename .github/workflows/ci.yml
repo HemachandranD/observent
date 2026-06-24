@@ -101,8 +101,12 @@ jobs:
       - name: Import scripts (no extra deps required)
         shell: python {0}
         run: |
-          import importlib.util, sys
+          import importlib.util, os, sys
+          # Put the scripts dir on sys.path so sibling imports (observent_matrix)
+          # resolve — exactly as they do when a script is run as `python <file>`.
+          sys.path.insert(0, os.path.abspath("skills/observent/scripts"))
           for path in [
+              "skills/observent/scripts/observent_matrix.py",
               "skills/observent/scripts/detect_framework.py",
               "skills/observent/scripts/validate_setup.py",
               "skills/observent/scripts/existing_setup.py",

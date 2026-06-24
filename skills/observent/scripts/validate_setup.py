@@ -32,15 +32,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-# Per-backend convention preference. See references/matrix.md § Convention resolution.
-# Phoenix is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith consume OTel-GenAI.
-BACKEND_CONVENTION: dict[str, str] = {
-    "phoenix": "oi",
-    "langfuse": "otel-genai",
-    "signoz": "otel-genai",
-    "elastic-apm": "otel-genai",
-    "langsmith": "otel-genai",
-}
+from observent_matrix import backend_conventions
+
+# Per-backend convention preference, derived from the single source of truth in
+# observent_matrix.py. See references/matrix.md § Convention resolution: Phoenix
+# is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith consume
+# OTel-GenAI.
+BACKEND_CONVENTION: dict[str, str] = backend_conventions()
 
 
 def resolve_convention(backends: list[str]) -> str:

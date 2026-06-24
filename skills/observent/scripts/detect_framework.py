@@ -21,23 +21,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-FRAMEWORKS: dict[str, list[str]] = {
-    "langgraph": ["langgraph"],
-    "crewai": ["crewai"],
-    "microsoft-agent-framework": ["agent_framework"],
-    "anthropic-agents": ["anthropic"],
-    "openai-agents": ["agents"],
-    "smolagents": ["smolagents"],
-    "llama-index": ["llama_index"],
-}
+from observent_matrix import backend_detection_modules, framework_detection_modules
 
-BACKENDS: dict[str, list[str]] = {
-    "phoenix": ["phoenix", "arize_phoenix"],
-    "langfuse": ["langfuse"],
-    "opentelemetry": ["opentelemetry"],
-    "elastic-apm": ["elasticapm"],
-    "langsmith": ["langsmith"],
-}
+# Derived from the single source of truth in observent_matrix.py (see CLAUDE.md
+# "Adding a new framework / backend"). FRAMEWORKS excludes the non-detectable
+# Custom path; BACKENDS adds the detection-only ``opentelemetry`` signal and
+# omits SigNoz (a service, not a pip package).
+FRAMEWORKS: dict[str, list[str]] = framework_detection_modules()
+
+BACKENDS: dict[str, list[str]] = backend_detection_modules()
 
 INSTRUMENTORS: dict[str, str] = {
     "openinference-instrumentation-langchain": "openinference.instrumentation.langchain",

@@ -37,6 +37,10 @@ skills/observent/
     self_host.md        # local-provisioning reference: pinned Docker compose / clone commands
                         # per self-hostable backend + image-tag pin table
   scripts/
+    observent_matrix.py # SINGLE SOURCE OF TRUTH for the framework×backend grid —
+                        # frameworks/backends (slug, display, detect modules,
+                        # convention). detect_framework.py, validate_setup.py and
+                        # tests/test_docs_consistency.py all derive their tables here.
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
     validate_setup.py   # Per-backend env + reachability check; --smoke-test emits a span
     existing_setup.py   # Reports pre-existing observability config in user's project
@@ -112,7 +116,7 @@ mypy skills/observent/scripts/
 
 Update in this order:
 
-1. `skills/observent/scripts/detect_framework.py` — add an entry to `FRAMEWORKS`.
+1. `skills/observent/scripts/observent_matrix.py` — add a `Framework(slug, display, modules)` entry to `FRAMEWORKS` (the single source of truth). `detect_framework.py`'s `FRAMEWORKS` table and `tests/test_docs_consistency.py`'s framework list both derive from this automatically — no edits needed in either.
 2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list in Phase 1 § Step 1.2 and the description's auto-invocation triggers.
 3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 8×3 compatibility matrix.
 4. `skills/observent/references/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
@@ -123,14 +127,14 @@ Update in this order:
 
 Update in this order:
 
-1. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS`, **and** add the backend to `BACKEND_CONVENTION` (`oi` for an OpenInference-native backend, `otel-genai` otherwise) so `resolve_convention()` and its tests pick it up.
-2. `skills/observent/scripts/detect_framework.py` — add an entry to `BACKENDS`.
+1. `skills/observent/scripts/observent_matrix.py` — add a `Backend(slug, display, convention, detect_modules)` entry to `BACKENDS` (`convention` is `oi` for an OpenInference-native backend, `otel-genai` otherwise; `detect_modules` is the probeable pip import name(s), or `()` for a service-only backend like SigNoz). `validate_setup.BACKEND_CONVENTION`, `detect_framework.BACKENDS`, and the docs-consistency backend list all derive from this. *(A detection-only signal that isn't a product backend — e.g. a bare `opentelemetry` install — goes in `DETECTION_EXTRA_BACKENDS` instead.)*
+2. `skills/observent/scripts/validate_setup.py` — add a `check_<backend>()` function and register it in `CHECKS` so `resolve_convention()` and its tests pick it up. (The convention itself now comes from step 1.)
 3. `skills/observent/SKILL.md` — update the description, the backend-options list in Phase 1 § Step 1.3, the convention-derivation table (if applicable), and the endpoints table in Phase 2 § Step 2.5.
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
 7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack or `upstream-clone` when the stack needs repo-mounted config files), add a row to the § Image Versions table with the exact image tag(s), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
-8. `tests/` — extend `test_docs_consistency.py`'s `BACKEND_COLUMNS` (and `FRAMEWORKS` when adding a framework) so the cross-file grid check covers the new option, then run `pytest` to confirm the matrix/README/code stay in sync.
+8. `tests/` — no edits needed for the grid: `test_docs_consistency.py` derives its framework/backend lists from `observent_matrix.py` (step 1), so the new option is covered automatically. Just run `pytest` to confirm the matrix/README/code stay in sync.
 
 ### Cross-tool distribution (read this first)
 

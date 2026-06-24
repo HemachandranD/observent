@@ -18,50 +18,44 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import observent_matrix
 import validate_setup
 
 ROOT = Path(__file__).resolve().parent.parent
 MATRIX = ROOT / "skills" / "observent" / "references" / "matrix.md"
 README = ROOT / "README.md"
 
-# Canonical sets — the single source of truth this test pins everything to.
-FRAMEWORKS = [
-    "LangGraph",
-    "CrewAI",
-    "Microsoft Agent Framework",
-    "Anthropic Agents SDK",
-    "OpenAI Agents SDK",
-    "smolagents",
-    "LlamaIndex",
-    "Custom",
-]
-BACKEND_COLUMNS = ["Arize Phoenix", "Langfuse", "SigNoz", "Elastic APM", "LangSmith"]
+# Derived from the single source of truth (observent_matrix.py). matrix.md and
+# README.md are checked against these display names; adding a framework/backend
+# there flows here automatically.
+FRAMEWORKS = observent_matrix.framework_display_names()
+BACKEND_COLUMNS = observent_matrix.backend_display_names()
 
 
 def _read(p: Path) -> str:
     return p.read_text(encoding="utf-8")
 
 
-def test_matrix_lists_all_frameworks():
+def test_matrix_lists_all_frameworks() -> None:
     text = _read(MATRIX)
     for fw in FRAMEWORKS:
         assert re.search(rf"^\|\s*{re.escape(fw)}\b", text, re.MULTILINE), fw
 
 
-def test_readme_lists_all_frameworks():
+def test_readme_lists_all_frameworks() -> None:
     text = _read(README)
     for fw in FRAMEWORKS:
         assert re.search(rf"^\|\s*{re.escape(fw)}\b", text, re.MULTILINE), fw
 
 
-def test_matrix_and_readme_share_backend_columns():
+def test_matrix_and_readme_share_backend_columns() -> None:
     matrix, readme = _read(MATRIX), _read(README)
     for backend in BACKEND_COLUMNS:
         assert backend in matrix, f"{backend} missing from matrix.md"
         assert backend in readme, f"{backend} missing from README.md"
 
 
-def test_version_pins_are_internally_consistent():
+def test_version_pins_are_internally_consistent() -> None:
     # No package may be pinned to two different versions within matrix.md.
     text = _read(MATRIX)
     pins: dict[str, set[str]] = {}
@@ -71,7 +65,7 @@ def test_version_pins_are_internally_consistent():
     assert not conflicts, f"conflicting version pins in matrix.md: {conflicts}"
 
 
-def test_verified_versions_table_pins_are_referenced():
+def test_verified_versions_table_pins_are_referenced() -> None:
     # Every package in the Verified Versions table should be pinned to the
     # same version where it's mentioned elsewhere in matrix.md (caught above),
     # and the table itself must be non-empty.
@@ -82,15 +76,9 @@ def test_verified_versions_table_pins_are_referenced():
     assert len(rows) >= 10, f"expected the full pin table, found {len(rows)} rows"
 
 
-def test_matrix_convention_columns_match_code():
-    # matrix.md labels Phoenix as *OI* and the other four as *OTel-GenAI* in the
-    # 8x5 header; resolve_convention() must agree per backend.
-    expected = {
-        "phoenix": "oi",
-        "langfuse": "otel-genai",
-        "signoz": "otel-genai",
-        "elastic-apm": "otel-genai",
-        "langsmith": "otel-genai",
-    }
-    for backend, conv in expected.items():
+def test_matrix_convention_columns_match_code() -> None:
+    # Each product backend's per-backend convention (from the single source) must
+    # match what resolve_convention() computes for that backend alone — Phoenix
+    # OI, the other four OTel-GenAI.
+    for backend, conv in observent_matrix.backend_conventions().items():
         assert validate_setup.resolve_convention([backend]) == conv
