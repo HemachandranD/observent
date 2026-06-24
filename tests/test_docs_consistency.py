@@ -82,3 +82,20 @@ def test_matrix_convention_columns_match_code() -> None:
     # OI, the other four OTel-GenAI.
     for backend, conv in observent_matrix.backend_conventions().items():
         assert validate_setup.resolve_convention([backend]) == conv
+
+
+def test_matrix_header_convention_labels_match_code() -> None:
+    # The 8x5 matrix header tags each backend with an italic convention label,
+    # e.g. ``Arize Phoenix<br>*OI*`` / ``Langfuse<br>*OTel-GenAI*``. That label is
+    # the canonical source's convention, written for humans — assert it matches.
+    text = _read(MATRIX)
+    label_to_conv = {"OI": "oi", "OTel-GenAI": "otel-genai"}
+    for backend in observent_matrix.BACKENDS:
+        m = re.search(rf"{re.escape(backend.display)}<br>\*([\w-]+)\*", text)
+        assert m, f"{backend.display}: no convention label in matrix.md 8x5 header"
+        label = m.group(1)
+        assert label in label_to_conv, f"{backend.display}: unknown convention label *{label}*"
+        assert label_to_conv[label] == backend.convention, (
+            f"{backend.display}: matrix.md labels it *{label}* "
+            f"but observent_matrix says {backend.convention}"
+        )
