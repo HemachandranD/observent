@@ -41,6 +41,11 @@ FRAMEWORKS: tuple[Framework, ...] = (
     Framework("openai-agents", "OpenAI Agents SDK", ("agents",)),
     Framework("smolagents", "smolagents", ("smolagents",)),
     Framework("llama-index", "LlamaIndex", ("llama_index",)),
+    # google-adk ships as the namespaced module ``google.adk`` (PyPI ``google-adk``).
+    # Two probes: ``google.adk`` matches an installed module via find_spec, and
+    # ``google_adk`` normalizes to ``google-adk`` for the declared-deps name match;
+    # bare ``google`` is intentionally omitted (it over-matches google-genai etc.).
+    Framework("google-adk", "Google ADK", ("google.adk", "google_adk")),
     Framework("custom", "Custom", ()),  # the no-framework path — never auto-detected
 )
 

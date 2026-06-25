@@ -1,8 +1,8 @@
 # observent Examples
 
-Runnable end-to-end examples covering 8 frameworks × 5 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
+Runnable end-to-end examples covering 9 frameworks × 5 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
-> **Convention notes.** Phoenix-targeted examples (1, 5, 8) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith examples (2, 3, 4, 6, 7, 9, 10) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8, 11) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith examples (2, 3, 4, 6, 7, 9, 10) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
 
 ---
 
@@ -834,6 +834,80 @@ python langgraph_langsmith.py
 **Sources:** LangSmith OTLP ingestion (`/otel/v1/traces`) — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · LangSmith API key auth (`x-api-key`) — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry#1-set-up-environment · LangSmith regions / endpoints — https://docs.smith.langchain.com/administration/concepts#regions · `openinference-instrumentation-langchain` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain
 
 *Last verified: 2026-05-15 with Python 3.12.*
+
+---
+
+## 11. Google ADK + Arize Phoenix (OpenInference instrumentor)
+
+Google's Agent Development Kit (ADK) builds agents around a `Runner` + `Session`. `openinference-instrumentation-google-adk` wraps the runner so agent runs, tool calls, and the underlying Gemini model requests land as a connected span tree. The instrumentor emits OpenInference attributes natively — Phoenix consumes them directly; swap the exporter (see Example 3 / 6 / 10) to target SigNoz / Langfuse / Elastic APM / LangSmith instead.
+
+```python
+# google_adk_phoenix.py
+import asyncio
+import os
+from phoenix.otel import register
+from openinference.instrumentation.google_adk import GoogleADKInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from google.adk.agents import Agent
+from google.adk.runners import InMemoryRunner
+from google.genai import types
+
+# --- Observability: Phoenix local ---
+tracer_provider = register(
+    project_name=os.getenv("PHOENIX_PROJECT_NAME", "google-adk-demo"),
+    endpoint=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces"),
+)
+GoogleADKInstrumentor().instrument(tracer_provider=tracer_provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=tracer_provider)  # W3C traceparent on outbound HTTP
+
+
+# --- Agent ---
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"It's 72F and sunny in {city}."
+
+
+agent = Agent(
+    name="weather_agent",
+    model="gemini-2.0-flash",
+    instruction="You answer weather questions concisely using the get_weather tool.",
+    tools=[get_weather],
+)
+
+
+async def main() -> None:
+    runner = InMemoryRunner(agent=agent, app_name="weather-app")
+    session = await runner.session_service.create_session(
+        app_name="weather-app", user_id="demo-user", session_id="demo-session-001"
+    )
+    content = types.Content(role="user", parts=[types.Part(text="What's the weather in Tokyo?")])
+    async for event in runner.run_async(
+        user_id=session.user_id, session_id=session.id, new_message=content
+    ):
+        if event.is_final_response() and event.content:
+            print(event.content.parts[0].text)
+    tracer_provider.shutdown()  # flush before exit
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+    # Open http://localhost:6006 — you should see:
+    #   Runner.run_async -> agent_run [weather_agent] -> tool: get_weather -> LLM (gemini-2.0-flash)
+```
+
+```bash
+phoenix serve &  # background Phoenix UI on :6006
+pip install 'google-adk>=2.3' 'openinference-instrumentation-google-adk>=0.1.15' \
+            'arize-phoenix>=15.0' \
+            'opentelemetry-sdk>=1.41' 'opentelemetry-exporter-otlp-proto-http>=1.41' \
+            'opentelemetry-instrumentation-httpx>=0.48'
+export GOOGLE_API_KEY=...   # or set GOOGLE_GENAI_USE_VERTEXAI=TRUE + Vertex creds
+python google_adk_phoenix.py
+```
+
+**Sources:** Google ADK docs — https://google.github.io/adk-docs/ · ADK `Runner` / `Session` quickstart — https://google.github.io/adk-docs/get-started/quickstart/ · `openinference-instrumentation-google-adk` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-google-adk · Phoenix `register()` — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python
+
+*Last verified: 2026-06-25 with Python 3.12.*
 
 ---
 
