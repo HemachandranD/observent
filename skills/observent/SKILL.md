@@ -1,6 +1,6 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, Google ADK, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, or Opik) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, Opik, Comet, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility. Also invoke for the optional Evaluate step when the user asks to set up evals, a regression gate, or a CI cost/latency/token gate for their agent.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, Google ADK, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, Opik, or Jaeger) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, Opik, Comet, Jaeger, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility. Also invoke for the optional Evaluate step when the user asks to set up evals, a regression gate, or a CI cost/latency/token gate for their agent.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: produce three artifacts under `.observent/` in the user's project, then execute the task list.
 
-**Backends supported (exactly 6):** Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith · Opik.
+**Backends supported (exactly 7):** Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith · Opik · Jaeger.
 **Frameworks supported (9):** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Google ADK · Custom.
 
 ## Lifecycle
@@ -70,7 +70,7 @@ For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfus
 
 ### Step 1.3 — Resolve backend(s) and convention
 
-`$2` accepts one or more backends, comma-separated (e.g. `phoenix` or `phoenix,langsmith`). If `$2` was passed, parse into a deduplicated set. Otherwise present these six with one-line trade-offs and ask the user to pick one or more:
+`$2` accepts one or more backends, comma-separated (e.g. `phoenix` or `phoenix,langsmith`). If `$2` was passed, parse into a deduplicated set. Otherwise present these seven with one-line trade-offs and ask the user to pick one or more:
 
 - **Arize Phoenix** — local-first, no account needed (`px.launch_app()`), OpenTelemetry-native, best dev-loop UX.
 - **Langfuse** — open-source self-hostable; best token cost tracking, prompt versioning, eval datasets.
@@ -78,14 +78,15 @@ For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfus
 - **Elastic APM** — Elastic Stack APM Server with the native `elastic-apm` agent; best when you also need transaction tracing and infra metrics in Kibana alongside LLM tracing.
 - **LangSmith** — LangChain's hosted observability platform (US + EU cloud, enterprise self-host); best when you're already on LangGraph/LangChain. Pure OTLP HTTP; OTel-GenAI conventions on the wire.
 - **Opik** — Comet's open-source LLM observability platform; free self-hostable via Docker (or Opik Cloud). Pure OTLP HTTP; OTel-GenAI conventions on the wire — mechanically identical to SigNoz/LangSmith, so it composes cleanly into the multi-backend fan-out.
+- **Jaeger** — the CNCF open-source distributed-tracing system; trivially self-hostable (single all-in-one container), ingests OTLP directly. Best for a lightweight, dependency-free local trace view (no LLM-specific UI; spans + `gen_ai.*` attributes shown generically). Pure OTLP HTTP; OTel-GenAI conventions on the wire.
 
 **Derive the convention mechanically** from the resolved backend set (do not ask the user):
 
 | Backend set | Convention |
 |---|---|
 | `{phoenix}` | `oi` (OpenInference only — Phoenix-native UI) |
-| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith, opik}` (no Phoenix) | `otel-genai` |
-| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik}` | `both` |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith, opik, jaeger}` (no Phoenix) | `otel-genai` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik, jaeger}` | `both` |
 
 State the resolved convention in one short sentence (e.g. "Resolved: phoenix,elastic-apm → emitting both OI and OTel-GenAI attributes").
 
@@ -102,7 +103,7 @@ Never overwrite without asking, even when auto-invoked. Store the choice in `spe
 
 For each backend whose resolved `endpoints.<backend>.mode == self-host`, probe the endpoint and record reachability in `spec.detection.backends_reachable.<backend>`. When a self-host backend is **unreachable**:
 
-- **Backend ∈ {phoenix, langfuse, signoz, elastic-apm, opik} and Docker available** (`detection.docker_available && detection.docker_compose_available`): ask
+- **Backend ∈ {phoenix, langfuse, signoz, elastic-apm, opik, jaeger} and Docker available** (`detection.docker_available && detection.docker_compose_available`): ask
   `<backend> isn't reachable at <url>. Provision it locally with Docker? (yes / no, I'll start it myself / skip)`.
   On `yes` set `spec.choice.self_host_provision.<backend> = true`; otherwise `false`.
 - **Docker not available**: state that and skip the offer (set `false`). For Phoenix, mention the `px.launch_app()` in-process alternative. The final `validate` will still report the backend as unreachable.
@@ -131,7 +132,7 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
   - `observent_eval.py` (only if the user opts into the Phase 5 eval gate — the no-op-in-prod span collector from `references/eval.md`; wired into `observent_otel.py` via `install_eval_collector(provider)`).
   - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
   - `.env.example` append with required env var names and notify user to fill in with exact values.
-- **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith, Opik). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
+- **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith, Opik, Jaeger). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
 - **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
 - **Local provisioning** — for each backend with `spec.choice.self_host_provision.<backend> == true`, materialize the chosen stack from `references/self_host.md` into a `plan.provision[]` entry:
@@ -185,8 +186,9 @@ observent emits W3C-compliant context. Every template relies on the OTel SDK's d
 | Elastic APM | APM Server `http://localhost:8200` (agent default) | `https://<deployment>.apm.<region>.cloud.es.io:443` (Bearer `ELASTIC_APM_SECRET_TOKEN` or ApiKey `ELASTIC_APM_API_KEY`) |
 | LangSmith | OTLP `${LANGSMITH_ENDPOINT}/otel/v1/traces` (enterprise self-host) | `https://api.smith.langchain.com/otel/v1/traces` (US) or `https://eu.api.smith.langchain.com/otel/v1/traces` (EU) (header `x-api-key`) |
 | Opik | OTLP `http://localhost:5173/api/v1/private/otel/v1/traces` (no auth) | `https://www.comet.com/opik/api/v1/private/otel/v1/traces` (headers `Authorization` + `Comet-Workspace`, optional `projectName`) |
+| Jaeger | OTLP `http://localhost:4318/v1/traces` (no auth; `JAEGER_ENDPOINT`) | self-host only — no hosted Jaeger SaaS |
 
-Default to self-host unless the user supplies cloud env vars. LangSmith is cloud-first — it has no localhost default.
+Default to self-host unless the user supplies cloud env vars. LangSmith is cloud-first — it has no localhost default. Jaeger is self-host only — there is no Jaeger SaaS.
 
 ### Step 2.6 — Write `.observent/plan.md`
 
@@ -243,7 +245,7 @@ After mutating any task: rewrite `tasks.json` to disk before moving to the next 
 
 ### Step 4.2 — Optional smoke test
 
-If env vars are set and the user wants a live trace, offer to re-run `validate_setup.py` with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM / LangSmith / Opik). Phoenix / Langfuse / SigNoz / LangSmith / Opik use an `OTLPSpanExporter`; Elastic APM uses the native `elasticapm.Client` so the smoke test exercises the same agent path the generated app uses.
+If env vars are set and the user wants a live trace, offer to re-run `validate_setup.py` with `--smoke-test`. Each backend in the list gets its own synthetic span carrying that backend's preferred convention (OI for Phoenix, OTel-GenAI for Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger). Phoenix / Langfuse / SigNoz / LangSmith / Opik / Jaeger use an `OTLPSpanExporter`; Elastic APM uses the native `elasticapm.Client` so the smoke test exercises the same agent path the generated app uses.
 
 ### Step 4.3 — Summary
 
@@ -260,6 +262,7 @@ Once all tasks are terminal, report back:
   - Elastic APM self-host (Kibana): `http://localhost:5601/app/apm` · Cloud: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
   - LangSmith US: `https://smith.langchain.com` · EU: `https://eu.smith.langchain.com`
   - Opik self-host: `http://localhost:5173` · Cloud: `https://www.comet.com/opik`
+  - Jaeger self-host: `http://localhost:16686` (self-host only)
 - For any locally provisioned stack (from `plan.provision[]`): note that it's now running under Docker and give the matching `down_command` to stop it (e.g. `docker compose -f docker-compose.observent-phoenix.yml down`).
 - One-line next step — set the env vars, run the app, refresh each UI.
 
@@ -332,11 +335,11 @@ Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block b
 - `references/spec_schema.md` — **canonical schema** for `.observent/spec.md`, `plan.md`, `tasks.json`. The contract; this SKILL.md describes the workflow.
 - `references/matrix.md` — full per-framework + per-backend matrix, OpenInference instrumentor map, span-attribute summary, context propagation patterns, multi-backend fan-out, troubleshooting, verified version pins.
 - `references/openinference.md` — canonical OpenInference semantic conventions reference (Phoenix-native; used when convention=`oi` or `both`).
-- `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith / Opik; used when convention=`otel-genai` or `both`).
-- `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
+- `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger; used when convention=`otel-genai` or `both`).
+- `references/examples.md` — runnable end-to-end examples (backends rotated across frameworks, plus one per non-Phoenix backend) and a multi-backend fan-out example.
 - `references/capture.md` — canonical transport-agnostic engine (`observent_capture.py`) that captures AI-boundary input/output + run status by enriching the existing root span, plus the optional `observent_http.py` raw-HTTP-body adapter.
 - `references/eval.md` — canonical eval-gate engine: the `.observent/eval.json` schema, the cross-convention alias table, the generated `observent_eval.py` collector, the PII/secret value-regex set, CI snippets, and the LLM-as-judge delegation contract. Consumed by Phase 5.
-- `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM · Opik), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
+- `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
 - `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
 - `scripts/validate_setup.py <backend|backend,backend,...|all> [--smoke-test]` — env vars, package presence, endpoint reachability, per-backend convention-aware synthetic span emission.

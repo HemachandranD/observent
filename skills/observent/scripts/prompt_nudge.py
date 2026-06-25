@@ -34,6 +34,7 @@ _KEYWORDS = (
     "elastic apm",
     "langsmith",
     "opik",
+    "jaeger",
 )
 
 

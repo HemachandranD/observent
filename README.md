@@ -17,7 +17,7 @@
 
 ---
 
-**observent** — a blend of **observe** + **agent** — sets up observability for multi-agent Python applications across **9 frameworks x 6 backends**.
+**observent** — a blend of **observe** + **agent** — sets up observability for multi-agent Python applications across **9 frameworks x 7 backends**.
 
 It detects your framework, generates integration code for the backend(s) you pick, previews every change before write, and validates ingestion (optionally with a smoke span).
 
@@ -77,7 +77,7 @@ Examples:
 /observent smolagents langfuse
 /observent custom phoenix
 /observent langgraph phoenix,signoz
-/observent crewai phoenix,langfuse,signoz,elastic-apm,langsmith,opik
+/observent crewai phoenix,langfuse,signoz,elastic-apm,langsmith,opik,jaeger
 ```
 
 ### `npx skills` install options
@@ -105,8 +105,8 @@ The generated convention is derived mechanically from selected backend(s):
 | Selected backend set | Convention emitted |
 |---|---|
 | `phoenix` only | OpenInference |
-| Any non-empty subset of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik` (without Phoenix) | OTel-GenAI |
-| `phoenix` + at least one of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik` | Both |
+| Any non-empty subset of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik`, `jaeger` (without Phoenix) | OTel-GenAI |
+| `phoenix` + at least one of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik`, `jaeger` | Both |
 
 There is no runtime override flag; to change conventions, re-run with a different backend set.
 
@@ -114,30 +114,31 @@ There is no runtime override flag; to change conventions, re-run with a differen
 
 ## Supported frameworks x backends
 
-| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith | Opik |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Microsoft Agent Framework | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| OpenAI Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Custom | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith | Opik | Jaeger |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Microsoft Agent Framework | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OpenAI Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Custom | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 These six are the first-class, validated targets. Under the hood observent just emits standard
 OpenTelemetry spans with **OpenInference** and/or **OTel-GenAI** semantic-convention attributes over
 **OTLP HTTP**, so it works with **any OTLP-compatible backend** that understands those conventions
-(e.g. Jaeger, Grafana Tempo, Datadog, Honeycomb, New Relic, Dash0, or any vendor's OTLP collector) —
+(e.g. Grafana Tempo, Datadog, Honeycomb, New Relic, Dash0, or any vendor's OTLP collector) —
 point the `OTLPSpanExporter` at that endpoint. The convention emitted is still derived from the
 backend set you pick (OpenInference for Phoenix, OTel-GenAI for the rest, or both); choose the one
-your target reads. Only the six above ship a dedicated `validate_setup.py` check and provisioning path.
+your target reads. Only the seven above ship a dedicated `validate_setup.py` check and provisioning path.
 
 Implementation notes:
 - **Elastic APM** defaults to the native `elastic-apm` Python agent (`elasticapm.Client(...)` + `elasticapm.instrument()`), with framework instrumentors layered on top.
 - **LangSmith** uses OTLP HTTP ingest with OTel-GenAI conventions; no generated `langsmith` SDK code.
 - **Opik** (Comet) uses OTLP HTTP ingest with OTel-GenAI conventions; no generated `opik` SDK code. Free self-host via Docker, or Opik Cloud.
+- **Jaeger** (CNCF) uses OTLP HTTP ingest with OTel-GenAI conventions; no SDK code. Self-host only (single all-in-one container); a lightweight, dependency-free local trace view with no LLM-specific panels.
 - **OpenAI Agents SDK** integration uses native trace processors (not `openinference-instrumentation-openai`) so agent structure stays intact.
 - **Microsoft Agent Framework** uses built-in OpenTelemetry support with `OpenAIInstrumentor` layered for raw model spans.
 
@@ -145,7 +146,7 @@ Implementation notes:
 
 ## Works with any model provider
 
-observent instruments the LLM call path, so model vendor choice is orthogonal to the 9x6 matrix.
+observent instruments the LLM call path, so model vendor choice is orthogonal to the 9x7 matrix.
 
 OpenAI-compatible endpoints work directly with the standard `openai` client:
 
@@ -161,7 +162,7 @@ If you use a non-OpenAI-compatible native SDK, use the Custom path to emit spans
 
 ## Local self-host provisioning
 
-For unreachable self-host backends (**Phoenix, Langfuse, SigNoz, Elastic APM, Opik**), observent can offer Docker-based provisioning.
+For unreachable self-host backends (**Phoenix, Langfuse, SigNoz, Elastic APM, Opik, Jaeger**), observent can offer Docker-based provisioning.
 
 Provisioning is always explicit:
 1. opt-in prompt,
@@ -207,12 +208,13 @@ backends:
   - elastic-apm
   - langsmith
   - opik
+  - jaeger
 primary_entrypoint: "/observent [framework] [backend|backend,...]"
 validate_entrypoint: "/observent-validate <backend|backend,...> [--smoke-test]"
 eval_entrypoint: "/observent-eval [--baseline] [--ci]"
 convention_rules:
   - "phoenix only => openinference"
-  - "langfuse/signoz/elastic-apm/langsmith/opik without phoenix => otel-genai"
+  - "langfuse/signoz/elastic-apm/langsmith/opik/jaeger without phoenix => otel-genai"
   - "phoenix with any non-phoenix backend => both"
 docs:
   matrix: "skills/observent/references/matrix.md"

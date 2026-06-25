@@ -1,10 +1,10 @@
-description = "Wire up observability for a multi-agent Python app (Arize Phoenix / Langfuse / SigNoz / Elastic APM / LangSmith / Opik) — spec-driven lifecycle"
+description = "Wire up observability for a multi-agent Python app (Arize Phoenix / Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger) — spec-driven lifecycle"
 prompt = """
 Run the observent observability setup for this project as a spec-driven lifecycle.
 
 Arguments (optional): {{args}}
   - First arg: framework  (langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom)
-  - Second arg: backend(s) — one or more, comma-separated  (phoenix | langfuse | signoz | elastic-apm | langsmith | opik; e.g. "phoenix" or "phoenix,opik")
+  - Second arg: backend(s) — one or more, comma-separated  (phoenix | langfuse | signoz | elastic-apm | langsmith | opik | jaeger; e.g. "phoenix" or "phoenix,jaeger")
 
 Execute the full SDD lifecycle from the observent skill: Spec → Plan → Tasks → Implement. Each phase persists its artifact under `.observent/` in the user's project.
 

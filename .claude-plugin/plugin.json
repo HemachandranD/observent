@@ -1,6 +1,6 @@
 {
   "name": "observent",
-  "description": "Production-grade observability for multi-agent Python apps. Detects your framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or a Custom no-framework path) and wires up Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, or Opik with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes.",
+  "description": "Production-grade observability for multi-agent Python apps. Detects your framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or a Custom no-framework path) and wires up Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, Opik, or Jaeger with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes.",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "homepage": "https://github.com/HemachandranD/observent",
@@ -19,7 +19,8 @@
     "langfuse",
     "signoz",
     "langsmith",
-    "opik"
+    "opik",
+    "jaeger"
   ],
   "author": {
     "name": "Hemachandran Dhinakaran",

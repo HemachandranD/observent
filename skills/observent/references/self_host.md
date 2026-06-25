@@ -11,7 +11,7 @@ Provisioning is **only ever offered** when **all** of these hold:
 1. The backend's resolved endpoint `mode` is `self-host` (cloud is never provisioned).
 2. The endpoint is unreachable at probe time (`detection.backends_reachable.<backend> == false`).
 3. Docker + Compose are available (`detection.docker_available && detection.docker_compose_available`).
-4. The backend is one of **Phoenix · Langfuse · SigNoz · Elastic APM · Opik** (see LangSmith note below).
+4. The backend is one of **Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger** (see LangSmith note below).
 
 `docker compose up` runs **only after** the user approves the `confirm` task — provisioning is
 never silent.
@@ -25,6 +25,7 @@ Two methods, chosen per backend by what the upstream stack needs:
 | Backend | Method | Why |
 |---|---|---|
 | Phoenix | `vendored-compose` | Single container, no external config files — fully self-contained. |
+| Jaeger | `vendored-compose` | Single all-in-one container, OTLP enabled inline via env — fully self-contained. |
 | Elastic APM | `vendored-compose` | ES + Kibana + APM Server; config passed inline via `-E` flags / env. |
 | Langfuse | `upstream-clone` | v3 stack is 6 coupled services with generated secrets; upstream compose is the supported path. |
 | SigNoz | `upstream-clone` | Compose mounts ClickHouse / OTel-Collector config files from the repo — not self-contained. |
@@ -67,6 +68,39 @@ services:
 - Down: `docker compose -f docker-compose.observent-phoenix.yml down`
 - **No-Docker alternative:** `px.launch_app()` in-process (see `matrix.md § Arize Phoenix`). Offer
   this if `detection.docker_available == false`.
+
+---
+
+## Jaeger — `vendored-compose`
+
+Single all-in-one container. Jaeger v2 ships OTLP receivers on `4317`/`4318` enabled by default; the
+explicit `COLLECTOR_OTLP_ENABLED=true` below is harmless on v2 and required if you pin a v1 image.
+UI on `16686`, OTLP HTTP on `4318`. No auth, in-memory storage (local dev only).
+
+`docker-compose.observent-jaeger.yml`:
+```yaml
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.19.0
+    container_name: observent-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # UI
+      - "4318:4318"     # OTLP HTTP (/v1/traces)
+      - "4317:4317"     # OTLP gRPC
+```
+
+- **Readiness:** Jaeger's image is distroless (no shell/curl/python), so it carries **no**
+  in-container `healthcheck:` — `docker compose up -d --wait` waits for the container to reach the
+  *running* state (Jaeger starts in ~1s), and the downstream `validate` task then probes the OTLP
+  endpoint. This is the one vendored stack without a healthcheck block, for that reason.
+- Up: `docker compose -f docker-compose.observent-jaeger.yml up -d --wait`
+- UI: `http://localhost:16686` · OTLP: `http://localhost:4318/v1/traces` (set `JAEGER_ENDPOINT` to it)
+- No auth — leave it unset.
+- **Note:** Jaeger's default `4318`/`4317` OTLP ports collide with a self-hosted SigNoz. If you run
+  both, remap one stack's host ports in its compose file.
+- Down: `docker compose -f docker-compose.observent-jaeger.yml down`
 
 ---
 
@@ -218,6 +252,7 @@ These are exact image tags, not floors. Bump alongside the matrix's pip pins and
 | Opik | `clickhouse/clickhouse-server` | `25.8.16.34-alpine` (upstream compose) | https://github.com/comet-ml/opik |
 | Opik | `mysql` | `8.4.2` (upstream compose) | https://github.com/comet-ml/opik |
 | Opik | `redis` | `7.2.4-alpine3.19` (upstream compose) | https://github.com/comet-ml/opik |
+| Jaeger | `jaegertracing/jaeger` | `2.19.0` | Docker Hub — https://hub.docker.com/r/jaegertracing/jaeger/tags |
 
 *Last verified: 2026-06-25.* Langfuse, SigNoz, and Opik tags are governed by their upstream compose
 files (`upstream-clone` method); the rows above record what those files pinned at verification time.
@@ -227,7 +262,9 @@ files (`upstream-clone` method); the rows above record what those files pinned a
 ## Port-conflict & readiness notes
 
 - **Readiness:** every `up` uses `--wait`; vendored compose files carry `healthcheck:` blocks so
-  `--wait` blocks until healthy. `upstream-clone` stacks ship their own healthchecks.
+  `--wait` blocks until healthy. `upstream-clone` stacks ship their own healthchecks. The lone
+  exception is Jaeger, whose distroless image can't self-healthcheck — `--wait` falls back to the
+  container's *running* state and the final `validate` task probes its OTLP endpoint.
 - **Port conflicts:** if a probe shows a port already in use by something *other* than the intended
   backend (e.g. `6006` taken but not Phoenix), warn the user and let them remap the host port in the
   compose file rather than forcing `up`.

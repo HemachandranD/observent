@@ -1,8 +1,8 @@
 # observent Examples
 
-Runnable end-to-end examples covering 9 frameworks × 6 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith, Opik). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
+Runnable end-to-end examples covering 9 frameworks × 7 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith, Opik, Jaeger). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
-> **Convention notes.** Phoenix-targeted examples (1, 5, 8, 11) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith / Opik examples (2, 3, 4, 6, 7, 9, 10, 12) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8, 11) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger examples (2, 3, 4, 6, 7, 9, 10, 12, 13) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
 
 ---
 
@@ -839,7 +839,7 @@ python langgraph_langsmith.py
 
 ## 11. Google ADK + Arize Phoenix (OpenInference instrumentor)
 
-Google's Agent Development Kit (ADK) builds agents around a `Runner` + `Session`. `openinference-instrumentation-google-adk` wraps the runner so agent runs, tool calls, and the underlying Gemini model requests land as a connected span tree. The instrumentor emits OpenInference attributes natively — Phoenix consumes them directly; swap the exporter (see Example 3 / 6 / 10 / 12) to target SigNoz / Langfuse / Elastic APM / LangSmith / Opik instead.
+Google's Agent Development Kit (ADK) builds agents around a `Runner` + `Session`. `openinference-instrumentation-google-adk` wraps the runner so agent runs, tool calls, and the underlying Gemini model requests land as a connected span tree. The instrumentor emits OpenInference attributes natively — Phoenix consumes them directly; swap the exporter (see Example 3 / 6 / 10 / 12 / 13) to target SigNoz / Langfuse / Elastic APM / LangSmith / Opik / Jaeger instead.
 
 ```python
 # google_adk_phoenix.py
@@ -911,9 +911,9 @@ python google_adk_phoenix.py
 
 ---
 
-## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM + LangSmith + Opik)
+## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM + LangSmith + Opik + Jaeger)
 
-Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz, LangSmith, Opik), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all six destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM, LangSmith, Opik}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
+Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz, LangSmith, Opik, Jaeger), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all seven destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM, LangSmith, Opik, Jaeger}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
 
 ```python
 # fanout.py
@@ -974,6 +974,11 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
     headers=_op_headers,
 )))
 
+# Jaeger — local OTLP receiver, no auth.
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("JAEGER_ENDPOINT", "http://localhost:4318/v1/traces"),
+)))
+
 trace.set_tracer_provider(provider)
 HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
@@ -1000,12 +1005,12 @@ with tracer.start_as_current_span("smoke-llm") as span:
     span.set_attribute("gen_ai.usage.output_tokens", 8)
 
 provider.shutdown()
-# Spans now in all six backends. Failure in one doesn't affect the others.
+# Spans now in all seven backends. Failure in one doesn't affect the others.
 ```
 
-For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,opik`), drop the OI block — `otel-genai` alone is sufficient.
+For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,jaeger`), drop the OI block — `otel-genai` alone is sufficient.
 
-**Sources:** OTel multi-exporter (multiple `BatchSpanProcessor` on one `TracerProvider`) — https://opentelemetry.io/docs/languages/python/exporters/ · Phoenix OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · Langfuse OTLP — https://langfuse.com/docs/opentelemetry/get-started · SigNoz OTLP — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · LangSmith OTLP — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · Opik OTLP — https://www.comet.com/docs/opik/tracing/opentelemetry/overview
+**Sources:** OTel multi-exporter (multiple `BatchSpanProcessor` on one `TracerProvider`) — https://opentelemetry.io/docs/languages/python/exporters/ · Phoenix OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · Langfuse OTLP — https://langfuse.com/docs/opentelemetry/get-started · SigNoz OTLP — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · LangSmith OTLP — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · Opik OTLP — https://www.comet.com/docs/opik/tracing/opentelemetry/overview · Jaeger OTLP — https://www.jaegertracing.io/docs/latest/apis/#opentelemetry-protocol
 
 *Last verified: 2026-05-15 with Python 3.12.*
 
@@ -1110,6 +1115,65 @@ python crew_opik.py
 ```
 
 **Sources:** Opik OpenTelemetry integration (`/v1/private/otel/v1/traces`) — https://www.comet.com/docs/opik/tracing/opentelemetry/overview · Opik self-host (Docker, port 5173) — https://www.comet.com/docs/opik/self-host/local_deployment · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai
+
+*Last verified: 2026-06-25 with Python 3.12.*
+
+---
+
+## 13. smolagents + Jaeger (pure OTLP — local trace view, zero account)
+
+Jaeger is the CNCF distributed-tracing system. Run the all-in-one container, point the
+`OTLPSpanExporter` at its OTLP receiver (`:4318`), and the same `SmolagentsInstrumentor` stack used
+for SigNoz/Langfuse works unchanged. No auth, no account, no SDK — Jaeger stores and displays the
+spans generically (`gen_ai.*` attributes show as ordinary span tags; there's no LLM-cost panel).
+Great for a fast, dependency-free local view of the span tree.
+
+```python
+# smolagents_jaeger.py
+import os
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from smolagents import CodeAgent, DuckDuckGoSearchTool, LiteLLMModel
+
+# --- Observability: Jaeger via OTLP HTTP (no auth) ---
+endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4318/v1/traces")
+provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "smolagents-jaeger-demo")}))
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
+trace.set_tracer_provider(provider)
+
+SmolagentsInstrumentor().instrument(tracer_provider=provider)
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
+
+# --- Agent ---
+model = LiteLLMModel(model_id="anthropic/claude-sonnet-4-6")
+agent = CodeAgent(tools=[DuckDuckGoSearchTool()], model=model)
+
+if __name__ == "__main__":
+    answer = agent.run("Who won the latest Formula 1 Grand Prix?")
+    print(answer)
+    provider.shutdown()  # flush before exit
+```
+
+```bash
+# Start Jaeger locally (UI on :16686, OTLP on :4318):
+docker run -d --name jaeger -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 -p 4318:4318 -p 4317:4317 jaegertracing/jaeger:2.19.0
+
+pip install 'smolagents>=1.0' 'openinference-instrumentation-smolagents>=0.1' \
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48'
+export ANTHROPIC_API_KEY=sk-ant-...
+# Default endpoint is http://localhost:4318/v1/traces; override with JAEGER_ENDPOINT if needed.
+python smolagents_jaeger.py
+# UI: http://localhost:16686 → Service "smolagents-jaeger-demo" → Find Traces
+```
+
+**Sources:** smolagents — https://huggingface.co/docs/smolagents · Jaeger OTLP ingestion — https://www.jaegertracing.io/docs/latest/apis/#opentelemetry-protocol · Jaeger all-in-one image — https://hub.docker.com/r/jaegertracing/jaeger · `openinference-instrumentation-smolagents` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-smolagents
 
 *Last verified: 2026-06-25 with Python 3.12.*
 

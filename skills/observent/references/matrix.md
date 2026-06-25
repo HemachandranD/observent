@@ -22,6 +22,7 @@ Re-verify each section against the upstream artifacts listed under it (per-subse
 - Elastic APM Python agent — https://www.elastic.co/guide/en/apm/agent/python/current/index.html
 - LangSmith — https://docs.smith.langchain.com
 - Opik (Comet) — https://www.comet.com/docs/opik/
+- Jaeger — https://www.jaegertracing.io/docs/
 
 **Frameworks (also linked in per-framework subsections):**
 - LangGraph — https://langchain-ai.github.io/langgraph/
@@ -40,21 +41,21 @@ Last reviewed: 2026-06-20.
 
 ---
 
-## 9 × 6 Compatibility Matrix
+## 9 × 7 Compatibility Matrix
 
-| Framework | Arize Phoenix<br>*OI* | Langfuse<br>*OTel-GenAI* | SigNoz<br>*OTel-GenAI* | Elastic APM<br>*OTel-GenAI* | LangSmith<br>*OTel-GenAI* | Opik<br>*OTel-GenAI* |
-|---|---|---|---|---|---|---|
-| LangGraph | OI: `LangChainInstrumentor` | LangChain callback (`langfuse.langchain.CallbackHandler`) | OTLP + OI: `LangChainInstrumentor` | Native agent + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` |
-| CrewAI | OI: `CrewAIInstrumentor` (+ LangChain) | LangChain callback (CrewAI inherits) | OTLP + OI: `CrewAIInstrumentor` | Native agent + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` |
-| Microsoft Agent Framework | OI: `OpenAIInstrumentor` + MAF native OTel | OTLP exporter + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | Native agent + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` |
-| Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` | Native agent + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` |
-| OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend | Native APM agent + OpenAI Agents SDK trace processor (OTel bridge) | **Native trace processor** with OTLP backend | **Native trace processor** with OTLP backend |
-| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` | Native agent + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` |
-| LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` | Native agent + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` |
-| Google ADK | OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | Native agent + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` |
-| Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter | Manual spans + `elasticapm.Client` (OTel bridge) | Manual spans + OTLP exporter | Manual spans + OTLP exporter |
+| Framework | Arize Phoenix<br>*OI* | Langfuse<br>*OTel-GenAI* | SigNoz<br>*OTel-GenAI* | Elastic APM<br>*OTel-GenAI* | LangSmith<br>*OTel-GenAI* | Opik<br>*OTel-GenAI* | Jaeger<br>*OTel-GenAI* |
+|---|---|---|---|---|---|---|---|
+| LangGraph | OI: `LangChainInstrumentor` | LangChain callback (`langfuse.langchain.CallbackHandler`) | OTLP + OI: `LangChainInstrumentor` | Native agent + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` | OTLP + OI: `LangChainInstrumentor` |
+| CrewAI | OI: `CrewAIInstrumentor` (+ LangChain) | LangChain callback (CrewAI inherits) | OTLP + OI: `CrewAIInstrumentor` | Native agent + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` | OTLP + OI: `CrewAIInstrumentor` |
+| Microsoft Agent Framework | OI: `OpenAIInstrumentor` + MAF native OTel | OTLP exporter + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | Native agent + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` | OTLP + MAF native OTel + `OpenAIInstrumentor` |
+| Anthropic Agents SDK | OI: `AnthropicInstrumentor` | `langfuse` decorator `@observe` (or `OpenAIInstrumentor`-style for Anthropic) | OTLP + OI: `AnthropicInstrumentor` | Native agent + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` | OTLP + OI: `AnthropicInstrumentor` |
+| OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend | Native APM agent + OpenAI Agents SDK trace processor (OTel bridge) | **Native trace processor** with OTLP backend | **Native trace processor** with OTLP backend | **Native trace processor** with OTLP backend |
+| smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` | Native agent + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` |
+| LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` | Native agent + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` |
+| Google ADK | OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | Native agent + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` |
+| Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter | Manual spans + `elasticapm.Client` (OTel bridge) | Manual spans + OTLP exporter | Manual spans + OTLP exporter | Manual spans + OTLP exporter |
 
-**Reading the matrix:** the italic label under each backend's header (e.g. *OI*, *OTel-GenAI*) is the **semantic convention** that backend prefers — Phoenix is OpenInference-native; the other five are OTel-GenAI-native. The convention observent emits at generation time is derived mechanically from the backend set you pick (see SKILL.md § Step 3): single Phoenix → OI only; any Phoenix-less subset → OTel-GenAI only; Phoenix + any other → both.
+**Reading the matrix:** the italic label under each backend's header (e.g. *OI*, *OTel-GenAI*) is the **semantic convention** that backend prefers — Phoenix is OpenInference-native; the other six are OTel-GenAI-native. The convention observent emits at generation time is derived mechanically from the backend set you pick (see SKILL.md § Step 3): single Phoenix → OI only; any Phoenix-less subset → OTel-GenAI only; Phoenix + any other → both.
 
 **OI** = OpenInference instrumentor (`openinference-instrumentation-*`). The OI instrumentor itself emits raw OTel spans regardless of which backend you target — only the exporter destination and the *attribute keys* the backend reads differ. For Elastic APM, the OI instrumentor still emits OTel spans; the `elasticapm.Client` agent picks them up via its OTel bridge (no separate exporter needed) and ingests them alongside auto-instrumented transaction spans.
 
@@ -375,6 +376,39 @@ LangChainInstrumentor().instrument(tracer_provider=provider)
 
 For self-host, set `OPIK_URL_OVERRIDE=http://localhost:5173/api` and leave the auth env vars unset; for Opik Cloud, `OPIK_API_KEY` + `OPIK_WORKSPACE` must be set or the exporter receives 401s.
 
+### Jaeger
+
+- **Type:** Open-source (CNCF graduated). **Self-host only** — there is no Jaeger SaaS. Trivially provisioned as a single all-in-one container.
+- **Integration mechanism:** **Pure OTLP HTTP** to Jaeger's built-in OTLP receiver. Jaeger ingests OTLP natively (v2 by default; v1 all-in-one needs `COLLECTOR_OTLP_ENABLED=true`) and stores/visualizes the spans generically — it has **no LLM-specific UI**, so `gen_ai.*` attributes show up as ordinary span tags. The same `OTLPSpanExporter` + OpenInference framework instrumentor stack used for SigNoz works unchanged. No Jaeger SDK exists or is generated — mechanically identical to SigNoz, so it composes cleanly into the multi-backend fan-out template.
+- **Endpoints:**
+  - Self-host OTLP HTTP: `http://localhost:4318/v1/traces` (gRPC on `:4317`)
+  - Self-host UI: `http://localhost:16686`
+- **Auth:** None (local service).
+- **Required env vars:** `JAEGER_ENDPOINT` (default `http://localhost:4318/v1/traces`). No keys.
+- **Install:** `opentelemetry-exporter-otlp-proto-http==1.41.1` plus the relevant `openinference-instrumentation-*` packages. Jaeger itself is a Docker image, not a pip dependency — nothing to add to `requirements.txt`.
+- **Sources:** Jaeger docs — https://www.jaegertracing.io/docs/ · OTLP ingestion — https://www.jaegertracing.io/docs/latest/apis/#opentelemetry-protocol · all-in-one image — https://hub.docker.com/r/jaegertracing/jaeger
+
+**Canonical setup (pure OTLP):**
+```python
+import os
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4318/v1/traces")
+exporter = OTLPSpanExporter(endpoint=endpoint)  # no auth for a local Jaeger
+provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "my-agent-app")}))
+provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+
+LangChainInstrumentor().instrument(tracer_provider=provider)
+```
+
+Jaeger is a generic trace store/UI — great for a fast, dependency-free local span view. For LLM-cost/token dashboards use Phoenix/Langfuse/SigNoz instead; Jaeger shows the same spans, just without GenAI-aware panels.
+
 ---
 
 ## Per-Framework Reference
@@ -402,7 +436,7 @@ For self-host, set `OPIK_URL_OVERRIDE=http://localhost:5173/api` and leave the a
 - **Tracing model:** Native OpenTelemetry emission built into `agent-framework`. The framework's spans land on the global `TracerProvider` automatically — just register the provider before constructing any `Agent`. Underlying model calls captured by `OpenAIInstrumentor` (or `AnthropicInstrumentor` for Anthropic-backed agents).
 - **Key entry points:** `Agent.run()`, `agent_framework.openai.OpenAIChatClient`, the workflow primitives (sequential, concurrent, handoff, group collaboration) under `agent_framework.workflows`.
 - **Where to thread `session_id`:** OTel baggage at the top — MAF's native context propagation carries it across agents and tool calls.
-- **Phoenix / SigNoz / Langfuse / LangSmith / Opik via OTLP:** `pip install 'agent-framework==1.4.0' 'openinference-instrumentation-openai==0.1.48'` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
+- **Phoenix / SigNoz / Langfuse / LangSmith / Opik / Jaeger via OTLP:** `pip install 'agent-framework==1.4.0' 'openinference-instrumentation-openai==0.1.48'` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
 - **Note:** observent no longer supports AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into agent-framework. Migrate AutoGen code to MAF, or use the **Custom** path.
 - **Sources:** Microsoft Agent Framework — https://github.com/microsoft/agent-framework · MAF observability guidance — search "Observability" / "OpenTelemetry" in the repo README · `openinference-instrumentation-openai` (raw model spans) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai
 
@@ -450,7 +484,7 @@ For self-host, set `OPIK_URL_OVERRIDE=http://localhost:5173/api` and leave the a
 - **Tracing model:** `openinference-instrumentation-google-adk` wraps the Agent Development Kit's runner and agent execution — captures `Runner.run()` / `Runner.run_async()`, agent invocations, tool calls, and the underlying model (Gemini / LiteLLM) requests as a connected span tree. ADK also emits some native OpenTelemetry spans; the OI instrumentor adds the LLM-specific attributes Phoenix and the OTel-GenAI backends read.
 - **Key entry points:** `google.adk.agents.Agent` / `LlmAgent`, `google.adk.runners.Runner` (`run`, `run_async`), tool functions and `google.adk.tools.*`.
 - **Where to thread `session_id`:** ADK's own `Session` (`session_service.create_session(...)`) carries an id end-to-end; also set OTel baggage (`session.id`) at the top of the turn so it lands on every span.
-- **Phoenix / SigNoz / Langfuse / Elastic APM / LangSmith / Opik:** `pip install 'google-adk==2.3.0' 'openinference-instrumentation-google-adk==0.1.15'` then:
+- **Phoenix / SigNoz / Langfuse / Elastic APM / LangSmith / Opik / Jaeger:** `pip install 'google-adk==2.3.0' 'openinference-instrumentation-google-adk==0.1.15'` then:
   ```python
   from openinference.instrumentation.google_adk import GoogleADKInstrumentor
   GoogleADKInstrumentor().instrument(tracer_provider=provider)
@@ -475,10 +509,10 @@ The convention emitted by generated code is fixed by the backend set chosen in `
 | Backend set | Convention | Reference doc |
 |---|---|---|
 | `{phoenix}` | **OI only** | `openinference.md` |
-| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith, opik}` (no Phoenix) | **OTel-GenAI only** | `otel_genai.md` |
-| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik}` | **Both** | `openinference.md` + `otel_genai.md` |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith, opik, jaeger}` (no Phoenix) | **OTel-GenAI only** | `otel_genai.md` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik, jaeger}` | **Both** | `openinference.md` + `otel_genai.md` |
 
-Rationale: Phoenix is OpenInference-native; Langfuse, SigNoz, Elastic APM, LangSmith, and Opik consume OTel-GenAI (SigNoz / Elastic / LangSmith / Opik treat OI keys as opaque attributes — no LLM-specific UI affordances on those backends). Dual-emission is reserved for fan-out cases where both communities are present on the same provider.
+Rationale: Phoenix is OpenInference-native; Langfuse, SigNoz, Elastic APM, LangSmith, Opik, and Jaeger consume OTel-GenAI (SigNoz / Elastic / LangSmith / Opik / Jaeger treat OI keys as opaque attributes — no LLM-specific UI affordances on those backends). Dual-emission is reserved for fan-out cases where both communities are present on the same provider.
 
 ### Per-kind summary (quick scan)
 
@@ -696,6 +730,11 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
     headers=_op_headers,
 )))
 
+# Jaeger — local OTLP receiver, no auth.
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=os.getenv("JAEGER_ENDPOINT", "http://localhost:4318/v1/traces"),
+)))
+
 trace.set_tracer_provider(provider)
 
 # Elastic APM — native agent. Picks up the same OTel spans via its bridge,
@@ -707,7 +746,7 @@ elasticapm.instrument()
 
 Each processor / agent exports independently. If one backend is unreachable, the others still receive spans.
 
-**Convention for fan-out:** when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz / Elastic APM / LangSmith / Opik, the convention resolves to `both` (see § Mandatory Span Attributes) — every span must carry OI **and** OTel-GenAI keys so each backend's UI lights up. For Phoenix-less fan-out (e.g. `langfuse,signoz` or `signoz,elastic-apm` or `langsmith,opik`), `otel-genai` alone is sufficient.
+**Convention for fan-out:** when the backend set contains Phoenix **and** at least one of Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger, the convention resolves to `both` (see § Mandatory Span Attributes) — every span must carry OI **and** OTel-GenAI keys so each backend's UI lights up. For Phoenix-less fan-out (e.g. `langfuse,signoz` or `signoz,elastic-apm` or `langsmith,jaeger`), `otel-genai` alone is sufficient.
 
 ---
 
@@ -726,7 +765,7 @@ Each processor / agent exports independently. If one backend is unreachable, the
 | `openinference-instrumentation-bedrock` | AWS Bedrock |
 | `openinference-instrumentation-vertexai` | Google Vertex AI |
 
-All are installable from PyPI. They emit OpenInference attributes natively — Phoenix consumes them directly. For Langfuse / SigNoz / Elastic APM / LangSmith / Opik exporters, the user-side code (the Custom path or wrapper code) must additionally emit OTel-GenAI keys per the resolution rule (`openinference.md` and `otel_genai.md`).
+All are installable from PyPI. They emit OpenInference attributes natively — Phoenix consumes them directly. For Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger exporters, the user-side code (the Custom path or wrapper code) must additionally emit OTel-GenAI keys per the resolution rule (`openinference.md` and `otel_genai.md`).
 
 **Sources:** OpenInference Python monorepo (canonical) — https://github.com/Arize-ai/openinference/tree/main/python · per-package PyPI pages at `https://pypi.org/project/openinference-instrumentation-<framework>/`.
 
