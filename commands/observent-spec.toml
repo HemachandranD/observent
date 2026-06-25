@@ -4,7 +4,7 @@ Run the observent SDD Spec phase for this project.
 
 Arguments (optional): {{args}}
   - First arg: framework  (langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom)
-  - Second arg: backend(s) — one or more, comma-separated  (phoenix | langfuse | signoz | elastic-apm | langsmith)
+  - Second arg: backend(s) — one or more, comma-separated  (phoenix | langfuse | signoz | elastic-apm | langsmith | opik | jaeger)
 
 Follow Phase 1 (Spec) of the observent skill: detect environment, resolve framework, resolve backend(s) and convention, capture the existing-setup decision, then write `.observent/spec.md` with `status: locked` per the canonical schema (`references/spec_schema.md § 1`). Do NOT proceed into Plan / Tasks / Implement — stop after the spec is written.
 

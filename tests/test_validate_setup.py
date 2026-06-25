@@ -10,7 +10,14 @@ import argparse
 
 import pytest
 import validate_setup
-from validate_setup import Result, _parse_backends, check_langfuse, check_langsmith
+from validate_setup import (
+    Result,
+    _parse_backends,
+    check_jaeger,
+    check_langfuse,
+    check_langsmith,
+    check_opik,
+)
 
 
 def test_parse_single_backend():
@@ -71,4 +78,20 @@ def test_langsmith_missing_key_fails(monkeypatch):
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
     monkeypatch.setenv("LANGSMITH_ENDPOINT", "http://127.0.0.1:9")  # closed port
     r = check_langsmith(smoke=False)
+    assert r.passed is False
+
+
+def test_opik_cloud_missing_key_fails(monkeypatch):
+    # Cloud base (comet.com) requires OPIK_API_KEY + OPIK_WORKSPACE -> must fail.
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
+    for var in ("OPIK_API_KEY", "OPIK_WORKSPACE"):
+        monkeypatch.delenv(var, raising=False)
+    r = check_opik(smoke=False)
+    assert r.passed is False
+
+
+def test_jaeger_unreachable_endpoint_fails(monkeypatch):
+    # Jaeger needs no auth, but an unreachable OTLP endpoint must fail the probe.
+    monkeypatch.setenv("JAEGER_ENDPOINT", "http://127.0.0.1:9/v1/traces")  # closed port
+    r = check_jaeger(smoke=False)
     assert r.passed is False

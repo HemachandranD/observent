@@ -1,9 +1,9 @@
-description = "Validate observability setup for a backend (phoenix | langfuse | signoz | elastic-apm | langsmith | all)"
+description = "Validate observability setup for a backend (phoenix | langfuse | signoz | elastic-apm | langsmith | opik | jaeger | all)"
 prompt = """
 Run the observent validation script for the specified backend.
 
 Arguments: {{args}}
-  - Backend: phoenix | langfuse | signoz | elastic-apm | langsmith | all  (or a comma-separated list, e.g. "phoenix,langsmith")
+  - Backend: phoenix | langfuse | signoz | elastic-apm | langsmith | opik | jaeger | all  (or a comma-separated list, e.g. "phoenix,jaeger")
   - Optional flag: --smoke-test  (emits a synthetic LLM span to confirm end-to-end ingestion)
 
 Execute:

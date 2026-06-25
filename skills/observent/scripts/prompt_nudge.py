@@ -33,6 +33,8 @@ _KEYWORDS = (
     "signoz",
     "elastic apm",
     "langsmith",
+    "opik",
+    "jaeger",
 )
 
 

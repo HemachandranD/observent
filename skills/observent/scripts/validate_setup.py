@@ -7,6 +7,8 @@ Usage:
   python validate_setup.py signoz [--smoke-test]
   python validate_setup.py elastic-apm [--smoke-test]
   python validate_setup.py langsmith [--smoke-test]
+  python validate_setup.py opik [--smoke-test]
+  python validate_setup.py jaeger [--smoke-test]
   python validate_setup.py phoenix,signoz [--smoke-test]   # multi-backend fan-out
   python validate_setup.py all
 
@@ -16,7 +18,7 @@ Per backend:
   - Probes the configured endpoint for reachability
   - With --smoke-test: emits one synthetic LLM span (carrying the convention
     that backend prefers — OI for Phoenix, OTel-GenAI for Langfuse / SigNoz /
-    Elastic APM / LangSmith)
+    Elastic APM / LangSmith / Opik / Jaeger)
 
 Exit code: 0 on pass, 1 on any failure.
 """
@@ -36,8 +38,8 @@ from observent_matrix import backend_conventions
 
 # Per-backend convention preference, derived from the single source of truth in
 # observent_matrix.py. See references/matrix.md § Convention resolution: Phoenix
-# is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith consume
-# OTel-GenAI.
+# is OpenInference-native; Langfuse / SigNoz / Elastic APM / LangSmith / Opik /
+# Jaeger consume OTel-GenAI.
 BACKEND_CONVENTION: dict[str, str] = backend_conventions()
 
 
@@ -52,8 +54,9 @@ def resolve_convention(backends: list[str]) -> str:
       - phoenix *and* >=1 OTel-GenAI backend            -> "both"
 
     Phoenix renders its native UI from OpenInference keys; Langfuse / SigNoz /
-    Elastic APM / LangSmith consume OTel-GenAI. "both" is justified only when a
-    fan-out spans Phoenix and at least one of the others, so each UI lights up.
+    Elastic APM / LangSmith / Opik / Jaeger consume OTel-GenAI. "both" is
+    justified only when a fan-out spans Phoenix and at least one of the others,
+    so each UI lights up.
     """
     has_phoenix = "phoenix" in backends
     has_otel_genai = any(BACKEND_CONVENTION.get(b) == "otel-genai" for b in backends)
@@ -396,6 +399,82 @@ def check_langsmith(smoke: bool) -> Result:
     return r
 
 
+def check_opik(smoke: bool) -> Result:
+    r = Result("opik")
+    if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
+        r.fail(
+            "opentelemetry-exporter-otlp-proto-http not installed "
+            "(pip install 'opentelemetry-exporter-otlp-proto-http>=1.25')"
+        )
+
+    base = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api").rstrip("/")
+    endpoint = f"{base}/v1/private/otel/v1/traces"
+    r.info(f"OPIK_URL_OVERRIDE = {base}")
+    r.info(f"OTLP traces endpoint = {endpoint}")
+
+    parsed = urlparse(endpoint)
+    is_cloud = bool(parsed.hostname and parsed.hostname.endswith("comet.com"))
+
+    headers: dict[str, str] = {}
+    api_key: str | None = None
+    if is_cloud:
+        # Opik Cloud requires an API key + workspace; project routing is optional.
+        api_key = _check_env(r, "OPIK_API_KEY")
+        workspace = _check_env(r, "OPIK_WORKSPACE")
+        if api_key:
+            headers["Authorization"] = api_key
+        if workspace:
+            headers["Comet-Workspace"] = workspace
+        project = os.environ.get("OPIK_PROJECT_NAME")
+        if project:
+            r.ok(f"OPIK_PROJECT_NAME = {project}")
+            headers["projectName"] = project
+        else:
+            r.info("OPIK_PROJECT_NAME not set (traces land in the 'Default Project')")
+    else:
+        r.info("Self-hosted Opik (no auth required)")
+
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    if not _probe_http(r, root, method="GET"):
+        _provision_hint(r, "opik", parsed.hostname)
+
+    if smoke and r.passed and (not is_cloud or api_key):
+        _emit_smoke_span(
+            r,
+            endpoint=endpoint,
+            headers=headers,
+            convention=BACKEND_CONVENTION["opik"],
+        )
+    return r
+
+
+def check_jaeger(smoke: bool) -> Result:
+    r = Result("jaeger")
+    if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
+        r.fail(
+            "opentelemetry-exporter-otlp-proto-http not installed "
+            "(pip install 'opentelemetry-exporter-otlp-proto-http>=1.25')"
+        )
+    endpoint = os.environ.get("JAEGER_ENDPOINT", "http://localhost:4318/v1/traces")
+    r.info(f"JAEGER_ENDPOINT = {endpoint}")
+    r.info("Jaeger ingests OTLP directly (v2, or v1 with COLLECTOR_OTLP_ENABLED=true); no auth.")
+
+    # Probe the OTLP endpoint root (Jaeger's OTLP receiver, default :4318).
+    parsed = urlparse(endpoint)
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    if not _probe_http(r, root, method="GET"):
+        _provision_hint(r, "jaeger", parsed.hostname)
+
+    if smoke and r.passed:
+        _emit_smoke_span(
+            r,
+            endpoint=endpoint,
+            headers={},
+            convention=BACKEND_CONVENTION["jaeger"],
+        )
+    return r
+
+
 def _phoenix_headers(api_key: str | None) -> dict[str, str]:
     if api_key:
         return {"Authorization": f"Bearer {api_key}"}
@@ -479,6 +558,8 @@ CHECKS: dict[str, Callable[[bool], Result]] = {
     "signoz": check_signoz,
     "elastic-apm": check_elastic_apm,
     "langsmith": check_langsmith,
+    "opik": check_opik,
+    "jaeger": check_jaeger,
 }
 
 
@@ -510,14 +591,14 @@ def main() -> int:
     parser.add_argument(
         "backend",
         type=_parse_backends,
-        help="Backend or comma-separated list (phoenix, langfuse, signoz, elastic-apm, langsmith, all). "
-        'e.g. "phoenix" or "phoenix,langsmith".',
+        help="Backend or comma-separated list (phoenix, langfuse, signoz, elastic-apm, "
+        'langsmith, opik, jaeger, all). e.g. "phoenix" or "phoenix,jaeger".',
     )
     parser.add_argument(
         "--smoke-test",
         action="store_true",
         help="Emit one synthetic span per backend (LLM span via OTLP for "
-        "phoenix/langfuse/signoz/langsmith; transaction via native elasticapm.Client "
+        "phoenix/langfuse/signoz/langsmith/opik/jaeger; transaction via native elasticapm.Client "
         "for elastic-apm).",
     )
     args = parser.parse_args()
