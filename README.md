@@ -17,7 +17,7 @@
 
 ---
 
-**observent** sets up observability for multi-agent Python applications across **9 frameworks x 6 backends**.
+**observent** — a blend of **observe** + **agent** — sets up observability for multi-agent Python applications across **9 frameworks x 6 backends**.
 
 It detects your framework, generates integration code for the backend(s) you pick, previews every change before write, and validates ingestion (optionally with a smoke span).
 
