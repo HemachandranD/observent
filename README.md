@@ -126,6 +126,14 @@ There is no runtime override flag; to change conventions, re-run with a differen
 | Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Custom | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
+These six are the first-class, validated targets. Under the hood observent just emits standard
+OpenTelemetry spans with **OpenInference** and/or **OTel-GenAI** semantic-convention attributes over
+**OTLP HTTP**, so it works with **any OTLP-compatible backend** that understands those conventions
+(e.g. Jaeger, Grafana Tempo, Datadog, Honeycomb, New Relic, Dash0, or any vendor's OTLP collector) —
+point the `OTLPSpanExporter` at that endpoint. The convention emitted is still derived from the
+backend set you pick (OpenInference for Phoenix, OTel-GenAI for the rest, or both); choose the one
+your target reads. Only the six above ship a dedicated `validate_setup.py` check and provisioning path.
+
 Implementation notes:
 - **Elastic APM** defaults to the native `elastic-apm` Python agent (`elasticapm.Client(...)` + `elasticapm.instrument()`), with framework instrumentors layered on top.
 - **LangSmith** uses OTLP HTTP ingest with OTel-GenAI conventions; no generated `langsmith` SDK code.
