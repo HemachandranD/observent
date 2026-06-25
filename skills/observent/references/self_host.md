@@ -11,7 +11,7 @@ Provisioning is **only ever offered** when **all** of these hold:
 1. The backend's resolved endpoint `mode` is `self-host` (cloud is never provisioned).
 2. The endpoint is unreachable at probe time (`detection.backends_reachable.<backend> == false`).
 3. Docker + Compose are available (`detection.docker_available && detection.docker_compose_available`).
-4. The backend is one of **Phoenix · Langfuse · SigNoz · Elastic APM** (see LangSmith note below).
+4. The backend is one of **Phoenix · Langfuse · SigNoz · Elastic APM · Opik** (see LangSmith note below).
 
 `docker compose up` runs **only after** the user approves the `confirm` task — provisioning is
 never silent.
@@ -28,6 +28,7 @@ Two methods, chosen per backend by what the upstream stack needs:
 | Elastic APM | `vendored-compose` | ES + Kibana + APM Server; config passed inline via `-E` flags / env. |
 | Langfuse | `upstream-clone` | v3 stack is 6 coupled services with generated secrets; upstream compose is the supported path. |
 | SigNoz | `upstream-clone` | Compose mounts ClickHouse / OTel-Collector config files from the repo — not self-contained. |
+| Opik | `upstream-clone` | Multi-service stack (backend, frontend, ClickHouse, MySQL, Redis, MinIO) wired via compose profiles; upstream compose is the supported path. |
 
 - **`vendored-compose`** → the skill writes `docker-compose.observent-<backend>.yml` into the
   user's project root (a `write_file` task), then runs
@@ -164,6 +165,25 @@ vendored as a single file. Clone the repo and bring up `deploy/docker`, pinning 
 
 ---
 
+## Opik — `upstream-clone`
+
+Opik's compose brings up a multi-service stack (backend, frontend, ClickHouse, MySQL, Redis, MinIO)
+selected via the `opik` profile. Clone the repo at the pinned tag so the compose file matches the
+pinned images, and pin `OPIK_VERSION` for the `ghcr.io/comet-ml/opik/*` images (the compose defaults
+them to `latest`).
+
+- Up:
+  ```bash
+  git clone --depth 1 -b 2.1.3 https://github.com/comet-ml/opik.git .observent/vendor/opik \
+    && OPIK_VERSION=2.1.3 docker compose -f .observent/vendor/opik/deployment/docker-compose/docker-compose.yaml --profile opik up -d --wait
+  ```
+- UI: `http://localhost:5173` · OTLP: `http://localhost:5173/api/v1/private/otel/v1/traces`
+- No auth for self-host (leave `OPIK_API_KEY` / `OPIK_WORKSPACE` unset; set `OPIK_URL_OVERRIDE=http://localhost:5173/api`).
+- If port `5173` is taken, set `NGINX_PORT` (or `OPIK_PORT_OFFSET` to shift every Opik port) before `up`.
+- Down: `docker compose -f .observent/vendor/opik/deployment/docker-compose/docker-compose.yaml --profile opik down`
+
+---
+
 ## LangSmith — not provisioned
 
 LangSmith has **no free OSS / Docker edition**. It is commercial and cloud-first; self-host is
@@ -194,9 +214,13 @@ These are exact image tags, not floors. Bump alongside the matrix's pip pins and
 | SigNoz | `signoz/signoz` | `v0.126.1` (upstream compose `VERSION`) | https://github.com/SigNoz/signoz |
 | SigNoz | `signoz/signoz-otel-collector` | `v0.144.4` (upstream `OTELCOL_TAG`) | https://github.com/SigNoz/signoz |
 | SigNoz | `clickhouse/clickhouse-server` | `25.5.6` (upstream compose) | https://github.com/SigNoz/signoz |
+| Opik | `ghcr.io/comet-ml/opik/opik-backend`, `opik-frontend`, `opik-python-backend` | `2.1.3` (`OPIK_VERSION`) | https://github.com/comet-ml/opik |
+| Opik | `clickhouse/clickhouse-server` | `25.8.16.34-alpine` (upstream compose) | https://github.com/comet-ml/opik |
+| Opik | `mysql` | `8.4.2` (upstream compose) | https://github.com/comet-ml/opik |
+| Opik | `redis` | `7.2.4-alpine3.19` (upstream compose) | https://github.com/comet-ml/opik |
 
-*Last verified: 2026-05-29.* Langfuse and SigNoz tags are governed by their upstream compose files
-(`upstream-clone` method); the rows above record what those files pinned at verification time.
+*Last verified: 2026-06-25.* Langfuse, SigNoz, and Opik tags are governed by their upstream compose
+files (`upstream-clone` method); the rows above record what those files pinned at verification time.
 
 ---
 

@@ -2,7 +2,7 @@
 """Single source of truth for observent's framework x backend grid.
 
 The shipped detector/validator scripts *and* the docs-consistency test all
-derive their framework/backend tables from the structures here, so the 8x5
+derive their framework/backend tables from the structures here, so the 8x6
 matrix is declared exactly once. The "Adding a new framework / backend" steps in
 CLAUDE.md that used to touch ``detect_framework.py``, ``validate_setup.py`` and
 ``tests/test_docs_consistency.py`` separately now collapse to editing this file;
@@ -49,7 +49,7 @@ FRAMEWORKS: tuple[Framework, ...] = (
     Framework("custom", "Custom", ()),  # the no-framework path — never auto-detected
 )
 
-# The five product backends — each has a UI column, a convention, and a
+# The six product backends — each has a UI column, a convention, and a
 # validate_setup check. SigNoz has no detect module: it's a backend service, not
 # a pip package, so a bare ``opentelemetry`` install (below) is its only hint.
 BACKENDS: tuple[Backend, ...] = (
@@ -58,6 +58,7 @@ BACKENDS: tuple[Backend, ...] = (
     Backend("signoz", "SigNoz", "otel-genai", ()),
     Backend("elastic-apm", "Elastic APM", "otel-genai", ("elasticapm",)),
     Backend("langsmith", "LangSmith", "otel-genai", ("langsmith",)),
+    Backend("opik", "Opik", "otel-genai", ("opik",)),
 )
 
 # Detection-only signals that are NOT product backends (no UI column, no
@@ -84,7 +85,7 @@ def backend_detection_modules() -> dict[str, list[str]]:
 
 
 def backend_conventions() -> dict[str, str]:
-    """slug -> convention, for the five product backends."""
+    """slug -> convention, for the six product backends."""
     return {b.slug: b.convention for b in BACKENDS}
 
 

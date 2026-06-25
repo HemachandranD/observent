@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "observent",
-  "description": "Production-grade observability for multi-agent Python apps. Supports LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, and a Custom no-framework path × Arize Phoenix, Langfuse, SigNoz, Elastic APM, and LangSmith.",
+  "description": "Production-grade observability for multi-agent Python apps. Supports LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, and a Custom no-framework path × Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, and Opik.",
   "owner": {
     "name": "Hemachandran Dhinakaran",
     "url": "https://github.com/HemachandranD"
@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "observent",
-      "description": "Wire up observability for your multi-agent Python app in one command. 8 frameworks × 5 backends, correct span hierarchy and context propagation out of the box.",
+      "description": "Wire up observability for your multi-agent Python app in one command. 9 frameworks × 6 backends, correct span hierarchy and context propagation out of the box.",
       "source": "./",
       "skills": ["./skills/observent"],
       "category": "productivity"

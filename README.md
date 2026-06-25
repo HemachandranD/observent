@@ -17,7 +17,7 @@
 
 ---
 
-**observent** sets up observability for multi-agent Python applications across **9 frameworks x 5 backends**.
+**observent** sets up observability for multi-agent Python applications across **9 frameworks x 6 backends**.
 
 It detects your framework, generates integration code for the backend(s) you pick, previews every change before write, and validates ingestion (optionally with a smoke span).
 
@@ -77,7 +77,7 @@ Examples:
 /observent smolagents langfuse
 /observent custom phoenix
 /observent langgraph phoenix,signoz
-/observent crewai phoenix,langfuse,signoz,elastic-apm,langsmith
+/observent crewai phoenix,langfuse,signoz,elastic-apm,langsmith,opik
 ```
 
 ### `npx skills` install options
@@ -105,8 +105,8 @@ The generated convention is derived mechanically from selected backend(s):
 | Selected backend set | Convention emitted |
 |---|---|
 | `phoenix` only | OpenInference |
-| Any non-empty subset of `langfuse`, `signoz`, `elastic-apm`, `langsmith` (without Phoenix) | OTel-GenAI |
-| `phoenix` + at least one of `langfuse`, `signoz`, `elastic-apm`, `langsmith` | Both |
+| Any non-empty subset of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik` (without Phoenix) | OTel-GenAI |
+| `phoenix` + at least one of `langfuse`, `signoz`, `elastic-apm`, `langsmith`, `opik` | Both |
 
 There is no runtime override flag; to change conventions, re-run with a different backend set.
 
@@ -114,21 +114,22 @@ There is no runtime override flag; to change conventions, re-run with a differen
 
 ## Supported frameworks x backends
 
-| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith |
-|---|:---:|:---:|:---:|:---:|:---:|
-| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ |
-| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Microsoft Agent Framework | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
-| OpenAI Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
-| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
-| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Custom | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Framework | Arize Phoenix | Langfuse | SigNoz | Elastic APM | LangSmith | Opik |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| LangGraph | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CrewAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Microsoft Agent Framework | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OpenAI Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| smolagents | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Custom | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 Implementation notes:
 - **Elastic APM** defaults to the native `elastic-apm` Python agent (`elasticapm.Client(...)` + `elasticapm.instrument()`), with framework instrumentors layered on top.
 - **LangSmith** uses OTLP HTTP ingest with OTel-GenAI conventions; no generated `langsmith` SDK code.
+- **Opik** (Comet) uses OTLP HTTP ingest with OTel-GenAI conventions; no generated `opik` SDK code. Free self-host via Docker, or Opik Cloud.
 - **OpenAI Agents SDK** integration uses native trace processors (not `openinference-instrumentation-openai`) so agent structure stays intact.
 - **Microsoft Agent Framework** uses built-in OpenTelemetry support with `OpenAIInstrumentor` layered for raw model spans.
 
@@ -136,7 +137,7 @@ Implementation notes:
 
 ## Works with any model provider
 
-observent instruments the LLM call path, so model vendor choice is orthogonal to the 8x5 matrix.
+observent instruments the LLM call path, so model vendor choice is orthogonal to the 9x6 matrix.
 
 OpenAI-compatible endpoints work directly with the standard `openai` client:
 
@@ -152,7 +153,7 @@ If you use a non-OpenAI-compatible native SDK, use the Custom path to emit spans
 
 ## Local self-host provisioning
 
-For unreachable self-host backends (**Phoenix, Langfuse, SigNoz, Elastic APM**), observent can offer Docker-based provisioning.
+For unreachable self-host backends (**Phoenix, Langfuse, SigNoz, Elastic APM, Opik**), observent can offer Docker-based provisioning.
 
 Provisioning is always explicit:
 1. opt-in prompt,
@@ -197,12 +198,13 @@ backends:
   - signoz
   - elastic-apm
   - langsmith
+  - opik
 primary_entrypoint: "/observent [framework] [backend|backend,...]"
 validate_entrypoint: "/observent-validate <backend|backend,...> [--smoke-test]"
 eval_entrypoint: "/observent-eval [--baseline] [--ci]"
 convention_rules:
   - "phoenix only => openinference"
-  - "langfuse/signoz/elastic-apm/langsmith without phoenix => otel-genai"
+  - "langfuse/signoz/elastic-apm/langsmith/opik without phoenix => otel-genai"
   - "phoenix with any non-phoenix backend => both"
 docs:
   matrix: "skills/observent/references/matrix.md"

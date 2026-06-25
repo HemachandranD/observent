@@ -43,7 +43,7 @@ detection:
   project_fingerprint: sha256:<hex>                      # sha256 of (pyproject.toml + requirements*.txt + poetry.lock) bytes, in that fixed order
 choice:
   framework: langgraph                                   # one of: langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom
-  backends: [phoenix, langsmith]                         # non-empty subset of: phoenix | langfuse | signoz | elastic-apm | langsmith
+  backends: [phoenix, langsmith]                         # non-empty subset of: phoenix | langfuse | signoz | elastic-apm | langsmith | opik
   convention: both                                       # derived mechanically from `backends` — see § Convention derivation below
   existing_setup_decision: extend                        # extend | replace | abort | none  (none = no existing setup found)
   endpoints:                                             # one entry per backend in `choice.backends`
@@ -65,8 +65,8 @@ Free-form rationale and user notes. The skill preserves this body across re-runs
 | `choice.backends` set | `choice.convention` |
 |---|---|
 | `{phoenix}` | `oi` |
-| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith}` (no Phoenix) | `otel-genai` |
-| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith}` | `both` |
+| Any non-empty subset of `{langfuse, signoz, elastic-apm, langsmith, opik}` (no Phoenix) | `otel-genai` |
+| Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik}` | `both` |
 
 The skill writes this field — it is never asked of the user. To change the convention the user changes the backend set and re-runs `/observent-spec`.
 
@@ -82,7 +82,7 @@ Missing files contribute nothing (not a placeholder). Computed at spec generatio
 
 ### Local self-host provisioning (`detection.docker_*`, `detection.backends_reachable`, `choice.self_host_provision`)
 
-When a backend's resolved endpoint `mode` is `self-host`, the skill probes it for reachability and records the result in `detection.backends_reachable.<backend>`. If unreachable **and** Docker is available (`detection.docker_available && detection.docker_compose_available`) **and** the backend is one of `{phoenix, langfuse, signoz, elastic-apm}`, the skill offers to stand it up locally; a `yes` sets `choice.self_host_provision.<backend> = true`. Rules:
+When a backend's resolved endpoint `mode` is `self-host`, the skill probes it for reachability and records the result in `detection.backends_reachable.<backend>`. If unreachable **and** Docker is available (`detection.docker_available && detection.docker_compose_available`) **and** the backend is one of `{phoenix, langfuse, signoz, elastic-apm, opik}`, the skill offers to stand it up locally; a `yes` sets `choice.self_host_provision.<backend> = true`. Rules:
 
 - `choice.self_host_provision` only has keys for backends whose `endpoints.<backend>.mode == self-host`. Cloud backends never appear.
 - `langsmith` **never** appears — it has no free OSS/Docker edition (self-host is enterprise-licensed). See `references/self_host.md § LangSmith`.

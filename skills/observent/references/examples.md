@@ -1,8 +1,8 @@
 # observent Examples
 
-Runnable end-to-end examples covering 9 frameworks × 5 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
+Runnable end-to-end examples covering 9 frameworks × 6 backends, with backends rotated across frameworks plus one extra example per non-Phoenix backend (Elastic APM, LangSmith, Opik). Plus a multi-backend fan-out, a verification checklist, and troubleshooting.
 
-> **Convention notes.** Phoenix-targeted examples (1, 5, 8, 11) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith examples (2, 3, 4, 6, 7, 9, 10) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
+> **Convention notes.** Phoenix-targeted examples (1, 5, 8, 11) emit OpenInference keys — Phoenix's UI is OI-native. Langfuse / SigNoz / Elastic APM / LangSmith / Opik examples (2, 3, 4, 6, 7, 9, 10, 12) inherit OI keys from the relevant `openinference-instrumentation-*` package and exporters carry them on the OTLP wire; the backends ingest the spans, but for richer convention-aware UI on those backends you can supplement with OTel-GenAI keys (`gen_ai.*` — see `otel_genai.md`) or use the Custom path (the helper bakes in the convention literal at generation time — see Example 8). The Multi-Backend Fan-Out example at the bottom emits both conventions because the resolved set requires it.
 
 ---
 
@@ -839,7 +839,7 @@ python langgraph_langsmith.py
 
 ## 11. Google ADK + Arize Phoenix (OpenInference instrumentor)
 
-Google's Agent Development Kit (ADK) builds agents around a `Runner` + `Session`. `openinference-instrumentation-google-adk` wraps the runner so agent runs, tool calls, and the underlying Gemini model requests land as a connected span tree. The instrumentor emits OpenInference attributes natively — Phoenix consumes them directly; swap the exporter (see Example 3 / 6 / 10) to target SigNoz / Langfuse / Elastic APM / LangSmith instead.
+Google's Agent Development Kit (ADK) builds agents around a `Runner` + `Session`. `openinference-instrumentation-google-adk` wraps the runner so agent runs, tool calls, and the underlying Gemini model requests land as a connected span tree. The instrumentor emits OpenInference attributes natively — Phoenix consumes them directly; swap the exporter (see Example 3 / 6 / 10 / 12) to target SigNoz / Langfuse / Elastic APM / LangSmith / Opik instead.
 
 ```python
 # google_adk_phoenix.py
@@ -911,9 +911,9 @@ python google_adk_phoenix.py
 
 ---
 
-## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM + LangSmith)
+## Multi-Backend Fan-Out (Phoenix + Langfuse + SigNoz + Elastic APM + LangSmith + Opik)
 
-Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz, LangSmith), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all five destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM, LangSmith}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
+Single `TracerProvider` with one `BatchSpanProcessor` per OTLP backend (Phoenix, Langfuse, SigNoz, LangSmith, Opik), plus a native `elasticapm.Client` next to it — the agent's OTel bridge attaches to the same global tracer provider, so the same spans flow to all six destinations. Because the set contains Phoenix **and** at least one of {Langfuse, SigNoz, Elastic APM, LangSmith, Opik}, the convention rule resolves to **`both`** — every span must carry OpenInference and OTel-GenAI keys. See `openinference.md` and `otel_genai.md` for canonical key lists.
 
 ```python
 # fanout.py
@@ -962,6 +962,18 @@ provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
     headers=_ls_headers,
 )))
 
+# Opik — self-host needs no auth; cloud needs Authorization + Comet-Workspace.
+_op_base = os.getenv("OPIK_URL_OVERRIDE", "http://localhost:5173/api").rstrip("/")
+_op_headers = {}
+if os.getenv("OPIK_API_KEY"):
+    _op_headers["Authorization"] = os.environ["OPIK_API_KEY"]
+if os.getenv("OPIK_WORKSPACE"):
+    _op_headers["Comet-Workspace"] = os.environ["OPIK_WORKSPACE"]
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+    endpoint=f"{_op_base}/v1/private/otel/v1/traces",
+    headers=_op_headers,
+)))
+
 trace.set_tracer_provider(provider)
 HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
@@ -988,14 +1000,118 @@ with tracer.start_as_current_span("smoke-llm") as span:
     span.set_attribute("gen_ai.usage.output_tokens", 8)
 
 provider.shutdown()
-# Spans now in all five backends. Failure in one doesn't affect the others.
+# Spans now in all six backends. Failure in one doesn't affect the others.
 ```
 
-For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,signoz`), drop the OI block — `otel-genai` alone is sufficient.
+For Phoenix-less fan-out (e.g. `langfuse,signoz`, `signoz,elastic-apm`, or `langsmith,opik`), drop the OI block — `otel-genai` alone is sufficient.
 
-**Sources:** OTel multi-exporter (multiple `BatchSpanProcessor` on one `TracerProvider`) — https://opentelemetry.io/docs/languages/python/exporters/ · Phoenix OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · Langfuse OTLP — https://langfuse.com/docs/opentelemetry/get-started · SigNoz OTLP — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · LangSmith OTLP — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry
+**Sources:** OTel multi-exporter (multiple `BatchSpanProcessor` on one `TracerProvider`) — https://opentelemetry.io/docs/languages/python/exporters/ · Phoenix OTLP — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · Langfuse OTLP — https://langfuse.com/docs/opentelemetry/get-started · SigNoz OTLP — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Elastic APM OpenTelemetry bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · LangSmith OTLP — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · Opik OTLP — https://www.comet.com/docs/opik/tracing/opentelemetry/overview
 
 *Last verified: 2026-05-15 with Python 3.12.*
+
+---
+
+## 12. CrewAI + Opik (pure OTLP — Comet's open-source UI)
+
+Opik is Comet's open-source LLM observability platform. observent uses its OTLP HTTP endpoint so the same `OTLPSpanExporter` + `CrewAIInstrumentor` stack works across self-host (free, Docker) and Opik Cloud. No `opik` SDK code is generated — Opik maps OTel-GenAI conventions to its native trace schema on ingest, so it's mechanically identical to the SigNoz / LangSmith paths. The example defaults to a local self-hosted Opik (no auth); uncomment the cloud block to target Opik Cloud.
+
+```python
+# crew_opik.py
+import os
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from openinference.instrumentation.crewai import CrewAIInstrumentor
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+from crewai import Agent, Task, Crew, Process
+from langchain_openai import ChatOpenAI
+
+# --- Observability: Opik via OTLP HTTP ---
+# Self-host default: http://localhost:5173/api ; Opik Cloud: https://www.comet.com/opik/api
+_op_base = os.getenv("OPIK_URL_OVERRIDE", "http://localhost:5173/api").rstrip("/")
+_op_headers = {}
+if api_key := os.getenv("OPIK_API_KEY"):  # cloud only; self-host needs no auth
+    _op_headers["Authorization"] = api_key
+if workspace := os.getenv("OPIK_WORKSPACE"):
+    _op_headers["Comet-Workspace"] = workspace
+if project := os.getenv("OPIK_PROJECT_NAME"):
+    _op_headers["projectName"] = project
+
+exporter = OTLPSpanExporter(endpoint=f"{_op_base}/v1/private/otel/v1/traces", headers=_op_headers)
+provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "crewai-opik-demo")}))
+provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+
+CrewAIInstrumentor().instrument(tracer_provider=provider)
+LangChainInstrumentor().instrument(tracer_provider=provider)  # CrewAI's underlying LLM calls
+HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
+
+# --- Agents ---
+llm = ChatOpenAI(model="gpt-4o")
+
+researcher = Agent(
+    role="Senior Research Analyst",
+    goal="Find accurate, source-backed information",
+    backstory="You are a meticulous researcher.",
+    llm=llm, verbose=True,
+)
+writer = Agent(
+    role="Technical Writer",
+    goal="Turn research into clear summaries",
+    backstory="You write for a developer audience.",
+    llm=llm, verbose=True,
+)
+
+research = Task(
+    description="Research the latest developments in {topic}",
+    expected_output="A structured summary with sources",
+    agent=researcher,
+)
+write = Task(
+    description="Write a 3-paragraph summary based on the research",
+    expected_output="A polished 3-paragraph summary",
+    agent=writer,
+)
+
+crew = Crew(
+    agents=[researcher, writer],
+    tasks=[research, write],
+    process=Process.sequential,
+    verbose=True,
+)
+
+if __name__ == "__main__":
+    result = crew.kickoff(inputs={"topic": "multi-agent observability"})
+    print(result)
+    provider.shutdown()  # flush before exit
+```
+
+```bash
+pip install 'crewai>=0.80' 'langchain-openai>=0.2' \
+            'openinference-instrumentation-crewai>=1.1' \
+            'openinference-instrumentation-langchain>=0.1' \
+            'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
+            'opentelemetry-instrumentation-httpx>=0.48'
+export OPENAI_API_KEY=sk-...
+# Self-host (default): start Opik locally, then point at it (no auth needed)
+#   git clone https://github.com/comet-ml/opik.git && cd opik && ./opik.sh
+export OPIK_URL_OVERRIDE=http://localhost:5173/api
+# Opik Cloud instead:
+# export OPIK_URL_OVERRIDE=https://www.comet.com/opik/api
+# export OPIK_API_KEY=... OPIK_WORKSPACE=your-workspace
+# Optional: route to a named project (default: "Default Project")
+# export OPIK_PROJECT_NAME=crewai-demo
+python crew_opik.py
+# Self-host UI: http://localhost:5173 → Projects → Traces
+```
+
+**Sources:** Opik OpenTelemetry integration (`/v1/private/otel/v1/traces`) — https://www.comet.com/docs/opik/tracing/opentelemetry/overview · Opik self-host (Docker, port 5173) — https://www.comet.com/docs/opik/self-host/local_deployment · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai
+
+*Last verified: 2026-06-25 with Python 3.12.*
 
 ---
 

@@ -10,7 +10,7 @@ import pytest
 import validate_setup
 from validate_setup import BACKEND_CONVENTION, resolve_convention
 
-OTEL_GENAI = ["langfuse", "signoz", "elastic-apm", "langsmith"]
+OTEL_GENAI = ["langfuse", "signoz", "elastic-apm", "langsmith", "opik"]
 
 
 def test_phoenix_alone_is_oi():
