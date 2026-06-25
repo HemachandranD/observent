@@ -1,0 +1,33 @@
+description = "Run the observent eval gate — assert token/latency/behavior budgets over a captured agent run (optional 5th lifecycle step)"
+prompt = """
+Run observent's optional Evaluate step: turn the telemetry observent already wires up
+into a deterministic, offline CI quality gate. Canonical reference: skills/observent/references/eval.md.
+
+Arguments: {{args}}
+  - Optional: --baseline   (seed/refresh .observent/eval/baseline.json from this run)
+  - Optional: --ci         (non-interactive: skip judge resolution, fail on any deterministic violation)
+
+Preconditions (set up once, diff-previewed like every generated file):
+  1. Ensure the generated collector `observent_eval.py` exists in the project and is wired
+     into `observent_otel.py` (`install_eval_collector(provider)`). If missing, generate it
+     from eval.md § Generated collector, preview the diff, and write it on confirm.
+  2. Ensure `.observent/eval.json` exists. If missing, generate a starter: run the agent once
+     in eval mode to collect a baseline, then seed conservative budgets above the observed
+     numbers (per eval.md § eval.json schema), reading `convention` from `.observent/spec.md`.
+
+Flow:
+  1. Run the user's agent/tests with OBSERVENT_EVAL=1 so spans land in `.observent/eval/spans.jsonl`.
+     (Ask for the run command if it isn't obvious from the project.)
+  2. Execute the gate:
+     !`python "${CLAUDE_SKILL_DIR}/scripts/eval_gate.py" --spec .observent/eval.json --spans .observent/eval/spans.jsonl --baseline .observent/eval/baseline.json {{args}}`
+  3. Surface the report verbatim. On exit 1, name the violated check(s) and the likely cause
+     (prompt/model/dep change that grew tokens or latency, a dropped tool call, a PII leak).
+  4. For any `needs-agent` judge criterion: unless --ci was passed, read the root-span
+     input.value / output.value pairs from spans.jsonl and score each criterion, reporting the
+     verdict alongside the deterministic results. With --ci, leave them skipped.
+
+Notes:
+  - The gate needs no backend — it reads captured spans offline.
+  - `spans.jsonl` is ephemeral (gitignore it); `baseline.json` is committed. Re-run with
+    --baseline only when an increase is intended, to bless the new numbers.
+"""

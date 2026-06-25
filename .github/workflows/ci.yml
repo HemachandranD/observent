@@ -110,6 +110,7 @@ jobs:
               "skills/observent/scripts/detect_framework.py",
               "skills/observent/scripts/validate_setup.py",
               "skills/observent/scripts/existing_setup.py",
+              "skills/observent/scripts/eval_gate.py",
               "skills/observent/scripts/session_start_detect.py",
               "skills/observent/scripts/prompt_nudge.py",
               "skills/observent/scripts/posttooluse_validate.py",

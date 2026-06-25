@@ -23,8 +23,9 @@ commands/
   observent-implement.toml  # /observent-implement — execute (or resume) tasks.json
   observent-detect.toml     # /observent-detect — run detectors and report
   observent-validate.toml   # /observent-validate <backend|backend,...> [--smoke-test]
+  observent-eval.toml       # /observent-eval [--baseline] [--ci] — optional Phase 5 eval gate
 skills/observent/
-  SKILL.md              # Skill entry point — frontmatter + 4-phase SDD workflow (Spec / Plan / Tasks / Implement)
+  SKILL.md              # Skill entry point — frontmatter + SDD workflow (Spec / Plan / Tasks / Implement) + optional Phase 5 Evaluate
   references/
     spec_schema.md      # Canonical schema for the three .observent/ artifacts (spec.md, plan.md, tasks.json)
     matrix.md           # 8×5 matrix, per-framework + per-backend reference,
@@ -36,6 +37,9 @@ skills/observent/
                         # (observent_capture.py) + optional observent_http.py raw-body adapter
     self_host.md        # local-provisioning reference: pinned Docker compose / clone commands
                         # per self-hostable backend + image-tag pin table
+    eval.md             # optional Phase 5 eval-gate engine: eval.json schema, cross-convention
+                        # alias table, generated observent_eval.py collector, PII regexes,
+                        # CI snippet, LLM-as-judge delegation contract
   scripts/
     observent_matrix.py # SINGLE SOURCE OF TRUTH for the framework×backend grid —
                         # frameworks/backends (slug, display, detect modules,
@@ -44,6 +48,8 @@ skills/observent/
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
     validate_setup.py   # Per-backend env + reachability check; --smoke-test emits a span
     existing_setup.py   # Reports pre-existing observability config in user's project
+    eval_gate.py        # Phase 5 deterministic eval gate (stdlib-only): normalizes spans
+                        # across conventions, asserts budgets/behavior/redaction/regression
 tests/test_workflows/   # Local test bed (NOT shipped in the plugin) — two demo agent
   building_blocks.py    #   apps (CrewAI + LangGraph) exercising every span kind, used to
   mcp_server.py         #   smoke-test that /observent wires up tracing end-to-end.
@@ -100,6 +106,12 @@ python skills/observent/scripts/validate_setup.py phoenix,langfuse,signoz,elasti
 python skills/observent/scripts/validate_setup.py phoenix --smoke-test
 python skills/observent/scripts/validate_setup.py phoenix,langsmith --smoke-test
 
+# Phase 5 eval gate — assert budgets/behavior over a captured run (offline, no backend)
+#   first collect spans:  OBSERVENT_EVAL=1 python your_app.py "question"
+python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl
+python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl --baseline .observent/eval/baseline.json --update-baseline
+python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl --format junit
+
 # Run the test suite (unit tests + docs-consistency checks)
 pytest
 
@@ -144,6 +156,16 @@ Update in this order:
 - **Every other agent** receives the same **self-contained** skill folder via [`npx skills`](https://github.com/vercel-labs/skills) (vercel-labs/skills): `npx skills add HemachandranD/observent` copies `skills/observent/` into the agent's skills directory (`.claude/skills/`, `.agents/skills/`, …). Discovery works two ways — the flat `skills/observent/SKILL.md` layout, **and** the `"skills": ["./skills/observent"]` array in `.claude-plugin/marketplace.json` (CI asserts that array resolves to a real `SKILL.md`).
 
 Keep the skill **self-contained and relative** so it runs wherever it lands: `references/*` are referenced by plain relative path; scripts are invoked via the agent-agnostic `<skill-dir>/scripts/…` placeholder, with the SKILL.md § Step 1.1 portability note telling each agent how to resolve `<skill-dir>` (Claude Code's `${CLAUDE_SKILL_DIR}`, or the skill's own folder for everyone else). Never reintroduce `${OBSERVENT_HOME}`, an `AGENTS.md` workflow mirror, or per-tool pointer files.
+
+### Adding a new eval check (Phase 5)
+
+The eval gate is **grid-agnostic** — it touches none of `observent_matrix.py`, the detectors, or the 8×5 matrix. To add a new assertion:
+
+1. `skills/observent/scripts/eval_gate.py` — add the check to the relevant family function (`check_budgets` / `check_behavior` / `check_redaction` / `check_regression`) or add a new family and call it from `run_checks`. Emit a `Check(name, status, message)`; keep it stdlib-only and `mypy --strict` clean.
+2. `skills/observent/references/eval.md` — document the new `eval.json` key under § eval.json schema. **If it reads a span attribute**, add the canonical field to the cross-convention alias table using only keys that exist in `references/openinference.md` / `otel_genai.md` (the docs-consistency test asserts this).
+3. `skills/observent/references/spec_schema.md § 4` — only if the `eval.json` top-level shape changes (a new family). Individual keys within an existing family don't need a schema edit.
+4. `tests/test_eval_gate.py` — add a pass/fail unit test for the new check (feed both OI and OTel-GenAI spans if it normalizes an attribute, to prove convention parity).
+5. `pytest` — `test_docs_consistency.py` re-checks the alias table against the canonical refs automatically.
 
 ### Adding a new provider
 

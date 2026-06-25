@@ -21,6 +21,8 @@
 
 It detects your framework, generates integration code for the backend(s) you pick, previews every change before write, and validates ingestion (optionally with a smoke span).
 
+An optional **Evaluate** step then turns that telemetry into a deterministic, offline CI quality gate — assert token / latency / behavior budgets (and catch PII leaks or regressions) straight from captured spans, no backend required.
+
 ## Quickstart
 
 ### Claude Code plugin (with `/observent*` slash commands)
@@ -60,6 +62,7 @@ Then ask your agent:
 /observent-implement
 /observent-detect
 /observent-validate <backend|backend,...> [--smoke-test]
+/observent-eval [--baseline] [--ci]
 ```
 
 Examples:
@@ -194,6 +197,7 @@ backends:
   - langsmith
 primary_entrypoint: "/observent [framework] [backend|backend,...]"
 validate_entrypoint: "/observent-validate <backend|backend,...> [--smoke-test]"
+eval_entrypoint: "/observent-eval [--baseline] [--ci]"
 convention_rules:
   - "phoenix only => openinference"
   - "langfuse/signoz/elastic-apm/langsmith without phoenix => otel-genai"
@@ -220,6 +224,7 @@ commands/
   observent-implement.toml
   observent-detect.toml
   observent-validate.toml
+  observent-eval.toml
 skills/observent/
   SKILL.md
   references/
@@ -228,11 +233,13 @@ skills/observent/
     otel_genai.md
     examples.md
     self_host.md
+    eval.md
   scripts/
     observent_matrix.py
     detect_framework.py
     validate_setup.py
     existing_setup.py
+    eval_gate.py
 .github/workflows/ci.yml
 ```
 

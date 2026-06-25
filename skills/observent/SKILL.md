@@ -1,6 +1,6 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility. Also invoke for the optional Evaluate step when the user asks to set up evals, a regression gate, or a CI cost/latency/token gate for their agent.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -127,6 +127,7 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
   - `observent_otel.py` (always — backend init + framework instrumentation).
   - `observent_capture.py` (always — transport-agnostic input/output/status capture at the AI boundary; see `references/capture.md`).
   - `observent_http.py` (only if `spec.choice.http_body_capture: true` — optional raw HTTP body/header capture; enriches the existing server span, adds no span).
+  - `observent_eval.py` (only if the user opts into the Phase 5 eval gate — the no-op-in-prod span collector from `references/eval.md`; wired into `observent_otel.py` via `install_eval_collector(provider)`).
   - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
   - `.env.example` append with required env var names and notify user to fill in with exact values.
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
@@ -261,6 +262,33 @@ Once all tasks are terminal, report back:
 
 ---
 
+## Phase 5 — Evaluate (optional gate)
+
+**Goal:** turn the telemetry observent already produces into a deterministic, **offline, zero-dependency CI quality gate**. This is an **opt-in 5th step** that runs *after* a working setup — the core lifecycle stays Spec→Plan→Tasks→Implement. Auto-invocation trigger: "set up evals / a regression gate / a CI cost (token / latency) gate for my agent." Canonical engine reference: `references/eval.md`.
+
+The gate asserts budgets + behavior from a declarative `.observent/eval.json` against spans captured to a local file — **no backend required**. The deterministic floor is `scripts/eval_gate.py` (stdlib-only, like `validate_setup.py`); subjective answer-quality `judge.criteria` are delegated to you (the host agent), never scored by the script.
+
+### Step 5.1 — Ensure the collector exists
+
+Generate `observent_eval.py` from `references/eval.md § Generated collector` if absent, and wire `install_eval_collector(provider)` into `observent_otel.py`. Diff-preview before write, same gate as every generated file. It's a **no-op unless `OBSERVENT_EVAL=1`**, so it's safe in prod. It piggybacks on the existing provider with a `SimpleSpanProcessor` that writes each finished span (`span.to_json(indent=None)`) to `.observent/eval/spans.jsonl`.
+
+### Step 5.2 — Ensure `.observent/eval.json` exists
+
+If absent, run the agent once in eval mode (`OBSERVENT_EVAL=1`) to collect a first capture, then generate a starter `eval.json` (per `references/eval.md § eval.json schema`) with **conservative budgets seeded above the observed numbers** and `convention` read from `.observent/spec.md`. The user owns and commits this file — it's the team contract. It's a peer artifact to spec/plan/tasks; schema lives in `references/spec_schema.md § 4`.
+
+### Step 5.3 — Collect → gate
+
+1. Run the user's agent/tests with `OBSERVENT_EVAL=1` so spans land in `.observent/eval/spans.jsonl`.
+2. Invoke `<skill-dir>/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl [--baseline .observent/eval/baseline.json] [--format text|json|junit]` (resolve `<skill-dir>` as in Step 1.1). Exit 0 = pass, 1 = any violation — the CI contract.
+3. Surface the report verbatim. On failure, name the violated check and the likely cause (a prompt/model/dep change that grew tokens or latency, a dropped tool call, a PII leak that escaped redaction).
+4. **Resolve `needs-agent` judge criteria** by reading the root-span `input.value` / `output.value` pairs from `spans.jsonl` and scoring each criterion, reported alongside the deterministic results. A CI run (`--fail-on-unjudged` absent) treats them as skipped.
+
+### Step 5.4 — Baseline & gitignore
+
+Seed/refresh `baseline.json` with `--update-baseline` (only when an increase is intended). Commit `baseline.json`; treat `.observent/eval/spans.jsonl` as ephemeral (gitignore it) — see `references/spec_schema.md § 6`.
+
+---
+
 ## Optional MCP enrichment (implementation phase)
 
 Everything above runs with **no MCP at all** — the bundled zero-dependency scripts (`detect_framework.py`, `existing_setup.py`, `validate_setup.py`) are the floor, and the skill must always work with just `Bash`. When the host agent *also* exposes one of the MCP servers below, use it as **progressive enhancement** to make Phase 4 stronger — never as a prerequisite.
@@ -304,7 +332,9 @@ Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block b
 - `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith; used when convention=`otel-genai` or `both`).
 - `references/examples.md` — eight runnable end-to-end examples (one per framework, backends rotated) plus a multi-backend fan-out example.
 - `references/capture.md` — canonical transport-agnostic engine (`observent_capture.py`) that captures AI-boundary input/output + run status by enriching the existing root span, plus the optional `observent_http.py` raw-HTTP-body adapter.
+- `references/eval.md` — canonical eval-gate engine: the `.observent/eval.json` schema, the cross-convention alias table, the generated `observent_eval.py` collector, the PII/secret value-regex set, CI snippets, and the LLM-as-judge delegation contract. Consumed by Phase 5.
 - `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
 - `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
 - `scripts/existing_setup.py` — outputs JSON listing pre-existing observability config.
 - `scripts/validate_setup.py <backend|backend,backend,...|all> [--smoke-test]` — env vars, package presence, endpoint reachability, per-backend convention-aware synthetic span emission.
+- `scripts/eval_gate.py --spec <eval.json> --spans <spans.jsonl> [--baseline <baseline.json>] [--format text|json|junit] [--update-baseline] [--fail-on-unjudged]` — the Phase 5 deterministic eval gate; normalizes spans across conventions and asserts budgets/behavior/redaction/regression, exit 0/1.
