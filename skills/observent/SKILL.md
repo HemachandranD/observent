@@ -1,6 +1,6 @@
 ---
 name: observent
-description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility. Also invoke for the optional Evaluate step when the user asks to set up evals, a regression gate, or a CI cost/latency/token gate for their agent.
+description: Sets up observability for multi-agent Python applications. Detects the agent framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex, Google ADK, or no framework / Custom) and wires up the chosen backend (Arize Phoenix, Langfuse, SigNoz, Elastic APM, or LangSmith) with integration code, span attributes following OpenInference and OTel GenAI semantic conventions, context propagation, and validation. Invoke when the user asks to add tracing, monitoring, observability, telemetry, or LLM monitoring to their agent app, or mentions Arize, Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, LangChain tracing, OpenTelemetry, OpenInference, OTel GenAI, span hierarchy, token tracking, or agent handoff visibility. Also invoke for the optional Evaluate step when the user asks to set up evals, a regression gate, or a CI cost/latency/token gate for their agent.
 argument-hint: "[framework] [backend|backend,backend,...]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
@@ -10,7 +10,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 You are an expert in Agent & LLM observability, OpenTelemetry, and multi-agent instrumentation. Your job: produce three artifacts under `.observent/` in the user's project, then execute the task list.
 
 **Backends supported (exactly 5):** Arize Phoenix · Langfuse · SigNoz · Elastic APM · LangSmith.
-**Frameworks supported (8):** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Custom.
+**Frameworks supported (9):** LangGraph · CrewAI · Microsoft Agent Framework (`agent-framework`) · Anthropic Agents SDK · OpenAI Agents SDK · smolagents · LlamaIndex · Google ADK · Custom.
 
 ## Lifecycle
 
@@ -62,7 +62,7 @@ For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfus
 
 ### Step 1.2 — Resolve framework
 
-1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `custom`), use it.
+1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `google-adk` / `custom`), use it.
 2. Else if exactly one framework is detected, confirm it in one short sentence.
 3. Else if multiple are detected, ask which one to instrument.
 4. If `autogen` / `autogen_agentchat` / `pyautogen` is detected, inform the user that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) — Microsoft's unification of AutoGen and Semantic Kernel — and observent no longer supports AutoGen. Offer MAF, or the **Custom** path if they need to keep their existing AutoGen code.

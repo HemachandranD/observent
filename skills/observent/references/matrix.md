@@ -30,6 +30,7 @@ Re-verify each section against the upstream artifacts listed under it (per-subse
 - OpenAI Agents SDK — https://openai.github.io/openai-agents-python/
 - smolagents — https://huggingface.co/docs/smolagents
 - LlamaIndex — https://docs.llamaindex.ai
+- Google ADK — https://google.github.io/adk-docs/
 
 **OpenInference instrumentors (PyPI):**
 - https://github.com/Arize-ai/openinference/tree/main/python — canonical Python monorepo; each per-instrumentor README has install + usage.
@@ -38,7 +39,7 @@ Last reviewed: 2026-06-20.
 
 ---
 
-## 8 × 5 Compatibility Matrix
+## 9 × 5 Compatibility Matrix
 
 | Framework | Arize Phoenix<br>*OI* | Langfuse<br>*OTel-GenAI* | SigNoz<br>*OTel-GenAI* | Elastic APM<br>*OTel-GenAI* | LangSmith<br>*OTel-GenAI* |
 |---|---|---|---|---|---|
@@ -49,6 +50,7 @@ Last reviewed: 2026-06-20.
 | OpenAI Agents SDK | **Native trace processor** (`phoenix.otel.OpenAIAgentsTracingProcessor`) | **Native trace processor** (Langfuse OpenAIAgents processor) | **Native trace processor** with OTLP backend | Native APM agent + OpenAI Agents SDK trace processor (OTel bridge) | **Native trace processor** with OTLP backend |
 | smolagents | OI: `SmolagentsInstrumentor` | OI: `SmolagentsInstrumentor` (exporter sends to Langfuse OTLP) | OTLP + OI: `SmolagentsInstrumentor` | Native agent + OI: `SmolagentsInstrumentor` | OTLP + OI: `SmolagentsInstrumentor` |
 | LlamaIndex | OI: `LlamaIndexInstrumentor` | `langfuse.llama_index` callback | OTLP + OI: `LlamaIndexInstrumentor` | Native agent + OI: `LlamaIndexInstrumentor` | OTLP + OI: `LlamaIndexInstrumentor` |
+| Google ADK | OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` | Native agent + OI: `GoogleADKInstrumentor` | OTLP + OI: `GoogleADKInstrumentor` |
 | Custom | Manual spans + helper functions | Manual spans + `langfuse` decorator | Manual spans + OTLP exporter | Manual spans + `elasticapm.Client` (OTel bridge) | Manual spans + OTLP exporter |
 
 **Reading the matrix:** the italic label under each backend's header (e.g. *OI*, *OTel-GenAI*) is the **semantic convention** that backend prefers — Phoenix is OpenInference-native; the other four are OTel-GenAI-native. The convention observent emits at generation time is derived mechanically from the backend set you pick (see SKILL.md § Step 3): single Phoenix → OI only; any Phoenix-less subset → OTel-GenAI only; Phoenix + any other → both.
@@ -61,7 +63,7 @@ Last reviewed: 2026-06-20.
 
 ## Verified Versions
 
-Last verified: 2026-06-20 against Python 3.12.
+Last verified: 2026-06-25 against Python 3.12.
 
 | Package | Pinned version |
 |---|---|
@@ -85,6 +87,8 @@ Last verified: 2026-06-20 against Python 3.12.
 | openinference-instrumentation-anthropic | ==1.0.4 |
 | openinference-instrumentation-llama-index | ==4.4.1 |
 | openinference-instrumentation-smolagents | ==0.1.30 |
+| google-adk | ==2.3.0 |
+| openinference-instrumentation-google-adk | ==0.1.15 |
 
 These are the exact versions `examples.md` and the per-framework install commands below target. When bumping any pin, update this table **and** the matching per-backend Install line, the per-framework `pip install` snippet, and the `*Last verified: …*` footer of any example in `examples.md` that was re-run.
 
@@ -397,6 +401,19 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
 - **Langfuse:** `from langfuse.llama_index import LlamaIndexCallbackHandler` then `Settings.callback_manager = CallbackManager([handler])`.
 - **Sources:** LlamaIndex docs — https://docs.llamaindex.ai · `openinference-instrumentation-llama-index` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-llama-index · Langfuse LlamaIndex integration — https://langfuse.com/docs/integrations/llama-index
 
+### Google ADK (`google.adk`)
+
+- **Tracing model:** `openinference-instrumentation-google-adk` wraps the Agent Development Kit's runner and agent execution — captures `Runner.run()` / `Runner.run_async()`, agent invocations, tool calls, and the underlying model (Gemini / LiteLLM) requests as a connected span tree. ADK also emits some native OpenTelemetry spans; the OI instrumentor adds the LLM-specific attributes Phoenix and the OTel-GenAI backends read.
+- **Key entry points:** `google.adk.agents.Agent` / `LlmAgent`, `google.adk.runners.Runner` (`run`, `run_async`), tool functions and `google.adk.tools.*`.
+- **Where to thread `session_id`:** ADK's own `Session` (`session_service.create_session(...)`) carries an id end-to-end; also set OTel baggage (`session.id`) at the top of the turn so it lands on every span.
+- **Phoenix / SigNoz / Langfuse / Elastic APM / LangSmith:** `pip install 'google-adk==2.3.0' 'openinference-instrumentation-google-adk==0.1.15'` then:
+  ```python
+  from openinference.instrumentation.google_adk import GoogleADKInstrumentor
+  GoogleADKInstrumentor().instrument(tracer_provider=provider)
+  ```
+  Only the exporter destination changes across backends; the instrumentor is identical.
+- **Sources:** Google ADK docs — https://google.github.io/adk-docs/ · `openinference-instrumentation-google-adk` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-google-adk
+
 ### Custom (no framework)
 
 - **Tracing model:** Manual OTel spans. The skill writes an `observent_otel.py` helper module into the user's project with typed setters: `set_llm_attrs(span, model, input_messages, output_messages, prompt_tokens, completion_tokens, ...)`, `set_tool_attrs(span, name, parameters, input_value, output_value)`, `set_agent_attrs(span, name, role)`.
@@ -647,6 +664,7 @@ Each processor / agent exports independently. If one backend is unreachable, the
 | `openinference-instrumentation-anthropic` | Anthropic SDK incl. prompt caching tokens |
 | `openinference-instrumentation-llama-index` | LlamaIndex Workflows, QueryEngines, Retrievers |
 | `openinference-instrumentation-smolagents` | smolagents CodeAgent/ToolCallingAgent |
+| `openinference-instrumentation-google-adk` | Google ADK agents, runners, tools |
 | `openinference-instrumentation-bedrock` | AWS Bedrock |
 | `openinference-instrumentation-vertexai` | Google Vertex AI |
 

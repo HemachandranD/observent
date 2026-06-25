@@ -17,7 +17,7 @@
 
 ---
 
-**observent** sets up observability for multi-agent Python applications across **8 frameworks x 5 backends**.
+**observent** sets up observability for multi-agent Python applications across **9 frameworks x 5 backends**.
 
 It detects your framework, generates integration code for the backend(s) you pick, previews every change before write, and validates ingestion (optionally with a smoke span).
 
@@ -123,6 +123,7 @@ There is no runtime override flag; to change conventions, re-run with a differen
 | OpenAI Agents SDK | ✓ | ✓ | ✓ | ✓ | ✓ |
 | smolagents | ✓ | ✓ | ✓ | ✓ | ✓ |
 | LlamaIndex | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Google ADK | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Custom | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 Implementation notes:
@@ -188,6 +189,7 @@ frameworks:
   - openai-agents
   - smolagents
   - llama-index
+  - google-adk
   - custom
 backends:
   - phoenix

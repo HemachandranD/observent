@@ -38,6 +38,7 @@ INSTRUMENTORS: dict[str, str] = {
     "openinference-instrumentation-anthropic": "openinference.instrumentation.anthropic",
     "openinference-instrumentation-llama-index": "openinference.instrumentation.llama_index",
     "openinference-instrumentation-smolagents": "openinference.instrumentation.smolagents",
+    "openinference-instrumentation-google-adk": "openinference.instrumentation.google_adk",
 }
 
 WEB_FRAMEWORKS: dict[str, list[str]] = {
