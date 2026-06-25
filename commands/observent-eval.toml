@@ -22,7 +22,11 @@ Flow:
      !`python "${CLAUDE_SKILL_DIR}/scripts/eval_gate.py" --spec .observent/eval.json --spans .observent/eval/spans.jsonl --baseline .observent/eval/baseline.json {{args}}`
   3. Surface the report verbatim. On exit 1, name the violated check(s) and the likely cause
      (prompt/model/dep change that grew tokens or latency, a dropped tool call, a PII leak).
-  4. For any `needs-agent` judge criterion: unless --ci was passed, read the root-span
+  4. Also write a self-contained HTML report the user can open anytime (the gate's exit code is
+     unchanged, so this is purely additive):
+     !`python "${CLAUDE_SKILL_DIR}/scripts/eval_gate.py" --spec .observent/eval.json --spans .observent/eval/spans.jsonl --baseline .observent/eval/baseline.json --format html > .observent/eval/report.html`
+     Tell the user it's at `.observent/eval/report.html` (open in any browser; no external assets).
+  5. For any `needs-agent` judge criterion: unless --ci was passed, read the root-span
      input.value / output.value pairs from spans.jsonl and score each criterion, reporting the
      verdict alongside the deterministic results. With --ci, leave them skipped.
 

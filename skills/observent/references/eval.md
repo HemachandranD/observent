@@ -229,10 +229,25 @@ python <skill-dir>/scripts/eval_gate.py \
 python <skill-dir>/scripts/eval_gate.py \
   --spec .observent/eval.json --spans .observent/eval/spans.jsonl \
   --baseline .observent/eval/baseline.json
+
+# 4. (optional) Save a shareable HTML report to open anytime
+python <skill-dir>/scripts/eval_gate.py \
+  --spec .observent/eval.json --spans .observent/eval/spans.jsonl \
+  --baseline .observent/eval/baseline.json \
+  --format html > .observent/eval/report.html
 ```
 
-Flags: `--format text|json|junit` (default `text`), `--update-baseline`,
+Flags: `--format text|json|junit|html` (default `text`), `--update-baseline`,
 `--fail-on-unjudged` (treat unresolved judge criteria as failures rather than skips).
+
+### HTML report
+
+`--format html` emits a **self-contained** report (no external assets — inline CSS, no CDN
+links) to stdout; redirect it to a `.html` file to open in any browser, attach to a PR, or
+archive. It renders the PASS/FAIL banner, the metric cards (tokens / latency / calls / cost),
+and every check with a colored status badge. The output is intentionally **ASCII-only** so the
+stdout redirect stays byte-safe under any platform locale (e.g. cp1252 on Windows). Exit code
+is unchanged (0/1), so a CI job can both gate *and* publish the report from one run.
 
 ---
 

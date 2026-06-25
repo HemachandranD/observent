@@ -7,6 +7,8 @@ Usage:
       --baseline .observent/eval/baseline.json --format junit
   python eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl \
       --update-baseline
+  python eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl \
+      --format html > .observent/eval/report.html   # shareable, open-anytime report
 
 Reads spans written by the generated ``observent_eval.py`` collector — one OTel
 ``ReadableSpan.to_json()`` object per line — normalizes each across the
@@ -487,6 +489,80 @@ def render_junit(checks: list[Check], ok: bool) -> str:
     return "\n".join(rows)
 
 
+_HTML_CSS = """
+:root{--bg:#0f1117;--panel:#171a23;--line:#2a2f3c;--txt:#e6e8ee;--muted:#9aa3b2;
+--green:#3fb950;--red:#f85149;--amber:#d29922;--blue:#6ea8fe;
+--mono:'SFMono-Regular',Consolas,Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);
+font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:32px 20px 80px}
+.banner{border-radius:12px;padding:18px 22px;margin-bottom:24px;font-weight:700;
+font-size:20px;display:flex;align-items:center;gap:12px}
+.banner.pass{background:rgba(63,185,80,.12);border:1px solid var(--green);color:var(--green)}
+.banner.fail{background:rgba(248,81,73,.12);border:1px solid var(--red);color:var(--red)}
+.sub{color:var(--muted);font-size:13px;margin-top:4px;font-weight:400}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+margin:28px 0 12px;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card .v{font-size:22px;font-weight:700;font-family:var(--mono)}
+.card .k{font-size:12px;color:var(--muted);margin-top:4px}
+table{width:100%;border-collapse:collapse;background:var(--panel);
+border:1px solid var(--line);border-radius:10px;overflow:hidden}
+td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.name{font-family:var(--mono);font-size:13px;white-space:nowrap}
+td.msg{color:var(--muted)}
+.badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;
+border-radius:5px;text-transform:uppercase}
+.badge.pass{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.fail{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.skip{background:rgba(154,163,178,.15);color:var(--muted)}
+.badge.needs-agent{background:rgba(110,168,254,.15);color:var(--blue)}
+footer{margin-top:46px;color:var(--muted);font-size:12px;text-align:center}
+"""
+
+
+def render_html(checks: list[Check], metrics: Metrics, ok: bool) -> str:
+    import html as _html
+    from datetime import datetime as _dt
+
+    m = metrics.as_dict()
+    cards = "".join(
+        f'<div class="card"><div class="v">{_html.escape(str(v))}</div>'
+        f'<div class="k">{_html.escape(k)}</div></div>'
+        for k, v in m.items()
+    )
+    rows = ""
+    for c in checks:
+        rows += (
+            f'<tr><td class="name">{_html.escape(c.name)}</td>'
+            f'<td><span class="badge {c.status}">{_html.escape(c.status)}</span></td>'
+            f'<td class="msg">{_html.escape(c.message)}</td></tr>'
+        )
+    counts = {s: sum(1 for c in checks if c.status == s) for s in (PASS, FAIL, SKIP, NEEDS_AGENT)}
+    verdict = "PASS" if ok else "FAIL"
+    now = _dt.now().strftime("%Y-%m-%d %H:%M")
+    # ASCII-only output: stdout redirect to a file uses the platform locale
+    # (cp1252 on Windows), so non-ASCII separators would corrupt the utf-8 file.
+    summary = (
+        f"{counts[PASS]} passed | {counts[FAIL]} failed | "
+        f"{counts[SKIP]} skipped | {counts[NEEDS_AGENT]} needs-agent"
+    )
+    return (
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<title>observent eval gate report</title>"
+        f"<style>{_HTML_CSS}</style></head><body><div class=\"wrap\">"
+        f'<div class="banner {verdict.lower()}">eval gate: {verdict}'
+        f'<span class="sub">{_html.escape(summary)} | generated {now}</span></div>'
+        f'<h2>Metrics</h2><div class="cards">{cards}</div>'
+        f'<h2>Checks</h2><table>{rows}</table>'
+        '<footer>observent eval gate -- self-contained report, no external assets</footer>'
+        "</div></body></html>"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Driver
 # --------------------------------------------------------------------------- #
@@ -530,7 +606,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--spec", required=True, type=Path, help="path to .observent/eval.json")
     parser.add_argument("--spans", required=True, type=Path, help="path to captured spans.jsonl")
     parser.add_argument("--baseline", type=Path, help="path to baseline.json for regression checks")
-    parser.add_argument("--format", choices=("text", "json", "junit"), default="text")
+    parser.add_argument(
+        "--format",
+        choices=("text", "json", "junit", "html"),
+        default="text",
+        help="output format; 'html' emits a self-contained report (redirect to a .html file)",
+    )
     parser.add_argument(
         "--update-baseline",
         action="store_true",
@@ -569,6 +650,8 @@ def main(argv: list[str] | None = None) -> int:
         print(render_json(checks, metrics, ok))
     elif args.format == "junit":
         print(render_junit(checks, ok))
+    elif args.format == "html":
+        print(render_html(checks, metrics, ok))
     else:
         print(render_text(checks, metrics, ok))
 

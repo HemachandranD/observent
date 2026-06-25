@@ -111,6 +111,8 @@ python skills/observent/scripts/validate_setup.py phoenix,langsmith --smoke-test
 python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl
 python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl --baseline .observent/eval/baseline.json --update-baseline
 python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl --format junit
+#   shareable, self-contained HTML report (ASCII-safe; open in any browser):
+python skills/observent/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl --format html > .observent/eval/report.html
 
 # Run the test suite (unit tests + docs-consistency checks)
 pytest

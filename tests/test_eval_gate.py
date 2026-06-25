@@ -285,6 +285,34 @@ def test_update_baseline_writes_file(tmp_path: Path) -> None:
     assert written["metrics"]["total_tokens"] == 2500
 
 
+def test_html_report_is_self_contained() -> None:
+    checks = [
+        eval_gate.Check("budget.total_tokens", eval_gate.PASS, "209 <= 4000 tokens"),
+        eval_gate.Check("regression.total_tokens", eval_gate.FAIL, "+43% vs baseline"),
+        eval_gate.Check("judge.relevant", eval_gate.NEEDS_AGENT, "Relevant?"),
+    ]
+    metrics = eval_gate.Metrics(total_tokens=300, llm_calls=2)
+    html = eval_gate.render_html(checks, metrics, ok=False)
+    assert html.startswith("<!doctype html>")
+    assert "eval gate: FAIL" in html
+    html.encode("ascii")  # must be ASCII-safe: stdout redirect uses the platform locale
+    assert "http://" not in html and "https://" not in html  # no external assets
+    assert "budget.total_tokens" in html and "regression.total_tokens" in html
+    assert 'class="badge fail"' in html and 'class="badge needs-agent"' in html
+    assert "300" in html  # metrics card rendered
+
+
+def test_main_html_format(tmp_path: Path, capsys: Any) -> None:
+    spans = _write_spans(tmp_path / "spans.jsonl", [_agent_root(), _llm_oi(2000, 500)])
+    spec = tmp_path / "eval.json"
+    spec.write_text(json.dumps({"budgets": {"max_total_tokens": 8000}}), encoding="utf-8")
+    rc = eval_gate.main(["--spec", str(spec), "--spans", str(spans), "--format", "html"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out.startswith("<!doctype html>")
+    assert "eval gate: PASS" in out
+
+
 def test_junit_output_is_well_formed() -> None:
     checks = [
         eval_gate.Check("budget.total_tokens", eval_gate.PASS, "ok"),

@@ -279,8 +279,8 @@ If absent, run the agent once in eval mode (`OBSERVENT_EVAL=1`) to collect a fir
 ### Step 5.3 — Collect → gate
 
 1. Run the user's agent/tests with `OBSERVENT_EVAL=1` so spans land in `.observent/eval/spans.jsonl`.
-2. Invoke `<skill-dir>/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl [--baseline .observent/eval/baseline.json] [--format text|json|junit]` (resolve `<skill-dir>` as in Step 1.1). Exit 0 = pass, 1 = any violation — the CI contract.
-3. Surface the report verbatim. On failure, name the violated check and the likely cause (a prompt/model/dep change that grew tokens or latency, a dropped tool call, a PII leak that escaped redaction).
+2. Invoke `<skill-dir>/scripts/eval_gate.py --spec .observent/eval.json --spans .observent/eval/spans.jsonl [--baseline .observent/eval/baseline.json] [--format text|json|junit|html]` (resolve `<skill-dir>` as in Step 1.1). Exit 0 = pass, 1 = any violation — the CI contract.
+3. Surface the report verbatim. On failure, name the violated check and the likely cause (a prompt/model/dep change that grew tokens or latency, a dropped tool call, a PII leak that escaped redaction). Optionally also write a shareable, self-contained HTML report the user can open anytime: re-run with `--format html > .observent/eval/report.html` (ASCII-safe, no external assets; exit code unchanged).
 4. **Resolve `needs-agent` judge criteria** by reading the root-span `input.value` / `output.value` pairs from `spans.jsonl` and scoring each criterion, reported alongside the deterministic results. A CI run (`--fail-on-unjudged` absent) treats them as skipped.
 
 ### Step 5.4 — Baseline & gitignore
