@@ -130,6 +130,9 @@ _PROMOTE_TO_BAGGAGE: frozenset[str] = frozenset({
     "user_id",
     "session_id",
     "request_id",
+    "conversation_id",
+    "run_id",
+    "mcp_session_id",
 })
 
 # OTel attribute values must be one of these primitives, or a list of them.
@@ -349,6 +352,8 @@ provider.add_span_processor(BaggageSpanProcessor(ALLOW_ALL_BAGGAGE_KEYS))
 ```
 
 Install: `pip install opentelemetry-processor-baggage`. Place it on the same `TracerProvider` that carries the OTLP exporters; Elastic APM picks up the same spans via its OTel bridge. Matching is exact, case-sensitive on the leaf segment; redacted values are never promoted. Keep the whitelist small for per-span cardinality / ingest cost — full-payload duplication onto every child span is intentionally avoided (N spans × full payload, brittle under sampling).
+
+The whitelist also carries the **correlation keys** used to group runs that originate in an opaque vendor runtime (`conversation_id`, `run_id`, `mcp_session_id` alongside `session_id`). When your tools serve a vendor runtime (Claude Code, Cursor) over MCP, read the MCP session id in the server handler and put it in the input (or set it directly via `baggage.set_baggage("mcp_session_id", ...)`); the processor then stamps it onto every child span so the run's calls group by one key. This is the in-process counterpart to the proxy-side capture in `references/gateway.md` — same key, different seam.
 
 ---
 

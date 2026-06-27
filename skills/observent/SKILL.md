@@ -175,6 +175,7 @@ observent emits W3C-compliant context. Every template relies on the OTel SDK's d
 - Threads: `attach()`/`detach()` pattern (see `references/matrix.md § Context Propagation`).
 - HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests`.
 - Subprocess fan-out: `opentelemetry.propagate.inject(env)` before `subprocess.run(env=env)`; child re-extracts with `extract(os.environ)`. On Windows, env var names are case-insensitive — read the exact case `inject` wrote (`traceparent`) or normalize.
+- **Opaque vendor runtimes** (Claude Code, Cursor's composer) can't accept propagated context — their loop runs in a process you can't instrument. When such a runtime is in the pipeline and routes its calls through an LLM gateway (litellm proxy, …), *offer* the gateway-boundary recipe in `references/gateway.md`: instrument the proxy and stamp an injected correlation id (`session.id` / `gen_ai.conversation.id`) so the run's calls **group** in the backend. This is opt-in and diff-previewed like any write; generate it only when applicable — it is grouping, not a single trace, and never mandatory for a normal run.
 
 ### Step 2.5 — Endpoints
 
@@ -338,6 +339,7 @@ Only the **frontmatter** is fingerprinted; edits to prose body or fenced-block b
 - `references/otel_genai.md` — canonical OTel-GenAI semantic conventions reference (Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger; used when convention=`otel-genai` or `both`).
 - `references/examples.md` — runnable end-to-end examples (backends rotated across frameworks, plus one per non-Phoenix backend) and a multi-backend fan-out example.
 - `references/capture.md` — canonical transport-agnostic engine (`observent_capture.py`) that captures AI-boundary input/output + run status by enriching the existing root span, plus the optional `observent_http.py` raw-HTTP-body adapter.
+- `references/gateway.md` — canonical gateway-boundary capture pattern for **opaque vendor runtimes** you can't instrument (Claude Code, Cursor): a litellm-proxy `CustomLogger` (`observent_litellm.py`) that stamps an injected correlation id so a run's LLM calls group by `session.id` / `gen_ai.conversation.id`. Grouping, not one trace. Consumed by Phase 2 § Step 2.4 when applicable.
 - `references/eval.md` — canonical eval-gate engine: the `.observent/eval.json` schema, the cross-convention alias table, the generated `observent_eval.py` collector, the PII/secret value-regex set, CI snippets, and the LLM-as-judge delegation contract. Consumed by Phase 5.
 - `references/self_host.md` — canonical local-provisioning reference: pinned Docker compose templates / clone commands per self-hostable backend (Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger), the LangSmith "not provisioned" note, and the image-tag pin table. Consumed by Phase 1 § 1.5 and Phase 2 § 2.1.
 - `scripts/detect_framework.py` — outputs JSON listing detected frameworks, backends, instrumentors, and web frameworks.
