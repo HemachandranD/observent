@@ -667,6 +667,12 @@ from opentelemetry.processor.baggage import BaggageSpanProcessor, ALLOW_ALL_BAGG
 provider.add_span_processor(BaggageSpanProcessor(ALLOW_ALL_BAGGAGE_KEYS))
 ```
 
+### Opaque-loop / vendor-runtime correlation
+
+Context propagation needs code running *inside* the agent. That is impossible for a **vendor runtime you don't control** — Claude Code, Cursor's composer — whose loop runs in a process you can't instrument and never emits `traceparent`. You cannot stitch those calls into one trace.
+
+What you **can** do is group them. The only seam you share with such a runtime is the **LLM gateway** every call flows through (a litellm proxy, Portkey, OpenRouter, …). Instrument that boundary and stamp a stable correlation id — injected at invocation (Claude Code's `ANTHROPIC_CUSTOM_HEADERS`, recovered from the proxy's request headers) — onto each call as `session.id` (OI) / `gen_ai.conversation.id` (OTel-GenAI). The backend's session/conversation view then collapses a run's calls into one group. This is **grouping, not a single `trace_id`**, and it sees only egress LLM calls (not the runtime's internal tool/sub-agent spans) — but it recovers the run-level linkage that per-call gateway logs lose. Canonical engine + the litellm reference adapter: **`references/gateway.md`**. When the runtime instead reaches *your* tools over MCP, the in-process counterpart is the `mcp_session_id` baggage key in `references/capture.md § Baggage promotion`.
+
 ---
 
 ## Multi-Backend Fan-Out

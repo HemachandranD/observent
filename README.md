@@ -158,6 +158,10 @@ OpenAI-compatible endpoints work directly with the standard `openai` client:
 
 If you use a non-OpenAI-compatible native SDK, use the Custom path to emit spans manually.
 
+### Opaque vendor runtimes (Claude Code, Cursor)
+
+When an "agent" is a vendor runtime you can't instrument and it routes its calls through an **LLM gateway** (a litellm proxy, …), observent can capture at that boundary: a proxy callback stamps a stable correlation id (injected via `ANTHROPIC_CUSTOM_HEADERS`) so a run's LLM calls **group** by `session.id` / `gen_ai.conversation.id` in your backend. This is run-level grouping, not a single trace through the vendor loop. See [`gateway.md`](skills/observent/references/gateway.md).
+
 ---
 
 ## Local self-host provisioning

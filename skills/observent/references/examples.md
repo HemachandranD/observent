@@ -1179,6 +1179,97 @@ python smolagents_jaeger.py
 
 ---
 
+## 14. Claude Code (vendor runtime) -> litellm proxy + Langfuse (grouped by session id)
+
+You can't instrument Claude Code's loop, but every model call it makes can be routed through a litellm proxy you *do* control. A `CustomLogger` on the proxy reads a per-run id off the request header Claude Code injects and stamps it as `session.id` / `gen_ai.conversation.id`, so the run's calls group in Langfuse. This is **grouping, not one trace** — see `references/gateway.md` for the full engine and the honest ceiling.
+
+```python
+# observent_litellm.py — compact form of the gateway.md reference adapter.
+# Register in the proxy:  litellm_settings: { callbacks: ["observent_litellm.handler"] }
+import os
+from datetime import datetime
+from litellm.integrations.custom_logger import CustomLogger
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.trace import SpanKind, Status, StatusCode
+
+# Proxy is its own process -> it needs its own exporter to Langfuse.
+provider = TracerProvider(resource=Resource.create({"service.name": "litellm-gateway"}))
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))  # reads OTEL_EXPORTER_OTLP_* env
+trace.set_tracer_provider(provider)
+_tracer = trace.get_tracer("observent.gateway")
+_HEADER = os.getenv("OBSERVENT_CORRELATION_HEADER", "x-observent-session-id").lower()
+
+
+def _emit(kwargs, response_obj, start_time, end_time, ok):
+    req = (kwargs.get("litellm_params") or {}).get("proxy_server_request") or {}
+    headers = {str(k).lower(): str(v) for k, v in dict(req.get("headers") or {}).items()}
+    cid = headers.get(_HEADER)
+    span = _tracer.start_span("chat", kind=SpanKind.CLIENT,
+                              start_time=int(start_time.timestamp() * 1e9) if isinstance(start_time, datetime) else None)
+    try:
+        if cid:                                   # otel-genai convention (Langfuse)
+            span.set_attribute("gen_ai.conversation.id", cid)
+            span.set_attribute("session.id", cid)
+        if kwargs.get("model"):
+            span.set_attribute("gen_ai.request.model", kwargs["model"])
+        usage = getattr(response_obj, "usage", None)
+        if usage is not None:
+            span.set_attribute("gen_ai.usage.input_tokens", getattr(usage, "prompt_tokens", 0))
+            span.set_attribute("gen_ai.usage.output_tokens", getattr(usage, "completion_tokens", 0))
+        span.set_status(Status(StatusCode.OK if ok else StatusCode.ERROR))
+    finally:
+        span.end(end_time=int(end_time.timestamp() * 1e9) if isinstance(end_time, datetime) else None)
+
+
+class _Logger(CustomLogger):
+    async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+        _emit(kwargs, response_obj, start_time, end_time, True)
+    async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
+        _emit(kwargs, response_obj, start_time, end_time, False)
+
+
+handler = _Logger()
+```
+
+```bash
+# 1. Install (proxy side):
+pip install 'litellm[proxy]>=1.86' 'opentelemetry-sdk>=1.41' \
+            'opentelemetry-exporter-otlp-proto-http>=1.41'
+
+# 2. Proxy config + point spans at Langfuse:
+cat > litellm_config.yaml <<'YAML'
+model_list:
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+litellm_settings:
+  callbacks: ["observent_litellm.handler"]
+YAML
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:3000/api/public/otel/v1/traces
+export OTEL_EXPORTER_OTLP_TRACES_HEADERS="Authorization=Basic $(printf '%s:%s' "$LANGFUSE_PUBLIC_KEY" "$LANGFUSE_SECRET_KEY" | base64)"
+export ANTHROPIC_API_KEY=sk-ant-...
+litellm --config litellm_config.yaml --port 4000
+
+# 3. Point Claude Code at the proxy and inject a per-run id (vendor-runtime side):
+export ANTHROPIC_BASE_URL=http://localhost:4000
+export ANTHROPIC_CUSTOM_HEADERS="x-observent-session-id: $(uuidgen)"
+claude -p "summarize the README"
+
+# Langfuse -> Sessions: every model call from that Claude Code run groups under the one id.
+```
+
+For Phoenix (OI) instead of Langfuse, set the convention to `oi` and emit `session.id` only (Phoenix groups sessions natively); see `references/gateway.md`.
+
+**Sources:** litellm custom callbacks — https://docs.litellm.ai/docs/observability/custom_callback · litellm proxy logging / request headers — https://docs.litellm.ai/docs/proxy/logging · Claude Code env vars (`ANTHROPIC_BASE_URL`, `ANTHROPIC_CUSTOM_HEADERS`) — https://code.claude.com/docs/en/env-vars · Langfuse OTLP endpoint — https://langfuse.com/docs/opentelemetry/get-started
+
+*Last verified: 2026-06-27 with Python 3.12 (engine reviewed; not yet re-run end-to-end — see `gateway.md`).*
+
+---
+
 ## Verification Checklist
 
 ```

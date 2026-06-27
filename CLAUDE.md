@@ -35,6 +35,9 @@ skills/observent/
     examples.md         # 8 runnable examples covering all frameworks + multi-backend fan-out
     capture.md          # transport-agnostic AI-boundary input/output/status capture engine
                         # (observent_capture.py) + optional observent_http.py raw-body adapter
+    gateway.md          # gateway-boundary capture for opaque vendor runtimes (Claude Code,
+                        # Cursor): litellm-proxy CustomLogger (observent_litellm.py) stamps an
+                        # injected correlation id -> calls group by session.id / gen_ai.conversation.id
     self_host.md        # local-provisioning reference: pinned Docker compose / clone commands
                         # per self-hostable backend + image-tag pin table
     eval.md             # optional Phase 5 eval-gate engine: eval.json schema, cross-convention
