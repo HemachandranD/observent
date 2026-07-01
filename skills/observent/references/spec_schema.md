@@ -122,7 +122,7 @@ elastic_apm_native_agent: false                # true iff `elastic-apm` ∈ spec
 openai_agents_native_processors: false         # true iff spec.choice.framework == openai-agents
 provision:                                     # one entry per backend with spec.choice.self_host_provision.<backend> == true; empty list otherwise
   - backend: phoenix
-    method: vendored-compose                   # vendored-compose | upstream-clone | vendor-cli-generated (see references/self_host.md § Provisioning method)
+    method: vendored-compose                   # vendored-compose | upstream-clone | vendor-cli-generated (see references/self_host.md § Provisioning method per backend)
     compose_file: docker-compose.observent-phoenix.yml   # vendored-compose: names a files[] entry (plan:compose_<backend> anchor). upstream-clone: null. vendor-cli-generated: the CLI-generated path (e.g. pours/deployment/compose.yaml) — NOT a plan anchor.
     up_command: "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"
     down_command: "docker compose -f docker-compose.observent-phoenix.yml down"
@@ -256,21 +256,34 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
+      "_comment": "t06–t09 are the vendor-cli-generated provision the t01b confirm gates (SigNoz/Foundry): install CLI → write CLI config → generate compose → up. For a vendored-compose backend (Phoenix/Elastic APM/Jaeger) this collapses to a single write_file (docker-compose.observent-<backend>.yml, content_ref plan#compose_<backend>) + one `docker compose … up -d --wait` run_command; for upstream-clone (Langfuse/Opik), a single `git clone … && docker compose … up` run_command.",
       "id": "t06",
-      "kind": "write_file",
-      "payload": {"path": "docker-compose.observent-phoenix.yml", "content_ref": "plan#compose_phoenix"},
+      "kind": "run_command",
+      "payload": {"cmd": "curl -fsSL https://signoz.io/foundry.sh | bash"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
       "id": "t07",
-      "kind": "run_command",
-      "payload": {"cmd": "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"},
+      "kind": "write_file",
+      "payload": {"path": "casting.yaml", "content_ref": "plan#clicfg_signoz"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
       "id": "t08",
+      "kind": "run_command",
+      "payload": {"cmd": "foundryctl forge -f casting.yaml"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t09",
+      "kind": "run_command",
+      "payload": {"cmd": "docker compose -f pours/deployment/compose.yaml up -d --wait"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t10",
       "kind": "validate",
-      "payload": {"cmd": "python <skill-dir>/scripts/validate_setup.py phoenix,langsmith"},
+      "payload": {"cmd": "python <skill-dir>/scripts/validate_setup.py phoenix,signoz --smoke-test"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     }
   ]

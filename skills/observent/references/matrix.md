@@ -212,7 +212,7 @@ exporter = OTLPSpanExporter(
 - **Endpoints:**
   - Self-host OTLP HTTP: `http://localhost:4318/v1/traces`
   - Self-host OTLP gRPC: `localhost:4317`
-  - Self-host UI: `http://localhost:3301`
+  - Self-host UI: `http://localhost:8080` (Foundry-generated stack; older `docker-compose` releases used `3301`)
   - Cloud OTLP: `https://ingest.{us,eu,in}.signoz.cloud:443/v1/traces`
   - Cloud UI: `https://<tenant>.{us,eu,in}.signoz.cloud`
 - **Auth:** None for self-host. Cloud requires header `signoz-access-token: <token>`. (Verify against current SigNoz docs — header name has changed historically.)
@@ -832,7 +832,7 @@ All are installable from PyPI. They emit OpenInference attributes natively — P
 1. Verify env vars actually loaded — print them at startup.
 2. Force flush before exit: `provider.shutdown()` (OTel) or `langfuse.flush()` (Langfuse client). Add as `atexit` handler.
 3. For Phoenix local — confirm UI is at `http://localhost:6006` and `px.launch_app()` was called.
-4. For SigNoz self-host — confirm `docker compose ps` shows `signoz-otel-collector` healthy on port 4318.
+4. For SigNoz self-host — confirm `docker compose ps` on the Foundry-generated compose shows the stack up and the OTLP receiver reachable on port 4318. Note the opamp settle: the collector reports `Healthy` (`:13133`) up to ~2 min before it actually serves OTLP (see `references/self_host.md § SigNoz`).
 5. Corporate proxy? OTLP HTTP works through proxies; gRPC often does not.
 
 ### "Traces appear but token counts are missing"

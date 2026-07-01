@@ -9,6 +9,9 @@ These are the cross-file facts that drift silently:
      not be pinned to two different versions across matrix.md.
   3. The convention-resolution rule documented in matrix.md must match what
      validate_setup.resolve_convention() actually computes.
+  4. The KNOWN_AUTO_INSTRUMENTING_DEPS single source (observent_matrix.py) must
+     be documented in matrix.md's "Known auto-instrumenting dependencies" table —
+     the detector's list and the user-facing appendix must not drift.
 
 Failing here means a PR introduced drift; fix the doc (or the code) so they
 agree, per CLAUDE.md § Documentation Hygiene.
@@ -126,6 +129,26 @@ def test_eval_phase5_cross_references_resolve() -> None:
     assert "Phase 5 — Evaluate" in skill, "SKILL.md missing Phase 5 section"
     assert "references/eval.md" in skill, "SKILL.md Phase 5 must cross-link references/eval.md"
     assert "eval_gate.py" in _read(EVAL_COMMAND), "observent-eval.toml must invoke eval_gate.py"
+
+
+def test_known_auto_instrumenting_deps_documented_in_matrix() -> None:
+    # Each dep in the single-source KNOWN_AUTO_INSTRUMENTING_DEPS (observent_matrix.py,
+    # surfaced by detect_framework.py) must be documented in matrix.md's "Known
+    # auto-instrumenting dependencies" appendix — both its slug and its gate env var
+    # — so the detector's list and the user-facing table can't silently diverge.
+    text = _read(MATRIX)
+    section = re.search(
+        r"## Known auto-instrumenting dependencies(.+?)(?:\n## |\Z)", text, re.DOTALL
+    )
+    assert section, "'Known auto-instrumenting dependencies' section not found in matrix.md"
+    body = section.group(1)
+    deps = observent_matrix.auto_instrumenting_deps()
+    assert deps, "KNOWN_AUTO_INSTRUMENTING_DEPS is empty"
+    for dep in deps:
+        assert dep["slug"] in body, f"auto-instrumenting dep `{dep['slug']}` missing from matrix.md table"
+        assert dep["env_var"] in body, (
+            f"gate env var `{dep['env_var']}` for `{dep['slug']}` missing from matrix.md table"
+        )
 
 
 def test_matrix_header_convention_labels_match_code() -> None:
