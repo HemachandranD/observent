@@ -128,6 +128,21 @@ tracer_provider = register(
 )
 ```
 
+> **`PHOENIX_PROJECT_NAME` in a multi-backend fan-out.** `register(project_name=...)` is
+> the **only** thing that reads `PHOENIX_PROJECT_NAME` — the manual `TracerProvider`
+> fan-out (§ Multi-Backend Fan-Out, the recommended path when Phoenix is combined with
+> another backend) never calls `register()`, so setting `PHOENIX_PROJECT_NAME` there has
+> **zero effect** and every trace silently lands in Phoenix's `default` project. For raw
+> OTLP, Phoenix routes on the **`openinference.project.name` resource attribute**, so fold
+> the env var into the resource instead:
+>
+> ```python
+> resource_attrs = {"service.name": service_name}
+> if phoenix_project := os.getenv("PHOENIX_PROJECT_NAME"):
+>     resource_attrs["openinference.project.name"] = phoenix_project
+> provider = TracerProvider(resource=Resource.create(resource_attrs))
+> ```
+
 For local development with no Phoenix server running, start one inline:
 
 ```python
@@ -205,13 +220,16 @@ exporter = OTLPSpanExporter(
 - **Install:** `pip install 'opentelemetry-sdk==1.41.1' 'opentelemetry-exporter-otlp-proto-http==1.41.1'` + relevant `openinference-instrumentation-*` packages.
 - **Sources:** SigNoz docs — https://signoz.io/docs · OTel Python instrumentation guide — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Cloud ingestion-key header — https://signoz.io/docs/ingestion/signoz-cloud/keys/
 
-**Self-host quickstart:**
+**Self-host quickstart:** SigNoz deprecated its `docker-compose` manifests (2026); self-host now
+flows through the **Foundry** CLI, which *generates* a plain compose file you run yourself:
 ```bash
-git clone -b main https://github.com/SigNoz/signoz.git && cd signoz/deploy
-docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d
-# UI at http://localhost:3301
-# OTLP receiver at http://localhost:4318
+curl -fsSL https://signoz.io/foundry.sh | bash        # installs foundryctl (checksum-verified)
+foundryctl forge -f casting.yaml                       # generates pours/deployment/compose.yaml
+docker compose -f pours/deployment/compose.yaml up -d --wait
+# UI at http://localhost:8080 · OTLP receiver at http://localhost:4318
 ```
+Full flow (incl. `casting.yaml`, the opamp OTLP-readiness caveat, and the CLI-install confirm gate):
+`references/self_host.md § SigNoz`.
 
 **Canonical setup snippet:**
 ```python
@@ -429,6 +447,9 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Where to thread `session_id`:** Pass via `inputs` dict and set OTel baggage at the top.
 - **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-crewai==1.1.6' 'openinference-instrumentation-langchain==0.1.65'` — captures Crew → Agent → Task → LLM hierarchy.
 - **Langfuse:** Use `langfuse.langchain.CallbackHandler` — CrewAI's LLM wrapper inherits LangChain callbacks.
+- **⚠️ Known readability limitation — CrewAI's native span names are not human-meaningful.** CrewAI's own instrumentor names spans `Crew_<uuid>.kickoff` (embeds the Crew's per-run UUID — different every run for what is logically "the same" operation) and generic constants like `Task Execution`, `Flow Execution`, `Environment Context`, `Crew Created` (identical across every agent/run, giving no hint which query/service they belong to without opening `input.value`). These are **upstream CrewAI names** — the skill neither generates nor can rename them. Only observent's own root span (the `open_or_enrich_span` fallback, `capture.md § Public entry point`) is nameable, so set `_SERVICE_NAME` per service (`text2sql.run`, …) to give at least the top of each trace a stable, legible name; the CrewAI subtree stays generic.
+- **⚠️ Non-primitive attribute warning (`crew_context`).** CrewAI may attach a `CrewContext` object to a span attribute, triggering `Invalid type CrewContext for attribute 'crew_context' value. Expected one of ['bool','str','bytes','int','float']…` from the OTel SDK. It's a benign upstream warning (the attribute is dropped, the span is otherwise fine) — observent's own capture coerces non-primitives to `str` via `_coerce` before `set_attribute`, so nothing observent generates emits it; the warning originates in CrewAI's instrumentor. Ignore it, or filter the OTel `logging` warning.
+- **⚠️ Flow span ordering can look inconsistent (needs-investigation).** With CrewAI **Flows**, the `Flow Execution` / step span tree sometimes appears out of sequence in the waterfall from run to run (a reported-but-not-yet-root-caused symptom). If you hit it, it is almost always a **context-propagation** issue rather than a capture bug — check the § "Trace tree is broken / orphan spans" list (async `create_task` context, `start_as_current_span` vs `start_span`, thread `attach`/`detach`), since Flow steps may run on tasks/threads that don't inherit the parent context. Reproduce against a Flow example before changing generated code; observent's own capture doesn't reorder spans.
 - **Sources:** CrewAI docs — https://docs.crewai.com · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai · `openinference-instrumentation-langchain` (underlying LLM calls) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain
 
 ### Microsoft Agent Framework (`agent-framework`)
@@ -490,6 +511,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
   GoogleADKInstrumentor().instrument(tracer_provider=provider)
   ```
   Only the exporter destination changes across backends; the instrumentor is identical.
+- **⚠️ Known instrumentor limitation — provider attribution is wrong for non-Gemini ADK agents.** When an ADK agent runs a **non-Google** model through `google.adk.models.lite_llm.LiteLlm` (e.g. OpenRouter / Together / Groq via LiteLLM), the instrumentor still hardcodes `llm.provider: "google"`, `gen_ai.system: "gcp.vertex.agent"`, and the `gcp.vertex.agent.*` attribute namespace — it never inspects the `LiteLlm` model string to correct attribution (though it *does* capture the real model name in `llm.model_name` / `gen_ai.request.model`, e.g. `openrouter/...`). Net effect: filtering or grouping a trace UI by **provider/system** buckets these calls under "google" even though nothing touched GCP/Vertex. **Don't trust `llm.provider` / `gen_ai.system` for LiteLLM-backed ADK agents** — group by `llm.model_name` instead. (Worth raising upstream: derive `llm.provider` from the `LiteLlm` model-string prefix rather than hardcoding `google`.)
 - **Sources:** Google ADK docs — https://google.github.io/adk-docs/ · `openinference-instrumentation-google-adk` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-google-adk
 
 ### Custom (no framework)
@@ -612,6 +634,23 @@ RequestsInstrumentor().instrument()
 
 Outgoing HTTP requests will carry W3C `traceparent` (TC §3.2) and `tracestate` (TC §3.3) headers automatically, so a downstream agent service can resume the trace. **Do not strip `tracestate`** in any custom outbound wrapper — downstream vendors (LangSmith, Elastic, SigNoz) may add list-member entries to it for vendor-specific routing per W3C TC §3.3.1.3.
 
+**Inject-only (no outbound span) — the default for multi-agent apps.** `HTTPXClientInstrumentor().instrument()` bundles two things: header injection **and** a span per httpx request. In a multi-agent app the *meaningful* LLM/tool spans are already produced by the framework instrumentor (CrewAI/ADK/LangChain), so the httpx-level span is pure noise — a bare `POST` with no route/attributes that duplicates the real LLM call one level up (and the same for A2A card-resolver `GET`s). When you want propagation but **not** the span, inject on a shared client instead of instrumenting httpx globally:
+
+```python
+import httpx
+from opentelemetry.propagate import inject
+
+class _PropagatingTransport(httpx.AsyncHTTPTransport):
+    async def handle_async_request(self, request):
+        inject(request.headers)  # W3C traceparent/tracestate, no span opened
+        return await super().handle_async_request(request)
+
+client = httpx.AsyncClient(transport=_PropagatingTransport())
+# equivalently: httpx.AsyncClient(event_hooks={"request": [lambda r: inject(r.headers)]})
+```
+
+This is the outbound twin of `capture.md § HTTP transport spans` (`http_transport_spans: none`): keep context flowing, drop the redundant transport span. Use the full `HTTPXClientInstrumentor` only when you genuinely want a span per outbound call (e.g. calling an un-instrumented third-party HTTP API that produces no span of its own). Same `tracestate` rule applies — `inject()` preserves it.
+
 **Sampling-flag note.** When an upstream caller sends `traceparent` with the `sampled` bit (TC §3.2.2.5) cleared, OTel's default `ParentBased(ALWAYS_ON)` sampler propagates the bit unchanged downstream. If you replace the global sampler, keep it parent-aware so cross-service trace integrity holds.
 
 ### AI-boundary input/output capture (any transport)
@@ -689,7 +728,14 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-provider = TracerProvider(resource=Resource.create({"service.name": "fanout-app"}))
+# Resource — carry service.name AND (when Phoenix is in the set) the project
+# routing key. register() is NOT used here, so PHOENIX_PROJECT_NAME must be folded
+# into the resource as openinference.project.name or traces land in Phoenix's
+# `default` project. See § Arize Phoenix note.
+_res_attrs = {"service.name": "fanout-app"}
+if _phx_project := os.getenv("PHOENIX_PROJECT_NAME"):
+    _res_attrs["openinference.project.name"] = _phx_project
+provider = TracerProvider(resource=Resource.create(_res_attrs))
 
 # Phoenix
 provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
@@ -821,3 +867,21 @@ Context propagation issue. Check:
 ### "OpenAI Agents SDK shows raw HTTP calls instead of agent spans"
 
 You're using `openinference-instrumentation-openai`. Switch to `openinference-instrumentation-openai-agents` and register via `set_trace_processors()`.
+
+### "Unexplained `<library>.*` spans I never instrumented"
+
+A dependency ships its **own** OpenTelemetry instrumentation that was dormant until you installed `opentelemetry-sdk` — see § Known auto-instrumenting dependencies below. Set that library's documented gate env var to `false` to silence it.
+
+---
+
+## Known auto-instrumenting dependencies
+
+Some third-party libraries ship **their own** OpenTelemetry instrumentation that is *dormant only because `opentelemetry` isn't importable yet*. The moment you `pip install opentelemetry-sdk` (which observent does), that instrumentation wakes up and emits **library-internal** spans to whatever global `TracerProvider` is registered — with **no** code from observent or from you. This is easy to miss: nothing you wrote produced the spans, and `detect_framework.py` / `existing_setup.py` only scan *your* code, not a dependency's built-in decorators.
+
+`detect_framework.py` carries a small known-list (source of truth: `scripts/observent_matrix.py` `KNOWN_AUTO_INSTRUMENTING_DEPS`) and reports any present dep under `auto_instrumenting_deps` in its JSON, with the env var that gates it. SKILL.md Phase 1 § 1.4b then offers **keep** (add the dep's internal spans) or **disable** (set the gate to `false` for a trace focused on your agent/LLM spans).
+
+| Dependency | Ships instrumentation for | Gate env var | Default |
+|---|---|---|---|
+| `a2a-sdk` | its own server/handlers/event-queue/client transports — spans like `a2a.server.*` (`JsonRpcDispatcher`, `DefaultRequestHandler*`, `EventQueueSource`, …), built from `@trace_class`/`@trace_function` decorators in `a2a/utils/telemetry.py` | `OTEL_INSTRUMENTATION_A2A_SDK_ENABLED` | `true` (enabled) |
+
+To add a dependency here: append an `AutoInstrumentingDep(...)` to `KNOWN_AUTO_INSTRUMENTING_DEPS` in `scripts/observent_matrix.py` (slug, display, probe modules, gate env var, default) and add a row above. Only list libraries with a **documented** on/off env var — an undocumented internal flag is not a stable gate.

@@ -71,6 +71,38 @@ DETECTION_EXTRA_BACKENDS: tuple[Backend, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class AutoInstrumentingDep:
+    slug: str  # pip/display slug, e.g. "a2a-sdk"
+    display: str  # UI / docs label, e.g. "A2A SDK"
+    modules: tuple[str, ...]  # import names to probe (installed / declared / imported)
+    env_var: str  # the documented on/off gate for its built-in instrumentation
+    enabled_by_default: bool  # value of env_var when unset
+
+
+# Third-party libraries that ship their OWN OpenTelemetry instrumentation, dormant
+# until ``opentelemetry`` becomes importable, then auto-emitting to whatever global
+# TracerProvider is registered — with NO code from observent or the user. The
+# skill's own ``pip install opentelemetry-sdk`` is exactly what wakes them, flooding
+# the trace with library-internal spans. Each is gated by a documented env var so
+# the spec phase can offer keep-vs-disable (same confirm discipline as any other
+# generation choice). See references/matrix.md § Known auto-instrumenting
+# dependencies. Keep this list conservative — only libraries with a *documented*
+# on/off env var belong here.
+KNOWN_AUTO_INSTRUMENTING_DEPS: tuple[AutoInstrumentingDep, ...] = (
+    AutoInstrumentingDep(
+        "a2a-sdk",
+        "A2A SDK",
+        # ``a2a`` matches an installed/imported module; ``a2a_sdk`` normalizes to
+        # the ``a2a-sdk`` PyPI name for the declared-deps match (same two-probe
+        # trick as google-adk above).
+        ("a2a", "a2a_sdk"),
+        "OTEL_INSTRUMENTATION_A2A_SDK_ENABLED",
+        True,
+    ),
+)
+
+
 # --- derived views the scripts / tests consume ---------------------------
 
 
@@ -89,6 +121,20 @@ def backend_detection_modules() -> dict[str, list[str]]:
 def backend_conventions() -> dict[str, str]:
     """slug -> convention, for the seven product backends."""
     return {b.slug: b.convention for b in BACKENDS}
+
+
+def auto_instrumenting_deps() -> list[dict[str, object]]:
+    """The known dormant-instrumentation deps, as plain dicts for detector output."""
+    return [
+        {
+            "slug": d.slug,
+            "display": d.display,
+            "modules": list(d.modules),
+            "env_var": d.env_var,
+            "enabled_by_default": d.enabled_by_default,
+        }
+        for d in KNOWN_AUTO_INSTRUMENTING_DEPS
+    ]
 
 
 def framework_display_names() -> list[str]:

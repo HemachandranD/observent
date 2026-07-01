@@ -99,6 +99,23 @@ If Step 1.1 found pre-existing observability config, ask explicitly:
 
 Never overwrite without asking, even when auto-invoked. Store the choice in `spec.choice.existing_setup_decision`. Once locked it is **not re-prompted on resume**; to change it the user re-runs `/observent-spec`.
 
+### Step 1.4b — Dormant dependency instrumentation
+
+If Step 1.1's `detect_framework.py` output has a non-empty `auto_instrumenting_deps` list, one or more installed dependencies ship their **own** OpenTelemetry instrumentation that is dormant only because `opentelemetry` isn't importable yet — the moment observent's `pip install opentelemetry-sdk` lands, it wakes up and emits library-internal spans (e.g. `a2a-sdk`'s `a2a.server.*` spans) to the global TracerProvider, with **no** code from observent or the user. For **each** detected dep, ask:
+
+`<display> ships its own OpenTelemetry instrumentation that will activate once opentelemetry-sdk is installed. Keep it enabled (adds <slug>-internal spans) or disable it (<ENV_VAR>=false) for a cleaner trace focused on your agent/LLM spans? (keep / disable)`
+
+Record each decision under `spec.choice.auto_instrumenting_deps.<slug>` (`keep` | `disable`). On `disable`, Phase 2 appends `<ENV_VAR>=false` to the generated `.env` (names+values for these gates are safe — they're booleans, not secrets). `keep` writes nothing. See `references/matrix.md § Known auto-instrumenting dependencies`. Same `confirm` discipline as every other choice; a missing/empty list skips this step entirely.
+
+### Step 1.4c — HTTP transport spans (web-served agents)
+
+Only when `detection.web_frameworks` is non-empty (the agent is served over HTTP). The web-framework/ASGI instrumentor bundles trace-context extraction (essential) with a server span + per-request transport spans (often just noise — a streaming/SSE endpoint emits an `http send` span *per chunk*). Set `spec.choice.http_transport_spans` with a **backend-dependent default**, then let the user override:
+
+- Backend set is **LLM-native only** (subset of `{phoenix, langfuse, opik, langsmith}`) → default **`none`** (drop the instrumentor; a context-only middleware preserves linkage, the capture root is the single clean span).
+- Set contains **any APM backend** (`{signoz, elastic-apm, jaeger}`) → default **`root-only`** (keep the one server span so their HTTP transaction/service-map/RED-metric dashboards still populate; suppress transport children). **Warn** that `none` would leave those APM dashboards without a data source.
+
+State the default in one line and offer `none` / `root-only` / `full`. Record in `spec.choice.http_transport_spans`. See `references/capture.md § HTTP transport spans`.
+
 ### Step 1.5 — Local provisioning offer
 
 For each backend whose resolved `endpoints.<backend>.mode == self-host`, probe the endpoint and record reachability in `spec.detection.backends_reachable.<backend>`. When a self-host backend is **unreachable**:
@@ -108,6 +125,8 @@ For each backend whose resolved `endpoints.<backend>.mode == self-host`, probe t
   On `yes` set `spec.choice.self_host_provision.<backend> = true`; otherwise `false`.
 - **Docker not available**: state that and skip the offer (set `false`). For Phoenix, mention the `px.launch_app()` in-process alternative. The final `validate` will still report the backend as unreachable.
 - **Backend == langsmith**: never offer Docker — surface the enterprise-license note from `references/self_host.md § LangSmith` and keep it cloud-first. `self_host_provision` gets no `langsmith` key.
+- **Backend provisioned via a vendor CLI** (`method: vendor-cli-generated`, currently **SigNoz** — see `references/self_host.md § Provisioning method`): its provisioning **also installs a local binary** (e.g. Foundry's `foundryctl`), not just `docker compose`. Call this out in the offer — `Provisioning <backend> also installs the <CLI> CLI locally (checksum-verified GitHub release). OK to install it? (yes / no)` — and record it so Phase 2 emits the dedicated `installs_cli` `confirm` gate (`references/spec_schema.md § tasks.json`). Never install the CLI silently.
+- **Cross-backend port collisions:** before committing the provision set, check the **newly-selected** backends against `references/self_host.md § Port-conflict matrix` (not just against already-running services). Phoenix's `4327` gRPC remap is baked in; a Jaeger + SigNoz pair still both bind host `4318`, so surface a remap (and the adjusted `*_ENDPOINT`) in the Phase 2 plan / Phase 3 diff rather than letting the second `docker compose up` fail with `port is already allocated`.
 
 Templates and pinned image tags are **not** decided here — they live in `references/self_host.md` and are materialized in Phase 2. This step only records the decision. Reachable backends and cloud-mode backends get no `self_host_provision` entry.
 
@@ -136,9 +155,10 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
 - **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
 - **Local provisioning** — for each backend with `spec.choice.self_host_provision.<backend> == true`, materialize the chosen stack from `references/self_host.md` into a `plan.provision[]` entry:
-  - `method: vendored-compose` (Phoenix, Elastic APM) → add a `files[]` create entry for `docker-compose.observent-<backend>.yml`, copy the pinned compose template into a `<!-- plan:compose_<backend> -->` anchor, and set `up_command`/`down_command` to the `docker compose -f … up -d --wait` / `down` lines.
-  - `method: upstream-clone` (Langfuse, SigNoz) → no compose file; set `up_command` to the pinned `git clone … && docker compose -f … up -d --wait` line from `self_host.md` (no `<!-- plan:compose_* -->` anchor).
-  Copy image tags **verbatim** from `references/self_host.md § Image Versions` — never invent versions. When `self_host_provision` is empty, `plan.provision` is `[]`.
+  - `method: vendored-compose` (Phoenix, Elastic APM, Jaeger) → add a `files[]` create entry for `docker-compose.observent-<backend>.yml`, copy the pinned compose template into a `<!-- plan:compose_<backend> -->` anchor, and set `up_command`/`down_command` to the `docker compose -f … up -d --wait` / `down` lines.
+  - `method: upstream-clone` (Langfuse, Opik) → no compose file; set `up_command` to the pinned `git clone … && docker compose -f … up -d --wait` line from `self_host.md` (no `<!-- plan:compose_* -->` anchor).
+  - `method: vendor-cli-generated` (SigNoz) → no compose anchor (the CLI generates the compose file). Emit the four ordered tasks from `self_host.md § SigNoz`: (1) a `confirm` with `installs_cli` metadata → (2) `run_command` `cli_install_command` → (3) `write_file` for `cli_config_file` (content in the `<!-- plan:clicfg_<backend> -->` anchor) → (4) `run_command` `generate_command` → (5) `run_command` `up_command` on the generated `compose_file`. Set `compose_file` to the CLI-generated path (e.g. `pours/deployment/compose.yaml`).
+  Copy image tags / CLI versions **verbatim** from `references/self_host.md § Image Versions` — never invent versions (for `vendor-cli-generated`, image tags are resolved by the CLI and **not** tracked; only the CLI/installer is pinned). When `self_host_provision` is empty, `plan.provision` is `[]`.
 
 ### Step 2.2 — Required pieces in every generated file
 
@@ -146,10 +166,12 @@ Every `observent_otel.py` template must include:
 
 - **Backend init** — exporter / native client configured from env vars; never hard-code keys.
 - **Framework instrumentation** — the right OpenInference instrumentor or native trace processor (see `references/matrix.md`).
-- **Multi-agent attributes** on every agent/chain span, keyed by `spec.choice.convention`:
+- **Multi-agent attributes** on every agent/chain span, keyed by `spec.choice.convention` — **this must be generated, not just aspired to** (a fallback root that carries only `input.*`/`output.*` is a defect, see gap: agent identity silently omitted):
   - `oi`: `openinference.span.kind` (`AGENT` / `CHAIN` / `LLM` / `TOOL` / `RETRIEVER`), `agent.name`, `agent.role`, `agent.framework`.
   - `otel-genai`: `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.provider.name`.
   - `both`: emit the union.
+  - **Enforcement:** the capture engine already stamps these on the run's root span via `_set_agent_identity` (`references/capture.md § Public entry point`). Fill its `_SERVICE_NAME` / `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals from `spec.choice` (framework → `_FRAMEWORK`; a per-service name → `_SERVICE_NAME` / `_AGENT_NAME`), **or** pass `agent_name=` / `agent_role=` at the `open_or_enrich_span` / `capture_run` wrap point. Do not leave the defaults generic when the identity is known.
+- **Phoenix project routing** (when `phoenix` ∈ `spec.choice.backends`) — read `PHOENIX_PROJECT_NAME` in **both** generation paths. The single-backend path uses `register(project_name=os.getenv("PHOENIX_PROJECT_NAME", ...))`; the manual multi-backend fan-out (`convention == "both"`) never calls `register()`, so it must fold the value into the resource as the `openinference.project.name` attribute (`Resource.create({"service.name": ..., "openinference.project.name": <PHOENIX_PROJECT_NAME>})`) or every trace silently lands in Phoenix's `default` project. See `references/matrix.md § Arize Phoenix`.
 - **Baggage** for `session.id`, `user.id`, `tenant.id`, `app.version` at the entry point.
 - **Flush-on-exit** — `provider.shutdown()` or `langfuse.flush()` via `atexit`.
 - **OTLP HTTP** (not gRPC) for all OTLP backends.
@@ -160,7 +182,8 @@ Every `observent_otel.py` template must include:
 observent's prime directive is **never miss any input or output that crosses the AI-system boundary**, regardless of how the agent is triggered (HTTP, CLI, queue worker, cron, notebook). This capture is **transport-agnostic** and is generated for **every** framework — not just web apps.
 
 - **Always** generate `observent_capture.py` from the canonical engine in `references/capture.md` and wrap the agent invocation with `capture_run` / `capture_run_async` (or call `enrich_current_span(...)` + `capture_output(...)` directly). See `references/capture.md § Per-framework wrap points` for where each framework's invoke call sits.
-- **Enrich in place, never duplicate the root span.** The engine writes `input.*` / `output.*` / status onto the span that is **already recording** (the framework instrumentor's root span, or the HTTP server span). It opens its own `agent.run` span **only** as a fallback when nothing is recording (e.g. a bare CLI), so input is never lost. Do not add a second observent root span when one already exists.
+- **Enrich in place, never duplicate the root span.** The engine writes `input.*` / `output.*` / status onto the span that is **already recording** (the framework instrumentor's root span, or the HTTP server span). It opens its own fallback root span (named `f"{_SERVICE_NAME}.run"`, default `agent.run`) **only** when nothing is recording (e.g. a bare CLI), so input is never lost. Do not add a second observent root span when one already exists.
+- **Root span always carries input AND output; the fallback root also carries agent identity.** Whichever span is the run root (enriched framework span or the fallback), it must end with both `input.*` and `output.*` set (never input-only). Identity attributes are stamped **always on the fallback** root (from the `_AGENT_NAME`/`_AGENT_ROLE`/`_FRAMEWORK` literals — fill these from `spec.choice`) and on an **enriched** framework root **only when `agent_name=`/`agent_role=` is passed explicitly** via `open_or_enrich_span(...)` (the engine won't blanket-overwrite a foreign span's identity with generic defaults). So when the framework already opens a root and you want that root to carry identity, wrap the boundary with `open_or_enrich_span(inputs, agent_name=…, agent_role=…)` directly rather than the bare `capture_run` decorator (which passes no identity and therefore only guarantees identity on the fallback root). `capture_run` / `capture_run_async` set input+output automatically; with `open_or_enrich_span` directly, pair it with `capture_output(result, span)`. Set `_SERVICE_NAME` per service so trace lists read `text2sql.run` / `deepresearch.run` rather than a wall of identical `agent.run`.
 - **Span status is set at the AI boundary** by the engine: `StatusCode.OK` on success; `record_exception()` + `StatusCode.ERROR` + `error.type` on failure. Status no longer depends on whether a transport instrumentor happens to be present.
 - Sensitive keys (auth credentials, session/CSRF, PII) are redacted at the value level (key preserved so the attribute shape is stable); a baggage whitelist promotes correlation keys onto child spans. Both are **generation-time literals** in the generated file — same rule as `_CONVENTION`. No truncation.
 - **Optional raw HTTP capture** — only if `spec.choice.http_body_capture: true`, also generate `observent_http.py` (an ASGI middleware that enriches the **existing** server span with `http.request.*` / `http.response.*`; adds no span, does not buffer streaming responses). Generate this only when the agent's logical input — already captured by `capture_run` — is insufficient and the raw wire payload (a header/envelope field) is also needed.
@@ -173,7 +196,8 @@ observent emits W3C-compliant context. Every template relies on the OTel SDK's d
 - Use `tracer.start_as_current_span()` (never the raw `start_span`).
 - Async: Python 3.11+ inherits context across `asyncio.create_task`. For older versions wrap with `contextvars.copy_context().run(...)`.
 - Threads: `attach()`/`detach()` pattern (see `references/matrix.md § Context Propagation`).
-- HTTP fan-out: enable `opentelemetry-instrumentation-httpx` and `opentelemetry-instrumentation-requests`.
+- **HTTP transport spans (inbound)** — branch generated web instrumentation on `spec.choice.http_transport_spans` (see `references/capture.md § HTTP transport spans`): `full` → framework/ASGI instrumentor + transport spans; `root-only` → instrumentor with `exclude_spans=["receive","send"]` (use `OpenTelemetryMiddleware` directly for **Starlette**, which — unlike `FastAPIInstrumentor` — has no `exclude_spans` param); `none` → **no** instrumentor, generate the context-only `TraceContextMiddleware` (extract-only, one `http.error` span on early failure). **Guardrail:** whenever `none` drops the instrumentor, the context-only middleware MUST be generated, or cross-service linkage silently breaks.
+- HTTP fan-out (outbound): default to **inject-only** propagation (a `_PropagatingTransport` / `event_hooks` on the shared client — headers only, no per-request span) for multi-agent apps where the framework instrumentor already produces the meaningful LLM/tool spans; use the full `opentelemetry-instrumentation-httpx` / `-requests` instrumentors only when a span per outbound call is genuinely wanted. See `references/matrix.md § Context Propagation § Cross-service / cross-agent network calls`.
 - Subprocess fan-out: `opentelemetry.propagate.inject(env)` before `subprocess.run(env=env)`; child re-extracts with `extract(os.environ)`. On Windows, env var names are case-insensitive — read the exact case `inject` wrote (`traceparent`) or normalize.
 - **Opaque vendor runtimes** (Claude Code, Cursor's composer) can't accept propagated context — their loop runs in a process you can't instrument. When such a runtime is in the pipeline and routes its calls through an LLM gateway (litellm proxy, …), *offer* the gateway-boundary recipe in `references/gateway.md`: instrument the proxy and stamp an injected correlation id (`session.id` / `gen_ai.conversation.id`) so the run's calls **group** in the backend. This is opt-in and diff-previewed like any write; generate it only when applicable — it is grouping, not a single trace, and never mandatory for a normal run.
 
@@ -211,13 +235,16 @@ Strict order:
    - `pip install` command.
    - Env vars grouped by backend (names only, never values).
    - Resolved convention.
+   - **Generated-attribute checklist** (catches silent omissions before a task is marked done): `agent identity attributes: present / missing` (agent.name/role/framework or gen_ai.agent.* on the run root) and `root span input + output: present / missing`. If either is *missing*, fix the generated file before proceeding — don't confirm a file that drops these.
    - Backends and endpoints (one line each).
-   - Any locally provisioned stacks: the compose file (`vendored-compose`) or clone target (`upstream-clone`) and the `docker compose … up` command, one line each, from `plan.provision[]`.
+   - Any locally provisioned stacks: the compose file (`vendored-compose`) or clone target (`upstream-clone`) or CLI install + generated compose (`vendor-cli-generated`) and the `docker compose … up` command, one line each, from `plan.provision[]`. For `vendor-cli-generated`, show the `installs_cli` details (package · installer URL · trust basis) as their own line — the CLI install is a distinct consent surface from `docker compose up`.
    - Prompt: `Apply these changes? (yes / preview <file> / abort)`.
-2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"` (this includes any `vendored-compose` `docker-compose.observent-<backend>.yml`).
+2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"` (this includes any `vendored-compose` `docker-compose.observent-<backend>.yml` and any `vendor-cli-generated` `cli_config_file`).
 3. One `edit_file` task per `files[].op == edit`, with `diff_ref: "plan#<slug>"`.
 4. One `run_command` task for `pip_install`.
-5. One `run_command` task per `plan.provision[]` entry, with `cmd` set to that entry's `up_command` (`docker compose … up -d --wait`, or the pinned clone+up for `upstream-clone`). These come **after** pip-install and **before** `validate` so the endpoint is live when validation runs.
+5. Provisioning tasks per `plan.provision[]` entry, placed **after** pip-install and **before** `validate` so the endpoint is live when validation runs:
+   - `vendored-compose` / `upstream-clone` → one `run_command` with `cmd` = that entry's `up_command` (`docker compose … up -d --wait`, or the pinned clone+up).
+   - `vendor-cli-generated` → the ordered sequence: a `confirm` carrying `installs_cli` (must be approved before any binary is installed) → `run_command` `cli_install_command` → `write_file` `cli_config_file` → `run_command` `generate_command` → `run_command` `up_command`. See `references/spec_schema.md § tasks.json`.
 6. One `validate` task — final — calling `<skill-dir>/scripts/validate_setup.py` (resolve `<skill-dir>` as in Step 1.1) with the comma-separated backend list from `spec.choice.backends`.
 
 ### Step 3.2 — Write `.observent/tasks.json`

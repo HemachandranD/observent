@@ -60,6 +60,25 @@ def test_empty_project_detects_nothing(tmp_path, monkeypatch):
     assert report["python"]  # always reported
 
 
+def test_auto_instrumenting_dep_detected_with_env_gate(tmp_path):
+    # a2a-sdk ships dormant OTel instrumentation that wakes once opentelemetry is
+    # importable; the detector must surface it plus its documented env-var gate.
+    (tmp_path / "requirements.txt").write_text("a2a-sdk>=0.2\n")
+    report = detect(tmp_path)
+    found = report["auto_instrumenting_deps"]
+    assert "a2a-sdk" in {e["name"] for e in found}
+    a2a = next(e for e in found if e["name"] == "a2a-sdk")
+    assert a2a["env_var"] == "OTEL_INSTRUMENTATION_A2A_SDK_ENABLED"
+    assert a2a["enabled_by_default"] is True
+    assert "declared" in a2a["sources"]
+
+
+def test_no_auto_instrumenting_deps_in_clean_project(tmp_path, monkeypatch):
+    monkeypatch.setattr(detect_framework, "_is_installed", lambda module: False)
+    report = detect(tmp_path)
+    assert report["auto_instrumenting_deps"] == []
+
+
 def test_name_match_normalizes_separators_and_case():
     assert _name_match("llama_index", {"LLAMA-INDEX"})
     assert _name_match("elastic-apm", {"elastic_apm"})
