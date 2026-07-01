@@ -2,7 +2,7 @@
 """Single source of truth for observent's framework x backend grid.
 
 The shipped detector/validator scripts *and* the docs-consistency test all
-derive their framework/backend tables from the structures here, so the 8x7
+derive their framework/backend tables from the structures here, so the 9x7
 matrix is declared exactly once. The "Adding a new framework / backend" steps in
 CLAUDE.md that used to touch ``detect_framework.py``, ``validate_setup.py`` and
 ``tests/test_docs_consistency.py`` separately now collapse to editing this file;

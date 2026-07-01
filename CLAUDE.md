@@ -28,7 +28,7 @@ skills/observent/
   SKILL.md              # Skill entry point — frontmatter + SDD workflow (Spec / Plan / Tasks / Implement) + optional Phase 5 Evaluate
   references/
     spec_schema.md      # Canonical schema for the three .observent/ artifacts (spec.md, plan.md, tasks.json)
-    matrix.md           # 9×5 matrix, per-framework + per-backend reference,
+    matrix.md           # 9×7 matrix, per-framework + per-backend reference,
                         # span attribute summary, context propagation, troubleshooting
     openinference.md    # Canonical OpenInference attribute reference (Phoenix path)
     otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger path)
@@ -137,7 +137,7 @@ Update in this order:
 
 1. `skills/observent/scripts/observent_matrix.py` — add a `Framework(slug, display, modules)` entry to `FRAMEWORKS` (the single source of truth). `detect_framework.py`'s `FRAMEWORKS` table and `tests/test_docs_consistency.py`'s framework list both derive from this automatically — no edits needed in either.
 2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list in Phase 1 § Step 1.2 and the description's auto-invocation triggers.
-3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 9×5 compatibility matrix.
+3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 9×7 compatibility matrix.
 4. `skills/observent/references/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 5. `skills/observent/references/matrix.md` § Verified Versions — add a row for the new framework + instrumentor packages with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-framework `pip install` snippet you added in step 3.
 6. CI passes (frontmatter parse, imports, lint, type-check).
@@ -175,7 +175,7 @@ Keep the skill **self-contained and relative** so it runs wherever it lands: `re
 
 ### Adding a new eval check (Phase 5)
 
-The eval gate is **grid-agnostic** — it touches none of `observent_matrix.py`, the detectors, or the 9×5 matrix. To add a new assertion:
+The eval gate is **grid-agnostic** — it touches none of `observent_matrix.py`, the detectors, or the 9×7 matrix. To add a new assertion:
 
 1. `skills/observent/scripts/eval_gate.py` — add the check to the relevant family function (`check_budgets` / `check_behavior` / `check_redaction` / `check_regression`) or add a new family and call it from `run_checks`. Emit a `Check(name, status, message)`; keep it stdlib-only and `mypy --strict` clean.
 2. `skills/observent/references/eval.md` — document the new `eval.json` key under § eval.json schema. **If it reads a span attribute**, add the canonical field to the cross-convention alias table using only keys that exist in `references/openinference.md` / `otel_genai.md` (the docs-consistency test asserts this).
@@ -214,7 +214,7 @@ Usually **nothing to do in this repo** — `npx skills` already maps 70+ coding 
 
 ## Documentation Hygiene
 
-The 9×5 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
+The 9×7 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
 - `SKILL.md` (Phase 2 § Step 2.5 endpoint table, Phase 1 § Step 1.3 backend-options list)
 - `README.md` (Supported matrix)
 - `references/examples.md` (if a removed combination had an example)
