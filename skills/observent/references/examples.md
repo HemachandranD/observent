@@ -221,9 +221,11 @@ if __name__ == "__main__":
 ```
 
 ```bash
-# Start SigNoz self-host first:
-git clone https://github.com/SigNoz/signoz.git && cd signoz/deploy
-docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d
+# Start SigNoz self-host first (Foundry CLI — SigNoz deprecated its docker-compose manifests):
+curl -fsSL https://signoz.io/foundry.sh | bash      # installs foundryctl (checksum-verified)
+foundryctl forge -f casting.yaml                     # generates pours/deployment/compose.yaml
+docker compose -f pours/deployment/compose.yaml up -d --wait
+# see references/self_host.md § SigNoz for casting.yaml + the OTLP-readiness caveat
 
 pip install 'agent-framework>=1.4' \
             'opentelemetry-sdk>=1.25' 'opentelemetry-exporter-otlp-proto-http>=1.25' \
@@ -231,7 +233,7 @@ pip install 'agent-framework>=1.4' \
             'openinference-instrumentation-openai>=0.1'
 export OPENAI_API_KEY=sk-... SIGNOZ_ENDPOINT=http://localhost:4318/v1/traces
 python maf_signoz.py
-# UI: http://localhost:3301
+# UI: http://localhost:8080
 ```
 
 **Sources:** Microsoft Agent Framework — https://github.com/microsoft/agent-framework · MAF observability — https://learn.microsoft.com/en-us/agent-framework/python/observability · SigNoz OTLP ingestion — https://signoz.io/docs/instrumentation/opentelemetry-python/ · `openinference-instrumentation-openai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai

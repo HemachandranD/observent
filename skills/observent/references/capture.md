@@ -34,17 +34,18 @@ observent does **not** open its own root span for the agent run. The framework i
 ```python
 span = trace.get_current_span()
 if span.is_recording():
-    # Normal path: stamp input/output/status onto the span that's already current.
+    # Normal path: stamp input/output/status (+ agent identity) onto the span
+    # that's already current.
     enrich_current_span(inputs)
 else:
     # Fallback ONLY when nothing is recording (e.g. a bare CLI before any
     # instrumentor opened a span). Prime directive = never miss input, so open a
-    # minimal root rather than silently drop it.
-    with tracer.start_as_current_span("agent.run") as span:
+    # minimal root rather than silently drop it. Named f"{_SERVICE_NAME}.run".
+    with tracer.start_as_current_span(f"{_SERVICE_NAME}.run") as span:
         ...
 ```
 
-This is why there is **no second `agent.run` span** behind HTTP or inside a framework run — the attributes land on the existing root. The fallback span appears only in the rare "nothing open" case, and is documented so it is never a surprise.
+This is why there is **no second root span** behind HTTP or inside a framework run — the attributes land on the existing root. The fallback span appears only in the rare "nothing open" case, and is documented so it is never a surprise. Both branches go through the public `open_or_enrich_span(...)` (see § Public entry point), which also stamps the mandatory agent-identity attributes and names the fallback span for readability.
 
 ### Attribute namespacing
 
@@ -94,6 +95,7 @@ customize; no env-var override is read at runtime by design.
 from __future__ import annotations
 
 import functools
+from contextlib import nullcontext
 from typing import Any, Awaitable, Callable, Iterator, TypeVar
 
 from opentelemetry import baggage, context, trace
@@ -101,6 +103,17 @@ from opentelemetry.trace import Status, StatusCode
 from opentelemetry.util.types import AttributeValue
 
 _CONVENTION = "oi"  # one of: "oi" | "otel-genai" | "both" — generation-time literal
+
+# Multi-agent identity, all generation-time literals (no runtime env override, same
+# rule as _CONVENTION). These name the fallback root span and stamp the "mandatory"
+# agent-identity attributes (matrix.md § Mandatory Span Attributes) so a trace list
+# is legible without opening resource attributes. The skill fills them from
+# spec.choice at generation time; callers can still override per-call via
+# open_or_enrich_span(name=..., agent_name=..., agent_role=...).
+_SERVICE_NAME = "agent"  # names the fallback root span: f"{_SERVICE_NAME}.run"
+_AGENT_NAME = "agent"    # agent.name / gen_ai.agent.name on the run's root span
+_AGENT_ROLE = ""         # agent.role (OI); "" = omit
+_FRAMEWORK = ""          # agent.framework (OI), e.g. "crewai" | "langgraph"; "" = omit
 
 _REDACT_KEYS: frozenset[str] = frozenset({
     "api_key", "apikey", "api-key",
@@ -250,21 +263,72 @@ def set_error(exc: BaseException, span: trace.Span | None = None) -> None:
         span.set_status(Status(StatusCode.ERROR, str(exc)))
 
 
-def _enrich_or_open(inputs: Any):
-    """Context manager: enrich the current recording span, or open a fallback
-    `agent.run` root span when nothing is recording (never-miss-input)."""
+def _set_agent_identity(
+    span: trace.Span,
+    agent_name: str | None = None,
+    agent_role: str | None = None,
+) -> None:
+    """Stamp the mandatory multi-agent identity attributes onto `span`, per the
+    resolved convention. Params override the generation-time literals. Applied to
+    the run's root span (both the enriched framework span and the fallback), so
+    every trace shows *which* agent produced it without opening resource attrs."""
+    if not span.is_recording():
+        return
+    name = agent_name or _AGENT_NAME
+    role = agent_role or _AGENT_ROLE
+    if _CONVENTION in ("oi", "both"):
+        span.set_attribute("openinference.span.kind", "AGENT")
+        if name:
+            span.set_attribute("agent.name", name)
+        if role:
+            span.set_attribute("agent.role", role)
+        if _FRAMEWORK:
+            span.set_attribute("agent.framework", _FRAMEWORK)
+    if _CONVENTION in ("otel-genai", "both"):
+        span.set_attribute("gen_ai.operation.name", "invoke_agent")
+        if name:
+            span.set_attribute("gen_ai.agent.name", name)
+
+
+def open_or_enrich_span(
+    inputs: Any,
+    *,
+    name: str | None = None,
+    agent_name: str | None = None,
+    agent_role: str | None = None,
+):
+    """Public context-manager entry point (also used by capture_run / _async).
+
+    If a span is already recording (framework instrumentor / server span), enrich
+    it in place and yield it — **no** new span. Otherwise open a fallback root span
+    so input is never missed, named `name` (default `f"{_SERVICE_NAME}.run"`). Either
+    way it stamps `input.*` and the multi-agent identity attributes, so the root
+    span carries both the run's input and *which* agent produced it. Callers that
+    wrap a shared AI boundary (e.g. a base executor) can use this directly instead
+    of the decorators; pair it with `capture_output(...)` so the root also carries
+    `output.*` (see § Root span always carries input and output)."""
     current = trace.get_current_span()
     if current.is_recording():
-        from contextlib import nullcontext
         enrich_current_span(inputs)
+        # Enrich path: the current span belongs to the framework/transport
+        # instrumentor, not observent. Only stamp identity when the caller passes
+        # it *explicitly* — never auto-apply the generic literal defaults, which
+        # would relabel a foreign span (e.g. an HTTP server span) or clobber
+        # better identity the instrumentor already set (e.g. Google ADK's
+        # gen_ai.agent.name). The fallback span below (which observent owns) always
+        # gets identity.
+        if agent_name or agent_role:
+            _set_agent_identity(current, agent_name, agent_role)
         return nullcontext(current)
     # set_error() already records the exception and sets ERROR status, so disable
     # the context manager's own exception handling to avoid a duplicate event.
+    span_name = name or f"{_SERVICE_NAME}.run"
     cm = _tracer.start_as_current_span(
-        "agent.run", record_exception=False, set_status_on_exception=False
+        span_name, record_exception=False, set_status_on_exception=False
     )
     span = cm.__enter__()
     enrich_current_span(inputs)
+    _set_agent_identity(span, agent_name, agent_role)
     return _Closing(cm, span)
 
 
@@ -290,7 +354,7 @@ def capture_run(fn: F) -> F:
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         inputs = args[0] if args else kwargs
-        holder = _enrich_or_open(inputs)
+        holder = open_or_enrich_span(inputs)
         with holder as span:
             try:
                 result = fn(*args, **kwargs)
@@ -308,7 +372,7 @@ def capture_run_async(fn: AF) -> AF:
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         inputs = args[0] if args else kwargs
-        holder = _enrich_or_open(inputs)
+        holder = open_or_enrich_span(inputs)
         with holder as span:
             try:
                 result = await fn(*args, **kwargs)
@@ -323,9 +387,29 @@ def capture_run_async(fn: AF) -> AF:
 
 ---
 
+## Public entry point, span naming & agent identity
+
+`open_or_enrich_span(inputs, *, name=None, agent_name=None, agent_role=None)` is the **public** context-manager entry point — the same one `capture_run` / `capture_run_async` use internally. Use it directly when you want to wrap a **single shared AI boundary** (e.g. a base executor's `execute()`), rather than decorating each entry point:
+
+```python
+from observent_capture import open_or_enrich_span, capture_output
+
+with open_or_enrich_span(inputs, name=f"{service_name}: {summary}", agent_name="text2sql", agent_role="sql-writer") as span:
+    result = run_the_agent(inputs)
+    capture_output(result, span)
+```
+
+**Span naming (readability).** The fallback root span is named `f"{_SERVICE_NAME}.run"` (a generation-time literal, default `"agent"` → `agent.run`). Set `_SERVICE_NAME` per service so a trace list reads `text2sql.run` / `deepresearch.run` instead of a wall of identical `agent.run`. A caller may pass `name=` for a richer label (e.g. `f"{service_name}: {input_summary[:40]}"`). **Never** put a redacted field's raw value in a span *name* — names aren't redacted; only attributes are. This only controls observent's own root span; a framework's internal span names (CrewAI's `Crew_<uuid>.kickoff`, `Task Execution`, …) are upstream and not renameable — see `matrix.md § CrewAI`.
+
+**Agent identity (mandatory attributes).** `_set_agent_identity` stamps the identity attributes `matrix.md § Mandatory Span Attributes` requires on an agent/chain root — `openinference.span.kind="AGENT"`, `agent.name`, `agent.role`, `agent.framework` (OI) and/or `gen_ai.operation.name="invoke_agent"`, `gen_ai.agent.name` (OTel-GenAI), keyed by `_CONVENTION`. **Scope matters:** identity is stamped **always on the fallback span** (which observent owns), but on the **enrich path only when `agent_name`/`agent_role` is passed explicitly** — the engine never auto-applies the generic literal defaults to a span it didn't create, since that would relabel a foreign span (an HTTP server span) or clobber better identity an instrumentor already set (e.g. Google ADK's `gen_ai.agent.name`). Defaults come from the `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals (used for the fallback span); per-call `agent_name=` / `agent_role=` override them and are the way to add identity to an existing framework root. This is what lets a trace list identify *which* agent produced a span without opening the `service.name` resource attribute.
+
+### Root span always carries input and output
+
+The run's root span must carry **both** `input.*` and `output.*` (never input-only). `capture_run` / `capture_run_async` guarantee this — they call `enrich_current_span` (input) on entry and `capture_output` on success. When you use `open_or_enrich_span` directly, always pair it with `capture_output(result, span)` inside the block so the root isn't left output-less on the happy path.
+
 ## Per-framework wrap points
 
-`capture_run` / `capture_run_async` (or a bare `enrich_current_span(...)` + `capture_output(...)` pair) goes at the **agent invocation**, so it enriches the framework's own root span:
+`capture_run` / `capture_run_async` (or a bare `open_or_enrich_span(...)` + `capture_output(...)` pair) goes at the **agent invocation**, so it enriches the framework's own root span:
 
 | Framework | Where to wrap |
 |---|---|
@@ -365,7 +449,12 @@ It is a thin Starlette/ASGI middleware that **enriches the existing server span*
 
 - **No new span** — it writes onto the server span the FastAPI instrumentor already opened.
 - **No response re-buffering** — it reads the request body (re-injecting it so the route still sees it) and, for the response, captures headers/status without collapsing a `StreamingResponse`. Streaming endpoints keep streaming.
-- Transport spans (`http receive` / `http send`) from the ASGI instrumentor are **left intact** — they are honest transport spans, not observent's to suppress. A user who wants them gone can pass `exclude_spans=["receive", "send"]` to the FastAPI instrumentor.
+- Transport spans (`http receive` / `http send`) from the ASGI instrumentor are governed by `spec.choice.http_transport_spans` (see § HTTP transport spans below) — by default observent doesn't emit them at all. **Suppressing them is framework-specific** (gap: the advice used to assume FastAPI): `FastAPIInstrumentor.instrument_app()` accepts `exclude_spans=["receive", "send"]`, but `StarletteInstrumentor.instrument_app()` has **no** such parameter (its signature only exposes the request/response hooks + provider args). For Starlette — and for de-noising **any** streaming ASGI app — add the underlying ASGI middleware directly, which *does* support it:
+  ```python
+  from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+  app.add_middleware(OpenTelemetryMiddleware, exclude_spans=["receive", "send"])
+  ```
+  This matters in practice: a plain `StarletteInstrumentor.instrument_app(app)` emits a `http send` span **per SSE chunk** (12+ transport spans for one streamed JSON-RPC response), on top of the one real server span.
 
 ```python
 # observent_http.py
@@ -431,6 +520,62 @@ app.add_middleware(ObserventHTTPMiddleware)
 
 ---
 
+## HTTP transport spans
+
+For a web-served agent, the ASGI/framework instrumentor bundles four things onto every request: (1) **incoming `traceparent` extraction** — critical for cross-service/cross-agent trace linkage; (2) a **server root span**; (3) **`http receive`/`http send` transport child spans** — per-SSE-chunk noise for streaming apps; (4) HTTP method/route/status attributes. For a multi-agent app the *meaningful* spans already come from the framework instrumentor (CrewAI/LangGraph/ADK) and this capture engine's root — so only (1) is essential.
+
+`spec.choice.http_transport_spans` picks how much to emit:
+
+| Mode | What's generated | When |
+|---|---|---|
+| `full` | Framework/ASGI instrumentor open, transport spans kept. | Legacy / user opts in. |
+| `root-only` | Framework instrumentor's server span kept; `exclude_spans=["receive","send"]` suppresses transport children (retains HTTP method/route/status — feeds APM dashboards). | **Default when an APM backend** (SigNoz / Elastic APM / Jaeger) is in the set — their transaction/service-map/RED-metric views are built on the HTTP server span. |
+| `none` | **No** framework instrumentor at all. A context-only middleware extracts `traceparent` (no span); the capture fallback root becomes the single clean span. | **Default when the backend set is LLM-native-only** ({phoenix, langfuse, opik, langsmith}), which ignore HTTP server spans. |
+
+**`none` — context-only middleware (no span on success, one span on early error).** Drop the ASGI/framework instrumentor entirely and add this. It preserves cross-service linkage (so child-agent spans still nest under the caller's trace) with zero spans on the happy path, but opens a single `http.error` span if the request fails *before* the agent boundary opened its own root (validation / auth / malformed body — otherwise invisible under `none`):
+
+```python
+from opentelemetry import context as otel_context
+from opentelemetry.propagate import extract
+from opentelemetry.trace import Status, StatusCode
+from observent_capture import _tracer  # reuse the engine's tracer
+
+class TraceContextMiddleware:
+    """Extract W3C trace context (traceparent/tracestate) from the incoming
+    request so this service's spans join the caller's trace — WITHOUT opening a
+    server span. Opens a lone `http.error` span only if the app raises before the
+    agent boundary's own root span exists."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        carrier = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        token = otel_context.attach(extract(carrier))
+        try:
+            await self.app(scope, receive, send)          # success: no span opened
+        except Exception as exc:
+            with _tracer.start_as_current_span("http.error") as span:
+                span.record_exception(exc)
+                span.set_attribute("error.type", type(exc).__qualname__)
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+            raise
+        finally:
+            otel_context.detach(token)
+```
+
+Register it *instead of* any `*Instrumentor` (uniformly, for FastAPI / Starlette / Flask-ASGI / …):
+
+```python
+app.add_middleware(TraceContextMiddleware)   # no FastAPIInstrumentor / StarletteInstrumentor
+```
+
+> **Linkage guardrail.** Never emit `none` *without* this middleware — dropping the instrumentor and adding nothing silently breaks distributed tracing (each service starts a disconnected trace). `none` == "no server span, but still extract context."
+
+The outbound counterpart (propagate `traceparent` on outgoing calls without a per-request httpx span) lives in `matrix.md § Context Propagation § Cross-service / cross-agent network calls` (inject-only transport).
+
 ## Truncation and attribute limits
 
 **No engine-level truncation** — full input/output is flattened into per-key attributes. Two OTel SDK caps still apply:
@@ -446,4 +591,4 @@ app.add_middleware(ObserventHTTPMiddleware)
 
 ---
 
-*Last verified: 2026-06-20 with Python 3.12, OpenTelemetry API/SDK 1.41, Starlette 0.40.*
+*Last verified: 2026-07-01 with Python 3.12, OpenTelemetry API/SDK 1.41, Starlette 0.40.*

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: run the docs-consistency suite whenever an 8x5 grid file is
+"""PostToolUse hook: run the docs-consistency suite whenever an 9x7 grid file is
 edited, so matrix/pin drift is caught in-loop instead of minutes later in CI.
 
 Reads the Claude Code hook JSON event on stdin. Exits 0 (silent) for files that

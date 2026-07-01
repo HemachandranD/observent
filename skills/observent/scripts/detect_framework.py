@@ -21,7 +21,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from observent_matrix import backend_detection_modules, framework_detection_modules
+from observent_matrix import (
+    auto_instrumenting_deps,
+    backend_detection_modules,
+    framework_detection_modules,
+)
 
 # Derived from the single source of truth in observent_matrix.py (see CLAUDE.md
 # "Adding a new framework / backend"). FRAMEWORKS excludes the non-detectable
@@ -30,6 +34,9 @@ from observent_matrix import backend_detection_modules, framework_detection_modu
 FRAMEWORKS: dict[str, list[str]] = framework_detection_modules()
 
 BACKENDS: dict[str, list[str]] = backend_detection_modules()
+
+# Third-party deps that carry their own dormant OTel instrumentation (gap #15).
+AUTO_INSTRUMENTING_DEPS: list[dict[str, object]] = auto_instrumenting_deps()
 
 INSTRUMENTORS: dict[str, str] = {
     "openinference-instrumentation-langchain": "openinference.instrumentation.langchain",
@@ -190,6 +197,30 @@ def detect(root: Path) -> dict[str, Any]:
         {"package": pkg} for pkg, mod in INSTRUMENTORS.items() if _is_installed(mod)
     ]
 
+    # Deps whose own OTel instrumentation will auto-activate once opentelemetry-sdk
+    # is installed. Surfaced so the spec phase can offer keep-vs-disable (env_var).
+    auto_instrumenting_found: list[dict[str, Any]] = []
+    for dep in AUTO_INSTRUMENTING_DEPS:
+        dep_modules = dep["modules"]
+        assert isinstance(dep_modules, list)
+        sources = []
+        if any(_is_installed(m) for m in dep_modules):
+            sources.append("installed")
+        if any(_name_match(m, declared) for m in dep_modules):
+            sources.append("declared")
+        if any(m in imports for m in dep_modules):
+            sources.append("imported")
+        if sources:
+            auto_instrumenting_found.append(
+                {
+                    "name": dep["slug"],
+                    "display": dep["display"],
+                    "env_var": dep["env_var"],
+                    "enabled_by_default": dep["enabled_by_default"],
+                    "sources": sources,
+                }
+            )
+
     web_frameworks_found: list[dict[str, Any]] = []
     for label, modules in WEB_FRAMEWORKS.items():
         sources = []
@@ -208,6 +239,7 @@ def detect(root: Path) -> dict[str, Any]:
         "frameworks": frameworks_found,
         "backends": backends_found,
         "instrumentors": instrumentors_found,
+        "auto_instrumenting_deps": auto_instrumenting_found,
         "web_frameworks": web_frameworks_found,
         "docker": _docker(),
         "imports_truncated": imports_truncated,

@@ -130,6 +130,71 @@ def test_secret_redaction(cap, exporter):
     assert attrs.get("input.user_id") == "42"
 
 
+def test_open_or_enrich_span_public_context_manager(cap, exporter):
+    # The public entry point stamps input + identity on the fallback root, and
+    # capture_output on the same span gives it output too (#18: root has both).
+    with cap.open_or_enrich_span({"message": "hi"}, agent_name="text2sql") as span:
+        cap.capture_output({"reply": "ok"}, span)
+        cap.set_ok(span)
+    root = _named(exporter.get_finished_spans(), "agent.run")
+    assert root is not None
+    attrs = dict(root.attributes)
+    assert attrs.get("input.message") == "hi"
+    assert attrs.get("output.reply") == "ok"
+    assert attrs.get("agent.name") == "text2sql"
+
+
+def test_enrich_path_does_not_autostamp_identity(cap, exporter):
+    # On an existing (foreign) framework span, capture_run must NOT blanket-apply
+    # the generic identity defaults — that would relabel/clobber the span.
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        cap.capture_run(lambda payload: {"reply": "ok"})({"message": "hi"})
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert "openinference.span.kind" not in attrs
+    assert "agent.name" not in attrs
+
+
+def test_enrich_path_applies_explicit_identity(cap, exporter):
+    # When identity is passed explicitly, it IS stamped onto the existing span.
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        with cap.open_or_enrich_span({"q": "x"}, agent_name="text2sql", agent_role="sql-writer"):
+            pass
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert attrs.get("agent.name") == "text2sql"
+    assert attrs.get("agent.role") == "sql-writer"
+
+
+def test_fallback_span_name_override(cap, exporter):
+    with cap.open_or_enrich_span({"q": "x"}, name="text2sql: the France query"):
+        pass
+    names = [s.name for s in exporter.get_finished_spans()]
+    assert "text2sql: the France query" in names
+
+
+def test_identity_attrs_on_fallback_root(cap, exporter):
+    # Default convention is "oi" -> OpenInference identity keys on the root span.
+    with cap.open_or_enrich_span({"q": "x"}, agent_name="rag", agent_role="retriever"):
+        pass
+    attrs = dict(_named(exporter.get_finished_spans(), "agent.run").attributes)
+    assert attrs.get("openinference.span.kind") == "AGENT"
+    assert attrs.get("agent.name") == "rag"
+    assert attrs.get("agent.role") == "retriever"
+
+
+def test_identity_attrs_respect_otel_genai_convention(cap, exporter, monkeypatch):
+    # Flip the generation-time convention literal to otel-genai and confirm the
+    # gen_ai.* identity keys are emitted instead of the OI ones.
+    monkeypatch.setattr(cap, "_CONVENTION", "otel-genai")
+    with cap.open_or_enrich_span({"q": "x"}, agent_name="deepresearch"):
+        pass
+    attrs = dict(_named(exporter.get_finished_spans(), "agent.run").attributes)
+    assert attrs.get("gen_ai.operation.name") == "invoke_agent"
+    assert attrs.get("gen_ai.agent.name") == "deepresearch"
+    assert "openinference.span.kind" not in attrs
+
+
 def test_baggage_promoted_to_child(cap, exporter):
     pytest.importorskip("opentelemetry.processor.baggage")
     tracer = trace.get_tracer("t")

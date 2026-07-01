@@ -28,6 +28,7 @@ import argparse
 import importlib.util
 import os
 import socket
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -164,12 +165,75 @@ def _probe_http(result: Result, url: str, method: str = "GET", timeout: float = 
         return False
 
 
-def check_phoenix(smoke: bool) -> Result:
+def _probe_http_retry(
+    result: Result,
+    url: str,
+    *,
+    method: str = "GET",
+    attempts: int = 7,
+    base_delay: float = 2.0,
+    max_delay: float = 45.0,
+    timeout: float = 5.0,
+) -> bool:
+    """Like ``_probe_http`` but retries with exponential backoff (bounded ~2 min).
+
+    For a backend whose endpoint may not accept traffic immediately after
+    ``docker compose up --wait`` returns. SigNoz is the motivating case: its
+    ingester serves OTLP only after an opamp-driven collector restart that can lag
+    ``--wait`` by ~2 minutes, so a single immediate probe fails with
+    ``RemoteDisconnected`` even though the stack is fine. Records only the final
+    outcome to ``result`` (no per-attempt spam), plus one INFO while it waits.
+    """
+    delay = base_delay
+    last_err = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            req = urllib.request.Request(url, method=method)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                result.ok(f"HTTP {method} {url} -> {resp.status} (attempt {attempt}/{attempts})")
+                return True
+        except urllib.error.HTTPError as e:
+            # A 4xx means the receiver is up (reachable-but-unauth); good enough.
+            if 400 <= e.code < 500:
+                result.ok(f"HTTP {method} {url} -> {e.code} (reachable, attempt {attempt}/{attempts})")
+                return True
+            last_err = f"HTTP {e.code}"
+        except (urllib.error.URLError, OSError) as e:
+            last_err = str(e)
+        if attempt < attempts:
+            wait = min(delay, max_delay)
+            if attempt == 1:
+                result.info(
+                    f"{url} not ready yet — retrying with backoff "
+                    f"(up to {attempts} attempts; SigNoz's OTLP receiver can lag `--wait` ~2 min)"
+                )
+            time.sleep(wait)
+            delay *= 2
+    result.fail(f"HTTP {method} {url} unreachable after {attempts} attempts: {last_err}")
+    return False
+
+
+def check_phoenix(smoke: bool, *, fanout: bool = False) -> Result:
     r = Result("phoenix")
-    if not _is_installed("phoenix"):
-        r.fail("arize-phoenix not installed (pip install 'arize-phoenix>=5.0')")
-    else:
+    if _is_installed("phoenix"):
         r.ok("arize-phoenix installed")
+    elif fanout:
+        # Multi-backend fan-out (Phoenix + >=1 other backend) uses a manual
+        # TracerProvider + OTLPSpanExporter per references/matrix.md § Multi-Backend
+        # Fan-Out — that path never imports arize-phoenix. Don't fail on its
+        # absence; the correct check here is reachability + a real synthetic-span
+        # POST (below), needing only the OTLP HTTP exporter.
+        r.info(
+            "arize-phoenix not installed — multi-backend fan-out uses a manual "
+            "TracerProvider (matrix.md § Multi-Backend Fan-Out); package not required"
+        )
+        if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
+            r.fail(
+                "opentelemetry-exporter-otlp-proto-http not installed "
+                "(pip install 'opentelemetry-exporter-otlp-proto-http>=1.25')"
+            )
+    else:
+        r.fail("arize-phoenix not installed (pip install 'arize-phoenix>=5.0')")
 
     api_key = os.environ.get("PHOENIX_API_KEY")
     endpoint = os.environ.get("PHOENIX_COLLECTOR_ENDPOINT")
@@ -258,9 +322,14 @@ def check_signoz(smoke: bool) -> Result:
     else:
         r.info("Self-hosted SigNoz (no ingestion key required)")
 
-    # Probe the OTLP endpoint root
+    # Probe the OTLP endpoint root. When we're about to emit a smoke span (i.e.
+    # right after provisioning), retry with backoff: SigNoz's ingester serves OTLP
+    # only after an opamp-driven collector restart that can lag `--wait` by ~2 min,
+    # so an immediate probe/POST hits a transient RemoteDisconnected window. A plain
+    # (no-smoke) reachability check stays a single fast probe.
     root = f"{parsed.scheme}://{parsed.netloc}"
-    if not _probe_http(r, root, method="GET"):
+    reachable = _probe_http_retry(r, root, method="GET") if smoke else _probe_http(r, root, method="GET")
+    if not reachable:
         _provision_hint(r, "signoz", parsed.hostname)
 
     if smoke and r.passed:
@@ -604,10 +673,17 @@ def main() -> int:
     args = parser.parse_args()
 
     backends: list[str] = args.backend
+    # A multi-backend invocation means the generated stack is the manual
+    # fan-out TracerProvider, not phoenix.otel.register(); Phoenix's package
+    # check relaxes accordingly (gap: arize-phoenix wrongly required in fan-out).
+    fanout = len(backends) > 1
     overall_pass = True
     for backend in backends:
         print(f"\n=== {backend} ===")
-        result = CHECKS[backend](args.smoke_test)
+        if backend == "phoenix":
+            result = check_phoenix(args.smoke_test, fanout=fanout)
+        else:
+            result = CHECKS[backend](args.smoke_test)
         for msg in result.messages:
             print(msg)
         if not result.passed:

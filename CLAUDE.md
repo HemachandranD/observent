@@ -28,7 +28,7 @@ skills/observent/
   SKILL.md              # Skill entry point — frontmatter + SDD workflow (Spec / Plan / Tasks / Implement) + optional Phase 5 Evaluate
   references/
     spec_schema.md      # Canonical schema for the three .observent/ artifacts (spec.md, plan.md, tasks.json)
-    matrix.md           # 9×5 matrix, per-framework + per-backend reference,
+    matrix.md           # 9×7 matrix, per-framework + per-backend reference,
                         # span attribute summary, context propagation, troubleshooting
     openinference.md    # Canonical OpenInference attribute reference (Phoenix path)
     otel_genai.md       # Canonical OTel-GenAI attribute reference (Langfuse / SigNoz / Elastic APM / LangSmith / Opik / Jaeger path)
@@ -46,7 +46,9 @@ skills/observent/
   scripts/
     observent_matrix.py # SINGLE SOURCE OF TRUTH for the framework×backend grid —
                         # frameworks/backends (slug, display, detect modules,
-                        # convention). detect_framework.py, validate_setup.py and
+                        # convention) + KNOWN_AUTO_INSTRUMENTING_DEPS (deps that ship
+                        # their own dormant OTel instrumentation, e.g. a2a-sdk).
+                        # detect_framework.py, validate_setup.py and
                         # tests/test_docs_consistency.py all derive their tables here.
     detect_framework.py # JSON report: frameworks/backends/instrumentors detected
     validate_setup.py   # Per-backend env + reachability check; --smoke-test emits a span
@@ -135,7 +137,7 @@ Update in this order:
 
 1. `skills/observent/scripts/observent_matrix.py` — add a `Framework(slug, display, modules)` entry to `FRAMEWORKS` (the single source of truth). `detect_framework.py`'s `FRAMEWORKS` table and `tests/test_docs_consistency.py`'s framework list both derive from this automatically — no edits needed in either.
 2. `skills/observent/SKILL.md` — add the framework to the `argument-hint`-eligible list in Phase 1 § Step 1.2 and the description's auto-invocation triggers.
-3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 9×5 compatibility matrix.
+3. `skills/observent/references/matrix.md` — add a "Per-framework reference" subsection and a row to the 9×7 compatibility matrix.
 4. `skills/observent/references/examples.md` — add at least one runnable example (rotate which backend it uses) and stamp it with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 5. `skills/observent/references/matrix.md` § Verified Versions — add a row for the new framework + instrumentor packages with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-framework `pip install` snippet you added in step 3.
 6. CI passes (frontmatter parse, imports, lint, type-check).
@@ -150,8 +152,17 @@ Update in this order:
 4. `skills/observent/references/matrix.md` — add a "Per-backend reference" subsection and a column to the matrix.
 5. `skills/observent/references/examples.md` — add at least one example using the new backend, with a `*Last verified: YYYY-MM-DD with Python X.Y.*` footer.
 6. `skills/observent/references/matrix.md` § Verified Versions — add a row for the backend's required package(s) with the exact installed version (`==X.Y.Z`, sourced from the package's PyPI page or `pip show`), and bump the table's "Last verified" date to today. Mirror the same `==` pin in the per-backend Install line you added in step 4.
-7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack or `upstream-clone` when the stack needs repo-mounted config files), add a row to the § Image Versions table with the exact image tag(s), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm, opik, jaeger}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
+7. **If the backend is self-hostable:** `skills/observent/references/self_host.md` — add a provisioning section (choose `vendored-compose` for a self-contained stack, `upstream-clone` when the stack needs repo-mounted config files, or `vendor-cli-generated` when self-host flows through a vendor CLI that *generates* a compose file, e.g. SigNoz/Foundry — this method has no Image-Versions rows since the CLI resolves image tags at generation time; pin the CLI/installer instead). Add a row to the § Image Versions table with the exact image tag(s) (skip for `vendor-cli-generated`), and bump that table's "Last verified" date. Add the backend to the `{phoenix, langfuse, signoz, elastic-apm, opik, jaeger}` provisionable set referenced in `SKILL.md` Phase 1 § 1.5. If it has **no** free self-host edition (like LangSmith), instead document it under the "not provisioned" note and leave it out of the provisionable set.
 8. `tests/` — no edits needed for the grid: `test_docs_consistency.py` derives its framework/backend lists from `observent_matrix.py` (step 1), so the new option is covered automatically. Just run `pytest` to confirm the matrix/README/code stay in sync.
+
+### Adding a known auto-instrumenting dependency
+
+Some third-party libraries ship their own OpenTelemetry instrumentation that is dormant until `opentelemetry` is importable, then auto-emits library-internal spans once the skill installs `opentelemetry-sdk` (e.g. `a2a-sdk`'s `a2a.server.*` spans, gated by `OTEL_INSTRUMENTATION_A2A_SDK_ENABLED`). To register one so the skill can offer keep-vs-disable:
+
+1. `skills/observent/scripts/observent_matrix.py` — append an `AutoInstrumentingDep(slug, display, modules, env_var, enabled_by_default)` to `KNOWN_AUTO_INSTRUMENTING_DEPS`. `detect_framework.py` derives its detection loop + the `auto_instrumenting_deps` JSON field from this automatically. Use two probe modules if the import name differs from the PyPI name (the `("a2a", "a2a_sdk")` trick, mirroring google-adk). Only list deps with a **documented** on/off env var.
+2. `skills/observent/references/matrix.md § Known auto-instrumenting dependencies` — add a row (dependency · what it instruments · gate env var · default).
+3. `skills/observent/SKILL.md § 1.4b` already handles the spec-phase keep/disable question generically — no edit needed unless the interaction changes.
+4. `tests/test_detect_framework.py` — add a detection test for the new dep.
 
 ### Cross-tool distribution (read this first)
 
@@ -164,7 +175,7 @@ Keep the skill **self-contained and relative** so it runs wherever it lands: `re
 
 ### Adding a new eval check (Phase 5)
 
-The eval gate is **grid-agnostic** — it touches none of `observent_matrix.py`, the detectors, or the 9×5 matrix. To add a new assertion:
+The eval gate is **grid-agnostic** — it touches none of `observent_matrix.py`, the detectors, or the 9×7 matrix. To add a new assertion:
 
 1. `skills/observent/scripts/eval_gate.py` — add the check to the relevant family function (`check_budgets` / `check_behavior` / `check_redaction` / `check_regression`) or add a new family and call it from `run_checks`. Emit a `Check(name, status, message)`; keep it stdlib-only and `mypy --strict` clean.
 2. `skills/observent/references/eval.md` — document the new `eval.json` key under § eval.json schema. **If it reads a span attribute**, add the canonical field to the cross-convention alias table using only keys that exist in `references/openinference.md` / `otel_genai.md` (the docs-consistency test asserts this).
@@ -197,13 +208,13 @@ Usually **nothing to do in this repo** — `npx skills` already maps 70+ coding 
 - **LangSmith uses pure OTLP HTTP** — `OTLPSpanExporter` to `${LANGSMITH_ENDPOINT}/otel/v1/traces` (default `https://api.smith.langchain.com`) with header `x-api-key: ${LANGSMITH_API_KEY}`. No `langsmith` SDK code is generated — LangSmith maps OTel-GenAI conventions to its native trace schema on ingest, so the generated stack is mechanically identical to SigNoz. This keeps LangSmith composable in the multi-backend fan-out template.
 - **Mandatory attributes** — every generated template must populate model, provider, prompt+completion+total tokens, input/output messages, and (for Anthropic) cache tokens. The reference doc lists the full set per span kind.
 - **Context propagation** — `start_as_current_span` (never `start_span`), Python ≥ 3.11 inherits async context, `attach()`/`detach()` for threads, `inject()` into env for subprocess, HTTPX/Requests instrumentors for cross-service.
-- **Local self-host provisioning** — when a chosen backend's endpoint is `self-host` and unreachable, and Docker + Compose are available, the skill *offers* to stand it up locally. Covered backends: **Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger**. **LangSmith is excluded** — it has no free OSS/Docker edition (self-host is enterprise-licensed), so it gets an explanatory note instead of an offer. **Two confirmation gates, never automatic:** (1) the Phase 1 §1.5 opt-in prompt (`Provision it locally with Docker?`) — a `no`/`skip` means no Docker task is generated; (2) the Phase 4 `confirm` task, which surfaces the `docker compose … up -d --wait` command (and the full compose file for `vendored-compose` backends) in the diff preview — `docker compose up` only runs after the user approves it. Provisioning stays inside the lifecycle as ordinary tasks — a `write_file` for a vendored compose (Phoenix, Elastic APM, Jaeger) and/or a `run_command` that runs the `up` command (or a pinned upstream `git clone` + up for Langfuse, SigNoz, Opik) — placed after `pip install` and before the final `validate`. No imperative Docker driver. Canonical templates + pinned image tags: `skills/observent/references/self_host.md`.
+- **Local self-host provisioning** — when a chosen backend's endpoint is `self-host` and unreachable, and Docker + Compose are available, the skill *offers* to stand it up locally. Covered backends: **Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger**. **LangSmith is excluded** — it has no free OSS/Docker edition (self-host is enterprise-licensed), so it gets an explanatory note instead of an offer. Three provisioning methods (`skills/observent/references/self_host.md § Provisioning method per backend`): `vendored-compose` (Phoenix, Elastic APM, Jaeger — a written compose file), `upstream-clone` (Langfuse, Opik — pinned `git clone` + up), and `vendor-cli-generated` (**SigNoz** — installs the Foundry CLI, writes its `casting.yaml`, runs `foundryctl forge` to *generate* a compose file, then `docker compose up` on it; SigNoz deprecated its own `docker-compose` manifests in 2026). **Confirmation gates, never automatic:** (1) the Phase 1 §1.5 opt-in prompt (`Provision it locally with Docker?`) — a `no`/`skip` means no Docker task is generated; (2) the Phase 4 `confirm` task, which surfaces the `docker compose … up -d --wait` command (and the full compose file for `vendored-compose` backends) in the diff preview — `docker compose up` only runs after the user approves it; (3) for `vendor-cli-generated`, an additional `installs_cli` `confirm` because it installs a local binary (a larger consent surface than `docker compose up`) — surfaces the package, installer URL, and trust basis. Provisioning stays inside the lifecycle as ordinary tasks — a `write_file` for a vendored compose (Phoenix, Elastic APM, Jaeger) and/or `run_command`s for the `up` command (a pinned upstream `git clone` + up for Langfuse, Opik; a CLI install → config write → `forge` → up for SigNoz) — placed after `pip install` and before the final `validate`. No imperative Docker driver. Canonical templates + pinned image tags: `skills/observent/references/self_host.md`.
 - **Diff preview before write** — even when auto-invoked. The skill never silently modifies user code.
 - **Optional MCP enrichment — progressive enhancement, never a dependency** — the bundled zero-dependency scripts (`detect_framework.py`, `existing_setup.py`, `validate_setup.py`) are the floor; the skill must run end-to-end with only `Bash`. When the host agent *also* exposes a useful MCP, Phase 4 may use it to *add* confidence, but the script/Bash path stays canonical for a task's `done`/`failed` status and a missing or failing MCP must never block a task. Recommended set (each with a documented fallback): an **IDE / language-server MCP** (verify generated `observent_otel.py` / `observent_capture.py` imports + type-checks before marking a `write_file`/`edit_file` task `done`), an **observability-backend MCP** (Phoenix / Langfuse / SigNoz / Datadog / Grafana — confirm the smoke-test span actually landed with the expected attributes, past mere endpoint reachability), and a **container / Docker MCP** (inspect provisioned-stack health + logs instead of trusting the `docker compose … up --wait` exit code). MCP use carries the same diff-preview/confirm gate as a file write (never exfiltrate user code/traces silently, never pass secret values). **Context7 is explicitly excluded** — it's a maintainer/authoring aid for refreshing the `references/` files, not an implementation-phase tool. Because the skill ships verbatim to 70+ agents via `npx skills`, MCPs are framed agent-agnostically and `allowed-tools` is **not** widened with volatile MCP tool names — Claude Code users add the relevant ones themselves. Canonical description: `skills/observent/SKILL.md` § Optional MCP enrichment.
 
 ## Documentation Hygiene
 
-The 9×5 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
+The 9×7 matrix in `references/matrix.md` is canonical. If you change a row or column there, mirror the change in:
 - `SKILL.md` (Phase 2 § Step 2.5 endpoint table, Phase 1 § Step 1.3 backend-options list)
 - `README.md` (Supported matrix)
 - `references/examples.md` (if a removed combination had an example)

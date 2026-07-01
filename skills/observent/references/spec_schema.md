@@ -51,8 +51,11 @@ choice:
     langsmith: {mode: cloud,     url: "https://api.smith.langchain.com/otel/v1/traces"}
   env_vars_required: [PHOENIX_API_KEY, LANGSMITH_API_KEY, LANGSMITH_PROJECT]
   http_body_capture: true                                # OPTIONAL raw-HTTP-body adapter; true iff detection.web_frameworks contains fastapi/starlette AND raw wire payload is wanted. AI-boundary capture (observent_capture.py) is always generated regardless.
+  http_transport_spans: none                             # none | root-only | full — how much web-framework/transport instrumentation to emit. Only meaningful when detection.web_frameworks is non-empty. Default is backend-dependent: `none` for LLM-native-only backend sets ({phoenix,langfuse,opik,langsmith}); `root-only` when any APM backend ({signoz,elastic-apm,jaeger}) is present. See SKILL.md § 2.4 + references/capture.md § HTTP transport spans.
   self_host_provision:                                   # per self-host backend: provision a local Docker stack? (see references/self_host.md)
     phoenix: true                                        # only keys for backends with endpoints.<backend>.mode == self-host; langsmith NEVER appears (no OSS edition)
+  auto_instrumenting_deps:                               # OPTIONAL; one key per detect_framework.py `auto_instrumenting_deps` entry (deps that ship dormant OTel instrumentation). Absent/empty when none detected. See SKILL.md § 1.4b + references/matrix.md § Known auto-instrumenting dependencies.
+    a2a-sdk: disable                                     # keep | disable — `disable` appends `<ENV_VAR>=false` to .env (e.g. OTEL_INSTRUMENTATION_A2A_SDK_ENABLED=false)
 ---
 
 # Observability Spec
@@ -119,12 +122,16 @@ elastic_apm_native_agent: false                # true iff `elastic-apm` ∈ spec
 openai_agents_native_processors: false         # true iff spec.choice.framework == openai-agents
 provision:                                     # one entry per backend with spec.choice.self_host_provision.<backend> == true; empty list otherwise
   - backend: phoenix
-    method: vendored-compose                   # vendored-compose | upstream-clone (see references/self_host.md § Provisioning method)
-    compose_file: docker-compose.observent-phoenix.yml   # present for vendored-compose; null for upstream-clone
+    method: vendored-compose                   # vendored-compose | upstream-clone | vendor-cli-generated (see references/self_host.md § Provisioning method per backend)
+    compose_file: docker-compose.observent-phoenix.yml   # vendored-compose: names a files[] entry (plan:compose_<backend> anchor). upstream-clone: null. vendor-cli-generated: the CLI-generated path (e.g. pours/deployment/compose.yaml) — NOT a plan anchor.
     up_command: "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"
     down_command: "docker compose -f docker-compose.observent-phoenix.yml down"
     ui_url: "http://localhost:6006"
     otlp_url: "http://localhost:6006/v1/traces"
+  # vendor-cli-generated adds three fields (present only for that method; null/absent otherwise):
+  #   cli_install_command: "curl -fsSL https://signoz.io/foundry.sh | bash"   # installs a binary -> needs an installs_cli confirm (below)
+  #   cli_config_file:     casting.yaml                                        # a files[] create entry; content in the <!-- plan:clicfg_<backend> --> anchor
+  #   generate_command:    "foundryctl forge -f casting.yaml"                  # runs the CLI's forge-equivalent to materialize compose_file
 ---
 
 <!-- plan:observent_otel -->
@@ -145,8 +152,16 @@ provision:                                     # one entry per backend with spec
 <!-- plan:compose_phoenix -->
 ```yaml
 # full content of docker-compose.observent-phoenix.yml — only present for vendored-compose
-# backends (phoenix, elastic-apm); upstream-clone backends (langfuse, signoz) have no anchor,
-# their `provision[].up_command` does the git clone + docker compose up. See references/self_host.md.
+# backends (phoenix, elastic-apm, jaeger); upstream-clone backends (langfuse, opik) have no anchor,
+# their `provision[].up_command` does the git clone + docker compose up. vendor-cli-generated
+# backends (signoz) also have no compose anchor — the CLI generates the compose file — but DO carry
+# a <!-- plan:clicfg_<backend> --> anchor for the CLI's declarative config. See references/self_host.md.
+```
+
+<!-- plan:clicfg_signoz -->
+```yaml
+# full content of the CLI's declarative config (e.g. Foundry casting.yaml) — only present for
+# vendor-cli-generated backends. Written by a write_file task; consumed by provision[].generate_command.
 ```
 
 <!-- plan:main_edit -->
@@ -174,7 +189,11 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
 - `pip_install` is **one** line, even when long; the skill quotes pinned versions from `references/matrix.md § Verified Versions`.
 - `env_vars` keys are exactly the entries in `spec.choice.backends`.
 - `processors` lists one entry per OTLP backend in `spec.choice.backends`; Elastic APM in native-agent mode does NOT appear here (it attaches to the global tracer via its OTel bridge — captured by `elastic_apm_native_agent: true` instead).
-- `provision` has one entry per backend with `spec.choice.self_host_provision.<backend> == true` (empty list when no provisioning was requested). For `method: vendored-compose`, `compose_file` names a `files[]` create entry whose content lives in the `<!-- plan:compose_<backend> -->` anchor; for `method: upstream-clone`, `compose_file` is null and `up_command` performs the pinned `git clone` + `docker compose up`. Templates and pinned image tags come from `references/self_host.md` — never inline them anywhere else.
+- `provision` has one entry per backend with `spec.choice.self_host_provision.<backend> == true` (empty list when no provisioning was requested). Per `method`:
+  - `vendored-compose` — `compose_file` names a `files[]` create entry whose content lives in the `<!-- plan:compose_<backend> -->` anchor; `up_command` runs `docker compose … up -d --wait` on it.
+  - `upstream-clone` — `compose_file` is null; `up_command` performs the pinned `git clone` + `docker compose up`.
+  - `vendor-cli-generated` — `compose_file` is the **CLI-generated** path (e.g. `pours/deployment/compose.yaml`), **not** a `plan:compose_*` anchor. Adds `cli_install_command` (installs the vendor CLI — must trigger an `installs_cli` `confirm`, see § tasks.json), `cli_config_file` (a `files[]` create entry with content in the `<!-- plan:clicfg_<backend> -->` anchor), and `generate_command` (runs the CLI's `forge`-equivalent to materialize `compose_file`). Ordered tasks: install-CLI `run_command` → write-config `write_file` → generate `run_command` → `up_command` `run_command`.
+  Templates and pinned image/CLI versions come from `references/self_host.md` — never inline them anywhere else.
 
 ```
 
@@ -197,6 +216,20 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
       "started_at": null,
       "finished_at": null,
       "error": null
+    },
+    {
+      "_comment": "Optional installs_cli confirm — REQUIRED before any vendor-cli-generated provision runs (it installs a local binary, a larger consent surface than `docker compose up`).",
+      "id": "t01b",
+      "kind": "confirm",
+      "payload": {
+        "prompt": "Provisioning SigNoz installs the Foundry CLI (foundryctl). Proceed? (yes / no)",
+        "installs_cli": {
+          "package": "foundryctl",
+          "installer_url": "https://signoz.io/foundry.sh",
+          "trust_basis": "checksum-verified GitHub release; installs to ~/.local/bin; no arbitrary remote exec"
+        }
+      },
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
       "id": "t02",
@@ -223,21 +256,34 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
+      "_comment": "t06–t09 are the vendor-cli-generated provision the t01b confirm gates (SigNoz/Foundry): install CLI → write CLI config → generate compose → up. For a vendored-compose backend (Phoenix/Elastic APM/Jaeger) this collapses to a single write_file (docker-compose.observent-<backend>.yml, content_ref plan#compose_<backend>) + one `docker compose … up -d --wait` run_command; for upstream-clone (Langfuse/Opik), a single `git clone … && docker compose … up` run_command.",
       "id": "t06",
-      "kind": "write_file",
-      "payload": {"path": "docker-compose.observent-phoenix.yml", "content_ref": "plan#compose_phoenix"},
+      "kind": "run_command",
+      "payload": {"cmd": "curl -fsSL https://signoz.io/foundry.sh | bash"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
       "id": "t07",
-      "kind": "run_command",
-      "payload": {"cmd": "docker compose -f docker-compose.observent-phoenix.yml up -d --wait"},
+      "kind": "write_file",
+      "payload": {"path": "casting.yaml", "content_ref": "plan#clicfg_signoz"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     },
     {
       "id": "t08",
+      "kind": "run_command",
+      "payload": {"cmd": "foundryctl forge -f casting.yaml"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t09",
+      "kind": "run_command",
+      "payload": {"cmd": "docker compose -f pours/deployment/compose.yaml up -d --wait"},
+      "status": "pending", "started_at": null, "finished_at": null, "error": null
+    },
+    {
+      "id": "t10",
       "kind": "validate",
-      "payload": {"cmd": "python <skill-dir>/scripts/validate_setup.py phoenix,langsmith"},
+      "payload": {"cmd": "python <skill-dir>/scripts/validate_setup.py phoenix,signoz --smoke-test"},
       "status": "pending", "started_at": null, "finished_at": null, "error": null
     }
   ]
@@ -248,7 +294,7 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
 
 | `kind` | Maps to | Required `payload` fields |
 |---|---|---|
-| `confirm` | User prompt | `prompt` (string) |
+| `confirm` | User prompt | `prompt` (string); optional `installs_cli` `{package, installer_url, trust_basis}` — set when the confirm gates a `vendor-cli-generated` provision that installs a local binary, so the diff preview shows what's installed and why it's trustworthy |
 | `write_file` | Write tool | `path` (project-relative), `content_ref` (`plan#<slug>`) |
 | `edit_file` | Edit tool | `path`, `diff_ref` (`plan#<slug>`) |
 | `run_command` | Bash tool | `cmd` (string) |

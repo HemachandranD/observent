@@ -263,6 +263,18 @@ Set on most span kinds for at-a-glance inspection in the UI.
 
 ---
 
+## Resource attributes (project routing)
+
+Set on the OTel `Resource` (not per-span). Phoenix reads these to route traces into projects when raw OTLP is used instead of `phoenix.otel.register()`.
+
+**Sources:** Phoenix "Setup Tracing" / projects — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `openinference.project.name` | string | Phoenix project the trace lands in. `register(project_name=...)` sets this for you; a manual `TracerProvider` (e.g. the multi-backend fan-out) must add it to `Resource.create({...})` itself, or traces land in the `default` project. Env-driven via `PHOENIX_PROJECT_NAME`. |
+
+---
+
 ## Cross-cutting (Baggage)
 
 Set once at the entry point with OTel baggage; promoted to span attributes via `BaggageSpanProcessor`.
