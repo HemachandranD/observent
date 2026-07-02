@@ -13,7 +13,6 @@
       "name": "observent",
       "description": "Wire up observability for your multi-agent Python app in one command. 9 frameworks × 7 backends, correct span hierarchy and context propagation out of the box.",
       "source": "./",
-      "strict": false,
       "skills": [
         "./skills/observent"
       ],
