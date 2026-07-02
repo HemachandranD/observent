@@ -1,6 +1,6 @@
 {
   "name": "observent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Production-grade observability for multi-agent Python apps. Detects your framework (LangGraph, CrewAI, Microsoft Agent Framework, Anthropic Agents SDK, OpenAI Agents SDK, smolagents, LlamaIndex) and wires up Arize Phoenix, Langfuse, SigNoz, Elastic APM, LangSmith, Opik, or Jaeger with correct span hierarchy, context propagation, and mandatory OTel/OpenInference attributes. Installs into 70+ coding agents via `npx skills`.",
   "keywords": [
