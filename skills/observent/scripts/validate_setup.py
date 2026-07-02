@@ -90,6 +90,18 @@ class Result:
         self.messages.append(f"  [INFO] {msg}")
 
 
+def _load_dotenv_if_available() -> None:
+    """Best-effort load of a project .env so standalone runs see the project's
+    real values (e.g. LANGFUSE_HOST=http://localhost:3000) instead of cloud
+    defaults. python-dotenv is an OPTIONAL soft dependency — never required
+    (skill scripts stay stdlib-only); absence degrades silently."""
+    try:
+        from dotenv import load_dotenv  # type: ignore[import-not-found,unused-ignore]
+    except ImportError:
+        return
+    load_dotenv()
+
+
 def _is_installed(module: str) -> bool:
     try:
         return importlib.util.find_spec(module) is not None
@@ -261,10 +273,25 @@ def check_phoenix(smoke: bool, *, fanout: bool = False) -> Result:
     return r
 
 
-def check_langfuse(smoke: bool) -> Result:
+def check_langfuse(smoke: bool, *, fanout: bool = False) -> Result:
     r = Result("langfuse")
-    if not _is_installed("langfuse"):
+    if _is_installed("langfuse"):
+        r.ok("langfuse installed")
+    elif fanout:
+        # Multi-backend fan-out uses a manual TracerProvider + OTLPSpanExporter
+        # (matrix.md § Langfuse OTLP path) — that path never imports langfuse.
+        r.info(
+            "langfuse not installed — multi-backend fan-out uses a manual "
+            "TracerProvider + OTLP exporter (matrix.md § Langfuse); package not required"
+        )
+        if not _is_installed("opentelemetry.exporter.otlp.proto.http"):
+            r.fail(
+                "opentelemetry-exporter-otlp-proto-http not installed "
+                "(pip install 'opentelemetry-exporter-otlp-proto-http>=1.25')"
+            )
+    else:
         r.fail("langfuse not installed (pip install 'langfuse>=3.0')")
+
     pk = _check_env(r, "LANGFUSE_PUBLIC_KEY")
     sk = _check_env(r, "LANGFUSE_SECRET_KEY")
     host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
@@ -272,8 +299,17 @@ def check_langfuse(smoke: bool) -> Result:
 
     host_name = urlparse(host).hostname
     if _is_local(host_name):
-        port = urlparse(host).port or 3000
-        if not _probe_tcp(r, host_name or "localhost", port):
+        # First boot pulls images + runs Postgres/ClickHouse migrations + compiles
+        # Next.js; langfuse-web has no upstream healthcheck so `--wait` can't block
+        # on it (self_host.md § Langfuse). Retry with backoff right before a smoke
+        # span POST; a plain reachability check stays a single fast probe.
+        health = f"{host.rstrip('/')}/api/public/health"
+        reachable = (
+            _probe_http_retry(r, health, method="GET")
+            if smoke
+            else _probe_http(r, health, method="GET")
+        )
+        if not reachable:
             _provision_hint(r, "langfuse", host_name)
 
     if pk and sk and _is_installed("langfuse"):
@@ -291,6 +327,10 @@ def check_langfuse(smoke: bool) -> Result:
                 _probe_http(r, f"{host.rstrip('/')}/api/public/health", method="GET")
         except Exception as e:  # noqa: BLE001
             r.fail(f"Langfuse client init failed: {e}")
+    elif fanout and pk and sk and not _is_installed("langfuse"):
+        # No SDK to auth_check() with — fall back to a plain reachability probe of
+        # the OTLP-path health endpoint so fan-out still gets a real auth/reach signal.
+        _probe_http(r, f"{host.rstrip('/')}/api/public/health", method="GET")
 
     if smoke and r.passed:
         import base64
@@ -656,6 +696,7 @@ def _parse_backends(value: str) -> list[str]:
 
 
 def main() -> int:
+    _load_dotenv_if_available()
     parser = argparse.ArgumentParser(description="Validate observent observability setup.")
     parser.add_argument(
         "backend",
@@ -682,6 +723,8 @@ def main() -> int:
         print(f"\n=== {backend} ===")
         if backend == "phoenix":
             result = check_phoenix(args.smoke_test, fanout=fanout)
+        elif backend == "langfuse":
+            result = check_langfuse(args.smoke_test, fanout=fanout)
         else:
             result = CHECKS[backend](args.smoke_test)
         for msg in result.messages:

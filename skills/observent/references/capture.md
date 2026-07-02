@@ -109,11 +109,11 @@ _CONVENTION = "oi"  # one of: "oi" | "otel-genai" | "both" — generation-time l
 # agent-identity attributes (matrix.md § Mandatory Span Attributes) so a trace list
 # is legible without opening resource attributes. The skill fills them from
 # spec.choice at generation time; callers can still override per-call via
-# open_or_enrich_span(name=..., agent_name=..., agent_role=...).
+# open_or_enrich_span(name=..., agent_name=..., agent_role=..., agent_framework=...).
 _SERVICE_NAME = "agent"  # names the fallback root span: f"{_SERVICE_NAME}.run"
 _AGENT_NAME = "agent"    # agent.name / gen_ai.agent.name on the run's root span
 _AGENT_ROLE = ""         # agent.role (OI); "" = omit
-_FRAMEWORK = ""          # agent.framework (OI), e.g. "crewai" | "langgraph"; "" = omit
+_FRAMEWORK = ""          # agent.framework (OI), e.g. "crewai" | "langgraph"; "" = omit (overridable per-call via agent_framework=)
 
 _REDACT_KEYS: frozenset[str] = frozenset({
     "api_key", "apikey", "api-key",
@@ -267,23 +267,28 @@ def _set_agent_identity(
     span: trace.Span,
     agent_name: str | None = None,
     agent_role: str | None = None,
+    agent_framework: str | None = None,
 ) -> None:
     """Stamp the mandatory multi-agent identity attributes onto `span`, per the
-    resolved convention. Params override the generation-time literals. Applied to
-    the run's root span (both the enriched framework span and the fallback), so
-    every trace shows *which* agent produced it without opening resource attrs."""
+    resolved convention. Params override the generation-time literals (including
+    agent_framework, which overrides _FRAMEWORK — the way a single shared
+    observent_capture.py can serve multiple frameworks in a multi-service repo).
+    Applied to the run's root span (both the enriched framework span and the
+    fallback), so every trace shows *which* agent produced it without opening
+    resource attrs."""
     if not span.is_recording():
         return
     name = agent_name or _AGENT_NAME
     role = agent_role or _AGENT_ROLE
+    framework = agent_framework or _FRAMEWORK
     if _CONVENTION in ("oi", "both"):
         span.set_attribute("openinference.span.kind", "AGENT")
         if name:
             span.set_attribute("agent.name", name)
         if role:
             span.set_attribute("agent.role", role)
-        if _FRAMEWORK:
-            span.set_attribute("agent.framework", _FRAMEWORK)
+        if framework:
+            span.set_attribute("agent.framework", framework)
     if _CONVENTION in ("otel-genai", "both"):
         span.set_attribute("gen_ai.operation.name", "invoke_agent")
         if name:
@@ -296,6 +301,7 @@ def open_or_enrich_span(
     name: str | None = None,
     agent_name: str | None = None,
     agent_role: str | None = None,
+    agent_framework: str | None = None,
 ):
     """Public context-manager entry point (also used by capture_run / _async).
 
@@ -317,8 +323,8 @@ def open_or_enrich_span(
         # better identity the instrumentor already set (e.g. Google ADK's
         # gen_ai.agent.name). The fallback span below (which observent owns) always
         # gets identity.
-        if agent_name or agent_role:
-            _set_agent_identity(current, agent_name, agent_role)
+        if agent_name or agent_role or agent_framework:
+            _set_agent_identity(current, agent_name, agent_role, agent_framework)
         return nullcontext(current)
     # set_error() already records the exception and sets ERROR status, so disable
     # the context manager's own exception handling to avoid a duplicate event.
@@ -328,7 +334,7 @@ def open_or_enrich_span(
     )
     span = cm.__enter__()
     enrich_current_span(inputs)
-    _set_agent_identity(span, agent_name, agent_role)
+    _set_agent_identity(span, agent_name, agent_role, agent_framework)
     return _Closing(cm, span)
 
 
@@ -389,7 +395,7 @@ def capture_run_async(fn: AF) -> AF:
 
 ## Public entry point, span naming & agent identity
 
-`open_or_enrich_span(inputs, *, name=None, agent_name=None, agent_role=None)` is the **public** context-manager entry point — the same one `capture_run` / `capture_run_async` use internally. Use it directly when you want to wrap a **single shared AI boundary** (e.g. a base executor's `execute()`), rather than decorating each entry point:
+`open_or_enrich_span(inputs, *, name=None, agent_name=None, agent_role=None, agent_framework=None)` is the **public** context-manager entry point — the same one `capture_run` / `capture_run_async` use internally. Use it directly when you want to wrap a **single shared AI boundary** (e.g. a base executor's `execute()`), rather than decorating each entry point:
 
 ```python
 from observent_capture import open_or_enrich_span, capture_output
@@ -401,7 +407,7 @@ with open_or_enrich_span(inputs, name=f"{service_name}: {summary}", agent_name="
 
 **Span naming (readability).** The fallback root span is named `f"{_SERVICE_NAME}.run"` (a generation-time literal, default `"agent"` → `agent.run`). Set `_SERVICE_NAME` per service so a trace list reads `text2sql.run` / `deepresearch.run` instead of a wall of identical `agent.run`. A caller may pass `name=` for a richer label (e.g. `f"{service_name}: {input_summary[:40]}"`). **Never** put a redacted field's raw value in a span *name* — names aren't redacted; only attributes are. This only controls observent's own root span; a framework's internal span names (CrewAI's `Crew_<uuid>.kickoff`, `Task Execution`, …) are upstream and not renameable — see `matrix.md § CrewAI`.
 
-**Agent identity (mandatory attributes).** `_set_agent_identity` stamps the identity attributes `matrix.md § Mandatory Span Attributes` requires on an agent/chain root — `openinference.span.kind="AGENT"`, `agent.name`, `agent.role`, `agent.framework` (OI) and/or `gen_ai.operation.name="invoke_agent"`, `gen_ai.agent.name` (OTel-GenAI), keyed by `_CONVENTION`. **Scope matters:** identity is stamped **always on the fallback span** (which observent owns), but on the **enrich path only when `agent_name`/`agent_role` is passed explicitly** — the engine never auto-applies the generic literal defaults to a span it didn't create, since that would relabel a foreign span (an HTTP server span) or clobber better identity an instrumentor already set (e.g. Google ADK's `gen_ai.agent.name`). Defaults come from the `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals (used for the fallback span); per-call `agent_name=` / `agent_role=` override them and are the way to add identity to an existing framework root. This is what lets a trace list identify *which* agent produced a span without opening the `service.name` resource attribute.
+**Agent identity (mandatory attributes).** `_set_agent_identity` stamps the identity attributes `matrix.md § Mandatory Span Attributes` requires on an agent/chain root — `openinference.span.kind="AGENT"`, `agent.name`, `agent.role`, `agent.framework` (OI) and/or `gen_ai.operation.name="invoke_agent"`, `gen_ai.agent.name` (OTel-GenAI), keyed by `_CONVENTION`. **Scope matters:** identity is stamped **always on the fallback span** (which observent owns), but on the **enrich path only when `agent_name`/`agent_role`/`agent_framework` is passed explicitly** — the engine never auto-applies the generic literal defaults to a span it didn't create, since that would relabel a foreign span (an HTTP server span) or clobber better identity an instrumentor already set (e.g. Google ADK's `gen_ai.agent.name`). Defaults come from the `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals (used for the fallback span); per-call `agent_name=` / `agent_role=` / `agent_framework=` override them and are the way to add identity to an existing framework root. `agent_framework=` is what lets a **single shared `observent_capture.py`** serve multiple frameworks in a multi-service monorepo — each service passes its own framework per-call instead of relying on one global `_FRAMEWORK` literal (see `spec_schema.md § Multi-service specs`). This is what lets a trace list identify *which* agent produced a span without opening the `service.name` resource attribute.
 
 ### Root span always carries input and output
 

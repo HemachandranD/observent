@@ -183,6 +183,40 @@ def test_identity_attrs_on_fallback_root(cap, exporter):
     assert attrs.get("agent.role") == "retriever"
 
 
+def test_open_or_enrich_span_agent_framework_override(cap, exporter, monkeypatch):
+    # A shared observent_capture.py serving multiple frameworks (multi-service
+    # monorepo) needs agent.framework settable per-call, not just via the single
+    # global _FRAMEWORK literal.
+    monkeypatch.setattr(cap, "_FRAMEWORK", "langgraph")
+    with cap.open_or_enrich_span({"q": "x"}, agent_name="text2sql", agent_framework="crewai"):
+        pass
+    attrs = dict(_named(exporter.get_finished_spans(), "agent.run").attributes)
+    assert attrs.get("agent.framework") == "crewai"
+
+
+def test_agent_framework_falls_back_to_literal(cap, exporter, monkeypatch):
+    monkeypatch.setattr(cap, "_FRAMEWORK", "langgraph")
+    with cap.open_or_enrich_span({"q": "x"}, agent_name="deepresearch"):
+        pass
+    attrs = dict(_named(exporter.get_finished_spans(), "agent.run").attributes)
+    assert attrs.get("agent.framework") == "langgraph"
+
+
+def test_enrich_path_stamps_framework_only_when_passed(cap, exporter, monkeypatch):
+    monkeypatch.setattr(cap, "_FRAMEWORK", "langgraph")
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        with cap.open_or_enrich_span({"q": "x"}, agent_framework="crewai"):
+            pass
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert attrs.get("agent.framework") == "crewai"
+
+    with tracer.start_as_current_span("framework.root2"):
+        cap.enrich_current_span({"q": "y"})
+    attrs2 = dict(_named(exporter.get_finished_spans(), "framework.root2").attributes)
+    assert "agent.framework" not in attrs2
+
+
 def test_identity_attrs_respect_otel_genai_convention(cap, exporter, monkeypatch):
     # Flip the generation-time convention literal to otel-genai and confirm the
     # gen_ai.* identity keys are emitted instead of the OI ones.

@@ -9,6 +9,7 @@ from __future__ import annotations
 import detect_framework
 from detect_framework import (
     _name_match,
+    _package_manager,
     _parse_pyproject,
     _parse_requirements,
     detect,
@@ -47,6 +48,48 @@ def test_imports_detected_from_source(tmp_path):
     report = detect(tmp_path)
     assert "smolagents" in _names(report["frameworks"])
     assert "fastapi" in _names(report["web_frameworks"])
+
+
+def test_package_manager_detection(tmp_path):
+    assert _package_manager(tmp_path) is None
+
+    (tmp_path / "requirements.txt").write_text("langgraph==1.2.0\n")
+    assert _package_manager(tmp_path) == "pip"
+
+    (tmp_path / "Pipfile").write_text("[packages]\n")
+    assert _package_manager(tmp_path) == "pipenv"
+    (tmp_path / "Pipfile").unlink()
+
+    (tmp_path / "pyproject.toml").write_text("[tool.poetry]\nname = 'x'\n")
+    assert _package_manager(tmp_path) == "poetry"
+
+    (tmp_path / "poetry.lock").write_text("")
+    assert _package_manager(tmp_path) == "poetry"
+
+    (tmp_path / "uv.lock").write_text("")
+    assert _package_manager(tmp_path) == "uv"  # uv.lock takes precedence
+
+
+def test_report_includes_package_manager(tmp_path):
+    (tmp_path / "uv.lock").write_text("")
+    report = detect(tmp_path)
+    assert report["package_manager"] == "uv"
+
+
+def test_adk_litellm_detection(tmp_path):
+    (tmp_path / "app.py").write_text(
+        "from google.adk.models.lite_llm import LiteLlm\n\nmodel = LiteLlm(model='openrouter/x')\n"
+    )
+    report = detect(tmp_path)
+    assert report["google_adk_lite_llm_detected"] is True
+
+
+def test_adk_litellm_not_detected_for_plain_adk(tmp_path):
+    (tmp_path / "app.py").write_text(
+        "from google.adk.agents import Agent\n\nagent = Agent(model='gemini-2.0-flash')\n"
+    )
+    report = detect(tmp_path)
+    assert report["google_adk_lite_llm_detected"] is False
 
 
 def test_empty_project_detects_nothing(tmp_path, monkeypatch):

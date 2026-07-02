@@ -30,6 +30,7 @@ MATRIX = _REFS / "matrix.md"
 OPENINFERENCE = _REFS / "openinference.md"
 OTEL_GENAI = _REFS / "otel_genai.md"
 EVAL = _REFS / "eval.md"
+SPEC_SCHEMA = _REFS / "spec_schema.md"
 SKILL = ROOT / "skills" / "observent" / "SKILL.md"
 EVAL_COMMAND = ROOT / "commands" / "observent-eval.toml"
 README = ROOT / "README.md"
@@ -149,6 +150,48 @@ def test_known_auto_instrumenting_deps_documented_in_matrix() -> None:
         assert dep["env_var"] in body, (
             f"gate env var `{dep['env_var']}` for `{dep['slug']}` missing from matrix.md table"
         )
+
+
+def test_crewai_canonical_snippet_uses_event_listener() -> None:
+    # CrewAIInstrumentor drops every LLM span unless instrument()'d with
+    # use_event_listener=True (see matrix.md § CrewAI). Guard the canonical
+    # snippet so this can't silently regress back to the LLM-span-dropping default.
+    text = _read(MATRIX)
+    section = re.search(r"### CrewAI \(`crewai`\)(.+?)(?:\n### )", text, re.DOTALL)
+    assert section, "'### CrewAI' section not found in matrix.md"
+    body = section.group(1)
+    assert "```python" in body, "matrix.md § CrewAI is missing a canonical setup snippet"
+    assert "use_event_listener=True" in body, (
+        "matrix.md § CrewAI canonical snippet must pass use_event_listener=True "
+        "to CrewAIInstrumentor().instrument(...) or LLM spans are silently dropped"
+    )
+
+
+def test_skill_phase3_has_dependency_dryrun_guard() -> None:
+    # Guards against a stale matrix.md pin silently downgrading an unrelated
+    # already-installed package (see feedback.md #1) — the confirm task must run
+    # a non-mutating dry-run resolve and flag any unexpected version change
+    # before the install command executes. Presence check so this can't be
+    # silently deleted from SKILL.md.
+    text = _read(SKILL)
+    phase3 = re.search(r"## Phase 3 — Tasks(.+?)(?:\n## )", text, re.DOTALL)
+    assert phase3, "'## Phase 3 — Tasks' section not found in SKILL.md"
+    body = phase3.group(1)
+    assert "dry-run" in body, "Phase 3 confirm task missing the dependency dry-run guard"
+    assert "package_manager" in body, "Phase 3 dry-run guard must key off spec.detection.package_manager"
+    assert "DOWNGRADE" in body, "Phase 3 dry-run guard missing the DOWNGRADE red-flag"
+
+
+def test_spec_schema_documents_multi_service() -> None:
+    # choice.services (multi-service monorepo alternative to singular
+    # choice.framework) must be documented with its three sub-keys, and the
+    # framework enum comment must include google-adk (already SKILL.md $1
+    # accepted, previously missing from the spec_schema.md enum comment).
+    text = _read(SPEC_SCHEMA)
+    assert "choice.services" in text, "spec_schema.md missing 'choice.services' documentation"
+    for key in ("name", "framework", "entry_point"):
+        assert key in text, f"spec_schema.md § Multi-service specs missing `{key}`"
+    assert "google-adk" in text, "spec_schema.md choice.framework enum comment missing google-adk"
 
 
 def test_matrix_header_convention_labels_match_code() -> None:

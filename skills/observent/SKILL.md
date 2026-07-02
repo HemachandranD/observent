@@ -56,17 +56,19 @@ Run both detectors **in parallel** — they're independent deterministic scripts
 > - **In Claude Code**, substitute the built-in `${CLAUDE_SKILL_DIR}` variable — e.g. `python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`. (This is the only place that variable applies; it resolves automatically.)
 > - **Every other agent** (Cursor, Copilot, Codex, Cline, Windsurf, …) receives the same self-contained folder via `npx skills` and has **no** `${CLAUDE_SKILL_DIR}` variable. Use the absolute path of the skill folder you loaded `SKILL.md` from — the exact directory varies by agent (project-level `.agents/skills/observent/` for many CLIs; a global dir such as `~/.cursor/skills/observent/`, `~/.codeium/windsurf/skills/observent/`, or `~/.config/<agent>/skills/observent/` when installed with `-g`). Same `scripts/` + `references/` layout either way.
 
-Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`. `detect_framework.py` also reports a `docker` block (`{available, compose_available}`) — capture it into `spec.detection.docker_available` / `docker_compose_available` for the provisioning offer in Step 1.6.
+Do **not** wrap either script in a subagent — they're already deterministic; an LLM in the middle adds latency and nondeterminism without saving context. The JSON output goes straight into `spec.detection`. `detect_framework.py` also reports a `docker` block (`{available, compose_available}`) — capture it into `spec.detection.docker_available` / `docker_compose_available` for the provisioning offer in Step 1.6 — plus `package_manager` (`uv` | `poetry` | `pipenv` | `pip` | null, from lockfile/manifest presence — capture into `spec.detection.package_manager`; Step 2.1 uses it to emit the install command in the right syntax and Phase 3 uses it for the dependency dry-run) and `google_adk_lite_llm_detected` (capture into `spec.detection.google_adk_lite_llm_detected`; see Step 1.2 bullet 6).
 
-For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files` as existing observability. Entries with `kind: "instrumentation"` alone don't count — they may belong to an unrelated tracing setup.
+For `existing_setup.py`: treat entries with `kind: "backend"` (Phoenix / Langfuse / SigNoz) and non-empty `imports` or `env_vars_in_files` as existing observability. Entries with `kind: "instrumentation"` alone don't count — they may belong to an unrelated tracing setup. Each entry's `instrumentation_code_found` (derived from non-empty `imports`) is the code-vs-config discriminator; the report's top-level `scaffold_only` flags the case where config exists but no entry has code — see Step 1.4.
 
 ### Step 1.2 — Resolve framework
 
 1. If the user passed a framework as `$1` (`langgraph` / `crewai` / `microsoft-agent-framework` / `anthropic-agents` / `openai-agents` / `smolagents` / `llama-index` / `google-adk` / `custom`), use it.
 2. Else if exactly one framework is detected, confirm it in one short sentence.
 3. Else if multiple are detected, ask which one to instrument.
+3b. **Multi-service monorepo.** If **multiple frameworks are detected** AND there are **multiple plausible entry points** (several `server.py` / `main.py` / `app.py`-shaped files under different subpackages or service directories), do **not** force a single pick under bullet 3. Offer the multi-service path instead: `Detected N services on M frameworks (e.g. text2sql→crewai, deepresearch→langgraph). Instrument all N services (each gets its own entry-point wiring, sharing one observent_capture.py) or just one? (all / <service-name>)`. On `all`, record each under `spec.choice.services: [{name, framework, entry_point}]` and omit `choice.framework` (see `references/spec_schema.md § Multi-service specs`). On a single pick, set `choice.framework` as in bullet 3. If only one framework is detected, or only one plausible entry point exists, keep the single-framework flow.
 4. If `autogen` / `autogen_agentchat` / `pyautogen` is detected, inform the user that AutoGen has been superseded by **Microsoft Agent Framework** (`microsoft-agent-framework`) — Microsoft's unification of AutoGen and Semantic Kernel — and observent no longer supports AutoGen. Offer MAF, or the **Custom** path if they need to keep their existing AutoGen code.
 5. If none detected, ask; "none / writing from scratch" → **Custom** path.
+6. If the resolved framework is `google-adk` and `detect_framework.py` reports `google_adk_lite_llm_detected: true`, proactively warn: `This project routes Google ADK through google.adk.models.lite_llm to a non-Google model backend. openinference-instrumentation-google-adk unconditionally sets llm.provider="google" / gen_ai.system="gcp.vertex.agent" regardless of the real backend (the true model name is still correct in llm.model_name / gen_ai.request.model). Group/filter by model name, not provider, when analyzing these spans — see matrix.md § Google ADK.` This is informational only — no choice to record, no confirm gate.
 
 ### Step 1.3 — Resolve backend(s) and convention
 
@@ -92,10 +94,13 @@ State the resolved convention in one short sentence (e.g. "Resolved: phoenix,ela
 
 ### Step 1.4 — Existing-setup decision
 
-If Step 1.1 found pre-existing observability config, ask explicitly:
-- **Extend** — keep their existing setup, add observent attributes/instrumentors on top.
-- **Replace** — overwrite with observent's recommended pattern.
-- **Abort** — exit without changes.
+If Step 1.1 found pre-existing observability config:
+
+- If `existing_setup.py` reports `scaffold_only: true` (env-var names/config from an earlier incomplete attempt, but every detected entry has `instrumentation_code_found: false` — no instrumentation code was ever written), name this case explicitly instead of forcing Extend/Replace: ask `Found observability config (env-var names) from an earlier incomplete attempt, but no instrumentation code. Set up fresh, keeping the existing env-var names? (scaffold_only / replace / abort)`. On `scaffold_only`, generate as if clean but reuse the detected env-var names instead of introducing new ones.
+- Otherwise ask explicitly:
+  - **Extend** — keep their existing setup, add observent attributes/instrumentors on top.
+  - **Replace** — overwrite with observent's recommended pattern.
+  - **Abort** — exit without changes.
 
 Never overwrite without asking, even when auto-invoked. Store the choice in `spec.choice.existing_setup_decision`. Once locked it is **not re-prompted on resume**; to change it the user re-runs `/observent-spec`.
 
@@ -151,9 +156,10 @@ Using `references/matrix.md` (sections **Per-framework** and **Per-backend**), d
   - `observent_eval.py` (only if the user opts into the Phase 5 eval gate — the no-op-in-prod span collector from `references/eval.md`; wired into `observent_otel.py` via `install_eval_collector(provider)`).
   - Edits to the user's entry-point file (e.g., `main.py`) to import `observent_otel`, wrap the agent invocation with `capture_run`, and (if applicable) register the HTTP middleware.
   - `.env.example` append with required env var names and notify user to fill in with exact values.
+  - **Multi-service (`spec.choice.services` present):** generate one entry-point edit per service (each importing `observent_otel` and wrapping its boundary with `open_or_enrich_span(..., agent_name=<service.name>, agent_framework=<service.framework>)`), sharing a single `observent_capture.py` and a single processor list across all services — see `references/spec_schema.md § Multi-service specs`. The OpenAI Agents SDK special-case below and the `_FRAMEWORK`-literal guidance in Step 2.2 apply per-service rather than once, since each service passes its own `agent_framework=` per-call instead of relying on one global `_FRAMEWORK` literal.
 - **Multi-backend processor list** — one `BatchSpanProcessor(OTLPSpanExporter(...))` per OTLP backend in `spec.choice.backends` (Phoenix, Langfuse, SigNoz, LangSmith, Opik, Jaeger). Elastic APM in native-agent mode is **not** a processor — set `elastic_apm_native_agent: true` and instantiate `elasticapm.Client(...)` + `elasticapm.instrument()` next to the TracerProvider.
 - **OpenAI Agents SDK** — if `spec.choice.framework == openai-agents`, set `openai_agents_native_processors: true` and use the SDK's native `set_trace_processors()` API, not `openinference-instrumentation-openai`. This is non-negotiable.
-- **Pinned versions** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions` into the `pip_install` line.
+- **Install command** — copy exact `==X.Y.Z` pins from `references/matrix.md § Verified Versions`, rendered into the `pip_install` line in the detected manager's syntax from `spec.detection.package_manager`: `uv` → `uv add <pkg>==<ver> …` (updates `pyproject.toml` + `uv.lock`); `poetry` → `poetry add <pkg>==<ver> …` (updates `pyproject.toml` + `poetry.lock`); `pipenv` → `pipenv install <pkg>==<ver> …`; `pip` or `null` → `pip install <pkg>==<ver> …`. Prefer the manager's native add command over `pip install` so `pyproject.toml`/lockfiles don't silently drift out of sync.
 - **Local provisioning** — for each backend with `spec.choice.self_host_provision.<backend> == true`, materialize the chosen stack from `references/self_host.md` into a `plan.provision[]` entry:
   - `method: vendored-compose` (Phoenix, Elastic APM, Jaeger) → add a `files[]` create entry for `docker-compose.observent-<backend>.yml`, copy the pinned compose template into a `<!-- plan:compose_<backend> -->` anchor, and set `up_command`/`down_command` to the `docker compose -f … up -d --wait` / `down` lines.
   - `method: upstream-clone` (Langfuse, Opik) → no compose file; set `up_command` to the pinned `git clone … && docker compose -f … up -d --wait` line from `self_host.md` (no `<!-- plan:compose_* -->` anchor).
@@ -170,7 +176,7 @@ Every `observent_otel.py` template must include:
   - `oi`: `openinference.span.kind` (`AGENT` / `CHAIN` / `LLM` / `TOOL` / `RETRIEVER`), `agent.name`, `agent.role`, `agent.framework`.
   - `otel-genai`: `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.provider.name`.
   - `both`: emit the union.
-  - **Enforcement:** the capture engine already stamps these on the run's root span via `_set_agent_identity` (`references/capture.md § Public entry point`). Fill its `_SERVICE_NAME` / `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals from `spec.choice` (framework → `_FRAMEWORK`; a per-service name → `_SERVICE_NAME` / `_AGENT_NAME`), **or** pass `agent_name=` / `agent_role=` at the `open_or_enrich_span` / `capture_run` wrap point. Do not leave the defaults generic when the identity is known.
+  - **Enforcement:** the capture engine already stamps these on the run's root span via `_set_agent_identity` (`references/capture.md § Public entry point`). Fill its `_SERVICE_NAME` / `_AGENT_NAME` / `_AGENT_ROLE` / `_FRAMEWORK` generation-time literals from `spec.choice` (framework → `_FRAMEWORK`; a per-service name → `_SERVICE_NAME` / `_AGENT_NAME`), **or** pass `agent_name=` / `agent_role=` / `agent_framework=` at the `open_or_enrich_span` / `capture_run` wrap point. Do not leave the defaults generic when the identity is known. **Multi-service (`spec.choice.services`):** `_FRAMEWORK` is a single global literal and can't hold more than one framework — each service's wrap point must instead pass `agent_framework=<service.framework>` per-call (`references/capture.md`).
 - **Phoenix project routing** (when `phoenix` ∈ `spec.choice.backends`) — read `PHOENIX_PROJECT_NAME` in **both** generation paths. The single-backend path uses `register(project_name=os.getenv("PHOENIX_PROJECT_NAME", ...))`; the manual multi-backend fan-out (`convention == "both"`) never calls `register()`, so it must fold the value into the resource as the `openinference.project.name` attribute (`Resource.create({"service.name": ..., "openinference.project.name": <PHOENIX_PROJECT_NAME>})`) or every trace silently lands in Phoenix's `default` project. See `references/matrix.md § Arize Phoenix`.
 - **Baggage** for `session.id`, `user.id`, `tenant.id`, `app.version` at the entry point.
 - **Flush-on-exit** — `provider.shutdown()` or `langfuse.flush()` via `atexit`.
@@ -232,16 +238,23 @@ Strict order:
 1. `confirm` — render the diff preview from `plan.md`:
    - New files (paths + one-line purpose).
    - Modified files with their unified diffs.
-   - `pip install` command.
+   - **Install command** (in the detected manager's syntax — see § 2.1).
+   - **Dependency-resolution diff** (guards against a stale pin silently downgrading an already-installed package). Do **not** treat the install command as a fait accompli. First run the detected manager's **non-mutating dry-run resolve**, from `spec.detection.package_manager`:
+     - `uv` → `uv add --dry-run <pins>`
+     - `poetry` → `poetry add --dry-run <pins>`
+     - `pipenv` → `pipenv install <pins>` in a scratch check, or inspect `pipenv lock` output
+     - `pip` → `pip install --dry-run --report - <pins>` (JSON report)
+
+     These are all non-mutating (no lockfile/manifest is written). Read the resolver's planned actions and diff them against currently-installed versions. Render, per affected package: `install X.Y.Z` / `upgrade A→B` / **`⚠ DOWNGRADE A→B`**. **Any version change to a package that is NOT in observent's install set — most critically a downgrade — is a red flag:** a stale exact `==` pin in `matrix.md § Verified Versions` can force the resolver to backtrack an unrelated already-installed package (e.g. `crewai 1.15.1 → 1.6.1`) to satisfy both that pin and the project's own loose constraint, and `uv add` / `pip install` will exit **0** with no visible error. Surface every such change as its own `⚠ unexpected dependency change` line in the confirm.
    - Env vars grouped by backend (names only, never values).
    - Resolved convention.
    - **Generated-attribute checklist** (catches silent omissions before a task is marked done): `agent identity attributes: present / missing` (agent.name/role/framework or gen_ai.agent.* on the run root) and `root span input + output: present / missing`. If either is *missing*, fix the generated file before proceeding — don't confirm a file that drops these.
    - Backends and endpoints (one line each).
    - Any locally provisioned stacks: the compose file (`vendored-compose`) or clone target (`upstream-clone`) or CLI install + generated compose (`vendor-cli-generated`) and the `docker compose … up` command, one line each, from `plan.provision[]`. For `vendor-cli-generated`, show the `installs_cli` details (package · installer URL · trust basis) as their own line — the CLI install is a distinct consent surface from `docker compose up`.
-   - Prompt: `Apply these changes? (yes / preview <file> / abort)`.
+   - Prompt: if the dependency-resolution diff found any unexpected change, `Apply these changes? (yes / adjust pins / abort)` — **abort is the recommended default** here, offering the user, one line each: (a) pin the affected package at its current version in the install command; (b) relax the one over-constraining observent pin (a targeted, single-package deviation surfaced in the diff — never a blanket `>=` sweep of the matrix); or (c) abort and report the conflicting pin so `matrix.md § Verified Versions` can be re-verified. With no unexpected changes: `Apply these changes? (yes / preview <file> / abort)`.
 2. One `write_file` task per `files[].op == create` in `plan.files`, with `content_ref: "plan#<slug>"` (this includes any `vendored-compose` `docker-compose.observent-<backend>.yml` and any `vendor-cli-generated` `cli_config_file`).
 3. One `edit_file` task per `files[].op == edit`, with `diff_ref: "plan#<slug>"`.
-4. One `run_command` task for `pip_install`.
+4. One `run_command` task for `pip_install` — the dependency dry-run diff above happens when the `confirm` task is rendered, before this task runs, so the install never executes before the user has seen the resolution diff.
 5. Provisioning tasks per `plan.provision[]` entry, placed **after** pip-install and **before** `validate` so the endpoint is live when validation runs:
    - `vendored-compose` / `upstream-clone` → one `run_command` with `cmd` = that entry's `up_command` (`docker compose … up -d --wait`, or the pinned clone+up).
    - `vendor-cli-generated` → the ordered sequence: a `confirm` carrying `installs_cli` (must be approved before any binary is installed) → `run_command` `cli_install_command` → `write_file` `cli_config_file` → `run_command` `generate_command` → `run_command` `up_command`. See `references/spec_schema.md § tasks.json`.
@@ -292,6 +305,7 @@ Once all tasks are terminal, report back:
   - Opik self-host: `http://localhost:5173` · Cloud: `https://www.comet.com/opik`
   - Jaeger self-host: `http://localhost:16686` (self-host only)
 - For any locally provisioned stack (from `plan.provision[]`): note that it's now running under Docker and give the matching `down_command` to stop it (e.g. `docker compose -f docker-compose.observent-phoenix.yml down`).
+- Recommend running one real request through the app and confirming at least one `llm`-kind span (not just Crew/Task/Agent/Flow) appears in the backend UI — `validate_setup.py --smoke-test`'s synthetic span (Step 4.2) drives its own span, not the framework's real LLM call path, so it can't catch a framework whose instrumentor silently drops LLM spans. Call this out by name for **CrewAI** — its instrumentor requires `use_event_listener=True` to emit LLM spans at all (`matrix.md § CrewAI`).
 - One-line next step — set the env vars, run the app, refresh each UI.
 
 ---

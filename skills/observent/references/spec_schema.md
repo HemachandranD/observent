@@ -38,14 +38,22 @@ detection:
     - {name: opentelemetry, kind: instrumentation, imports: [main.py], env_vars_in_files: [], env_files: []}
   docker_available: true                                 # from detect_framework.py: docker.available
   docker_compose_available: true                         # from detect_framework.py: docker.compose_available
+  package_manager: uv                                    # from detect_framework.py: package_manager — uv | poetry | pipenv | pip | null (lockfile/manifest presence)
   backends_reachable:                                    # one entry per self-host backend in choice.backends; cloud backends omitted
     phoenix: false                                       # endpoint probed at spec/resume time (false => provisioning may be offered)
   project_fingerprint: sha256:<hex>                      # sha256 of (pyproject.toml + requirements*.txt + poetry.lock) bytes, in that fixed order
 choice:
-  framework: langgraph                                   # one of: langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | custom
+  # EITHER framework (single-service repo) …
+  framework: langgraph                                   # one of: langgraph | crewai | microsoft-agent-framework | anthropic-agents | openai-agents | smolagents | llama-index | google-adk | custom
+  # … OR services (multi-service monorepo: multiple frameworks across independent
+  # entry-point processes). Provide exactly one of `framework` / `services` — see
+  # § Multi-service specs below.
+  # services:
+  #   - {name: text2sql,     framework: crewai,    entry_point: services/text2sql/server.py}
+  #   - {name: deepresearch, framework: langgraph, entry_point: services/deepresearch/main.py}
   backends: [phoenix, langsmith]                         # non-empty subset of: phoenix | langfuse | signoz | elastic-apm | langsmith | opik | jaeger
   convention: both                                       # derived mechanically from `backends` — see § Convention derivation below
-  existing_setup_decision: extend                        # extend | replace | abort | none  (none = no existing setup found)
+  existing_setup_decision: extend                        # extend | replace | abort | none | scaffold_only  (none = nothing detected; scaffold_only = env-var names/config exist but no instrumentation code was ever written)
   endpoints:                                             # one entry per backend in `choice.backends`
     phoenix:   {mode: self-host, url: "http://localhost:6006/v1/traces"}
     langsmith: {mode: cloud,     url: "https://api.smith.langchain.com/otel/v1/traces"}
@@ -72,6 +80,26 @@ Free-form rationale and user notes. The skill preserves this body across re-runs
 | Any set containing Phoenix **and** at least one of `{langfuse, signoz, elastic-apm, langsmith, opik, jaeger}` | `both` |
 
 The skill writes this field — it is never asked of the user. To change the convention the user changes the backend set and re-runs `/observent-spec`.
+
+### Multi-service specs (`choice.services`)
+
+Exactly one of `choice.framework` (singular) or `choice.services` (a list) is present — never both. `choice.services` is for a multi-service monorepo: multiple frameworks across independent entry-point processes (e.g. several A2A services, each its own framework and its own `server.py`/`main.py`). See SKILL.md Step 1.2 bullet 3b for when the skill offers this path instead of forcing a single framework pick.
+
+Each entry is `{name, framework, entry_point}`:
+
+- `name` — a short, stable service identifier. Used for that service's `_SERVICE_NAME` generation-time literal and its `<name>.run` fallback span name.
+- `framework` — one of the `choice.framework` enum values above. Drives that service's instrumentor.
+- `entry_point` — the project-relative file Phase 2 edits to import `observent_otel` and wrap that service's AI boundary.
+
+`convention`, `backends`, `endpoints`, `env_vars_required`, and the rest of `choice` stay **shared** across all services (derived once from the backend set) — services differ only by framework and entry point. Phase 2 generates **one** shared `observent_capture.py`; each service's wrap point passes its own identity per-call — `open_or_enrich_span(..., agent_name=<name>, agent_framework=<framework>)` — using the `agent_framework` override (`references/capture.md`) instead of relying on a single global `_FRAMEWORK` literal, since that literal can only hold one framework at a time.
+
+### `existing_setup_decision` states
+
+- `none` — `existing_setup.py` detected nothing; no decision needed.
+- `extend` — a working setup exists (`instrumentation_code_found: true` on at least one detected entry); keep it and layer observent's attributes/instrumentors on top.
+- `replace` — a working setup exists but the user wants observent's recommended pattern instead; overwrite it.
+- `abort` — exit without changes.
+- `scaffold_only` — `existing_setup.py` reports `scaffold_only: true`: env-var names/config exist (from an earlier, incomplete attempt) but every detected entry has `instrumentation_code_found: false` — there is no working code to either extend or replace. observent generates a fresh setup as if the project were clean, but reuses the already-present env-var names instead of introducing new ones. See SKILL.md Step 1.4.
 
 ### Project fingerprint
 
@@ -111,7 +139,7 @@ files:
   - {path: "docker-compose.observent-phoenix.yml", op: create, purpose: "Local Phoenix stack (vendored-compose provisioning)"}
   - {path: "main.py",                            op: edit,   purpose: "Import observent_otel; wrap agent invocation with capture_run"}
   - {path: ".env",                               op: append, purpose: "Env var stubs (names only, no values)"}
-pip_install: "pip install opentelemetry-sdk==X.Y.Z openinference-instrumentation-langchain==X.Y.Z arize-phoenix-otel==X.Y.Z ..."
+pip_install: "uv add opentelemetry-sdk==X.Y.Z openinference-instrumentation-langchain==X.Y.Z arize-phoenix-otel==X.Y.Z ..."  # despite the key name, this holds the resolved manager's install command (uv add / poetry add / pipenv install / pip install) — see SKILL.md § 2.1
 env_vars:
   phoenix:   [PHOENIX_API_KEY]
   langsmith: [LANGSMITH_API_KEY, LANGSMITH_PROJECT]
@@ -186,7 +214,7 @@ Each anchor is the comment `<!-- plan:<slug> -->` immediately followed by a sing
 
 - `files[].path` is relative to the user's project root.
 - `files[].op` is `create` (write a new file), `edit` (apply a unified diff), or `append` (append to file; create if missing).
-- `pip_install` is **one** line, even when long; the skill quotes pinned versions from `references/matrix.md § Verified Versions`.
+- `pip_install` is **one** line, even when long; the skill quotes pinned versions from `references/matrix.md § Verified Versions`, rendered in the syntax of `spec.detection.package_manager` (`uv add` / `poetry add` / `pipenv install` / `pip install`).
 - `env_vars` keys are exactly the entries in `spec.choice.backends`.
 - `processors` lists one entry per OTLP backend in `spec.choice.backends`; Elastic APM in native-agent mode does NOT appear here (it attaches to the global tracer via its OTel bridge — captured by `elastic_apm_native_agent: true` instead).
 - `provision` has one entry per backend with `spec.choice.self_host_provision.<backend> == true` (empty list when no provisioning was requested). Per `method`:

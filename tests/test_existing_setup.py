@@ -58,3 +58,28 @@ def test_clean_project_detects_nothing(tmp_path):
     report = scan(tmp_path)
     assert report["detected"] == []
     assert report["self_scan_excluded"] is False
+
+
+def test_scaffold_only_env_without_code(tmp_path):
+    # Env-var names from an earlier incomplete attempt, but no instrumentation
+    # code anywhere — SKILL.md Step 1.4's "scaffold_only" case.
+    (tmp_path / ".env").write_text("PHOENIX_API_KEY=\n")
+    report = scan(tmp_path)
+    assert report["scaffold_only"] is True
+    phoenix = next(e for e in report["detected"] if e["name"] == "phoenix")
+    assert phoenix["instrumentation_code_found"] is False
+
+
+def test_not_scaffold_only_when_code_present(tmp_path):
+    (tmp_path / "app.py").write_text("import phoenix\nphoenix.otel.register()\n")
+    (tmp_path / ".env").write_text("PHOENIX_API_KEY=sk-123\n")
+    report = scan(tmp_path)
+    assert report["scaffold_only"] is False
+    phoenix = next(e for e in report["detected"] if e["name"] == "phoenix")
+    assert phoenix["instrumentation_code_found"] is True
+
+
+def test_scaffold_only_false_when_nothing_detected(tmp_path):
+    (tmp_path / "main.py").write_text("print('hello')\n")
+    report = scan(tmp_path)
+    assert report["scaffold_only"] is False

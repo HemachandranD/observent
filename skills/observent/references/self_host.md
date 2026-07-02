@@ -194,6 +194,15 @@ stability contract).
 - After first start, create a project in the UI and copy `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`
   into `.env`, with `LANGFUSE_HOST=http://localhost:3000`. Unlike the other stacks these keys can't
   be known ahead of time, so the `validate` task may report missing keys until the user fills them in.
+- **⚠️ First-boot readiness.** `docker compose up -d --wait` can return before Langfuse is actually
+  serving: first boot pulls six images, runs Postgres + ClickHouse migrations, and compiles the
+  Next.js web app — several minutes. Worse, upstream's `langfuse-web` service ships **no
+  `healthcheck:`** in its compose definition, so `--wait` can't block on it (it falls back to
+  container-running state, not application-ready state). Expect the UI/OTLP endpoint to refuse
+  connections or 5xx for a few minutes after `--wait` reports up. `validate_setup.py`'s
+  `check_langfuse` handles this by probing `/api/public/health` with bounded retry/backoff under
+  `--smoke-test` (don't treat the first failure as fatal) — poll
+  `http://localhost:3000/api/public/health` manually if validating by hand.
 - Down: `docker compose -f .observent/vendor/langfuse/docker-compose.yml down`
 
 ---
@@ -364,13 +373,18 @@ Pairwise host-port collisions (all on `4317`/`4318`):
 ### Readiness
 
 - **`--wait`:** every `up` uses `--wait`; vendored compose files carry `healthcheck:` blocks so
-  `--wait` blocks until healthy. `upstream-clone` stacks ship their own healthchecks. The lone
-  exception is Jaeger, whose distroless image can't self-healthcheck — `--wait` falls back to the
-  container's *running* state and the final `validate` task probes its OTLP endpoint.
+  `--wait` blocks until healthy. `upstream-clone` stacks generally ship their own healthchecks, with
+  one exception: Langfuse's `langfuse-web` service has none (see below). Jaeger is the other
+  exception — its distroless image can't self-healthcheck — `--wait` falls back to the container's
+  *running* state and the final `validate` task probes its OTLP endpoint.
 - **SigNoz opamp settle delay:** `--wait` reporting `Healthy` is **not** sufficient for SigNoz — its
   ingester serves OTLP only after an opamp-driven collector restart that can lag `--wait` by ~2 min.
   See § SigNoz for the full explanation; `validate_setup.py` retries the SigNoz smoke span with
   backoff rather than failing on the first `RemoteDisconnected`.
+- **Langfuse first-boot delay:** `--wait` reporting up is **not** sufficient either — `langfuse-web`
+  ships no `healthcheck:` and first boot runs Postgres + ClickHouse migrations plus a Next.js compile
+  (several minutes). See § Langfuse; `validate_setup.py`'s `check_langfuse` retries
+  `/api/public/health` with backoff under `--smoke-test`.
 - **Stray port conflicts:** if a probe shows a port already in use by something *other* than the
   intended backend (e.g. `6006` taken but not Phoenix), warn the user and let them remap the host
   port in the compose file rather than forcing `up`.

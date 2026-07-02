@@ -122,6 +122,25 @@ def _gather_imports(root: Path, max_files: int = 200) -> tuple[set[str], bool]:
     return imports, truncated
 
 
+def _uses_adk_litellm(root: Path, max_files: int = 200) -> bool:
+    """Detect ADK's LiteLLM model wrapper specifically — finer-grained than the
+    top-level-only `imports` set from _gather_imports, needed to proactively warn
+    about the upstream google-adk instrumentor's hardcoded provider attribution
+    (see matrix.md, Google ADK section) only when the project is actually in
+    this situation."""
+    pattern = re.compile(r"\bgoogle\.adk\.models\.lite_llm\b|\bLiteLlm\(")
+    count = 0
+    for py in root.rglob("*.py"):
+        if any(part.startswith(".") or part in {"venv", ".venv", "env", "__pycache__"} for part in py.parts):
+            continue
+        if count >= max_files:
+            break
+        count += 1
+        if pattern.search(_read_text(py)):
+            return True
+    return False
+
+
 def _name_match(needle: str, haystack: set[str]) -> bool:
     needle_norm = needle.replace("_", "-").lower()
     for h in haystack:
@@ -165,6 +184,28 @@ def _docker() -> dict[str, bool]:
             except (OSError, subprocess.SubprocessError):
                 compose_available = False
     return {"available": available, "compose_available": compose_available}
+
+
+def _package_manager(root: Path) -> str | None:
+    """Identify the project's package manager from lockfile/manifest presence.
+
+    Precedence (most specific first): a uv/poetry/pipenv lockfile beats a bare
+    manifest. Feeds SKILL.md Phase 2 § 2.1 so the generated install command uses
+    the right syntax (uv add / poetry add / pipenv install / pip install) and
+    Phase 3's dependency dry-run knows which resolver to invoke.
+    """
+    if (root / "uv.lock").exists():
+        return "uv"
+    if (root / "poetry.lock").exists():
+        return "poetry"
+    pyproject_text = _read_text(root / "pyproject.toml")
+    if "[tool.poetry]" in pyproject_text:
+        return "poetry"
+    if (root / "Pipfile.lock").exists() or (root / "Pipfile").exists():
+        return "pipenv"
+    if pyproject_text or (root / "requirements.txt").exists() or any(root.glob("requirements*.txt")):
+        return "pip"
+    return None
 
 
 def detect(root: Path) -> dict[str, Any]:
@@ -242,6 +283,8 @@ def detect(root: Path) -> dict[str, Any]:
         "auto_instrumenting_deps": auto_instrumenting_found,
         "web_frameworks": web_frameworks_found,
         "docker": _docker(),
+        "package_manager": _package_manager(root),
+        "google_adk_lite_llm_detected": _uses_adk_litellm(root),
         "imports_truncated": imports_truncated,
     }
 

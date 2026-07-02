@@ -67,12 +67,79 @@ def test_result_ok_warn_info_keep_passed_true():
     assert len(r.messages) == 3
 
 
+def test_load_dotenv_soft_optional(monkeypatch):
+    # python-dotenv is an optional soft dependency; absence must not raise.
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "dotenv":
+            raise ImportError("no module named dotenv")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    validate_setup._load_dotenv_if_available()  # must not raise
+
+
 def test_langfuse_missing_env_fails(monkeypatch):
     # No LANGFUSE_* env vars set -> the check must fail (without network).
     for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"):
         monkeypatch.delenv(var, raising=False)
     r = check_langfuse(smoke=False)
     assert r.passed is False
+
+
+def test_check_langfuse_fanout_missing_pkg_is_info_not_fail(monkeypatch):
+    # Multi-backend fan-out uses a manual TracerProvider + OTLPSpanExporter and
+    # never imports langfuse -> its absence must not fail the check.
+    def fake_installed(module):
+        return module == "opentelemetry.exporter.otlp.proto.http"
+
+    monkeypatch.setattr(validate_setup, "_is_installed", fake_installed)
+    monkeypatch.setattr(validate_setup, "_probe_http", lambda *a, **k: True)
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-x")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-x")
+    r = check_langfuse(smoke=False, fanout=True)
+    assert not any("langfuse not installed (pip install" in m for m in r.messages)
+
+
+def test_check_langfuse_fanout_requires_otlp_exporter(monkeypatch):
+    monkeypatch.setattr(validate_setup, "_is_installed", lambda module: False)
+    monkeypatch.setattr(validate_setup, "_probe_http", lambda *a, **k: True)
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-x")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-x")
+    r = check_langfuse(smoke=False, fanout=True)
+    assert r.passed is False
+    assert any("opentelemetry-exporter-otlp-proto-http not installed" in m for m in r.messages)
+
+
+def test_check_langfuse_single_backend_still_requires_pkg(monkeypatch):
+    monkeypatch.setattr(validate_setup, "_is_installed", lambda module: False)
+    monkeypatch.setattr(validate_setup, "_probe_http", lambda *a, **k: True)
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-x")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-x")
+    r = check_langfuse(smoke=False, fanout=False)
+    assert r.passed is False
+    assert any("langfuse not installed (pip install" in m for m in r.messages)
+
+
+def test_check_langfuse_smoke_uses_retry_probe(monkeypatch):
+    calls = []
+    monkeypatch.setattr(validate_setup, "_is_installed", lambda module: True)
+    monkeypatch.setattr(validate_setup, "_probe_http_retry", lambda *a, **k: calls.append("retry") or True)
+    monkeypatch.setattr(validate_setup, "_probe_http", lambda *a, **k: calls.append("plain") or True)
+    monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3000")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-x")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-x")
+
+    check_langfuse(smoke=True, fanout=False)
+    assert "retry" in calls
+
+    calls.clear()
+    check_langfuse(smoke=False, fanout=False)
+    assert "retry" not in calls
+    assert "plain" in calls
 
 
 def test_langsmith_missing_key_fails(monkeypatch):

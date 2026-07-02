@@ -149,7 +149,16 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
                 "imports": sorted(set(found["imports"]))[:10],
                 "env_vars_in_files": sorted(set(found["env_vars"]))[:10],
                 "env_files": sorted(set(found["env_files"]))[:10],
+                "instrumentation_code_found": bool(found["imports"]),
             })
+
+    # "Scaffolded but never implemented": env-var names/config exist from an
+    # earlier attempt, but zero instrumentation code was ever written for any
+    # detected entry. Distinct from both "extend" (nothing working to extend)
+    # and "replace" (no working code to overwrite) in SKILL.md Step 1.4.
+    any_code = any(e["imports"] for e in detected)
+    any_config = any(e["env_vars_in_files"] or e["env_files"] for e in detected)
+    scaffold_only = bool(detected) and not any_code and any_config
 
     return {
         "cwd": str(root),
@@ -157,6 +166,7 @@ def scan(root: Path, max_files: int = 500) -> dict[str, Any]:
         "files_truncated": truncated,
         "self_scan_excluded": self_scan,
         "detected": detected,
+        "scaffold_only": scaffold_only,
     }
 
 

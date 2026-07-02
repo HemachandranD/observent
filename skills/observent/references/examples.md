@@ -1053,7 +1053,7 @@ provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("O
 provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 
-CrewAIInstrumentor().instrument(tracer_provider=provider)
+CrewAIInstrumentor().instrument(tracer_provider=provider, use_event_listener=True)  # required for LLM spans — see matrix.md § CrewAI
 LangChainInstrumentor().instrument(tracer_provider=provider)  # CrewAI's underlying LLM calls
 HTTPXClientInstrumentor().instrument(tracer_provider=provider)  # W3C traceparent on outbound HTTP
 
@@ -1118,7 +1118,7 @@ python crew_opik.py
 
 **Sources:** Opik OpenTelemetry integration (`/v1/private/otel/v1/traces`) — https://www.comet.com/docs/opik/tracing/opentelemetry/overview · Opik self-host (Docker, port 5173) — https://www.comet.com/docs/opik/self-host/local_deployment · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai
 
-*Last verified: 2026-06-25 with Python 3.12.*
+*Last verified: 2026-07-02 with Python 3.12.*
 
 ---
 
