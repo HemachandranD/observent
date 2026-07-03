@@ -25,6 +25,7 @@ from observent_matrix import (
     auto_instrumenting_deps,
     backend_detection_modules,
     framework_detection_modules,
+    vendor_telemetry,
 )
 
 # Derived from the single source of truth in observent_matrix.py (see CLAUDE.md
@@ -37,6 +38,10 @@ BACKENDS: dict[str, list[str]] = backend_detection_modules()
 
 # Third-party deps that carry their own dormant OTel instrumentation (gap #15).
 AUTO_INSTRUMENTING_DEPS: list[dict[str, object]] = auto_instrumenting_deps()
+
+# Frameworks that ship built-in product telemetry which piggybacks on the global
+# provider observent installs (keyed by framework slug).
+VENDOR_TELEMETRY: list[dict[str, object]] = vendor_telemetry()
 
 INSTRUMENTORS: dict[str, str] = {
     "openinference-instrumentation-langchain": "openinference.instrumentation.langchain",
@@ -262,6 +267,23 @@ def detect(root: Path) -> dict[str, Any]:
                 }
             )
 
+    # Frameworks whose built-in product telemetry will piggyback on observent's
+    # global TracerProvider and leak into the user's backend. Keyed off detected
+    # frameworks (a subset of frameworks_found), surfaced so the spec phase can
+    # offer keep-vs-disable via the documented disable flag.
+    detected_framework_names = {f["name"] for f in frameworks_found}
+    vendor_telemetry_found: list[dict[str, Any]] = [
+        {
+            "framework_slug": v["framework_slug"],
+            "display": v["display"],
+            "disable_env_var": v["disable_env_var"],
+            "disable_value": v["disable_value"],
+            "span_names": v["span_names"],
+        }
+        for v in VENDOR_TELEMETRY
+        if v["framework_slug"] in detected_framework_names
+    ]
+
     web_frameworks_found: list[dict[str, Any]] = []
     for label, modules in WEB_FRAMEWORKS.items():
         sources = []
@@ -281,6 +303,7 @@ def detect(root: Path) -> dict[str, Any]:
         "backends": backends_found,
         "instrumentors": instrumentors_found,
         "auto_instrumenting_deps": auto_instrumenting_found,
+        "framework_vendor_telemetry": vendor_telemetry_found,
         "web_frameworks": web_frameworks_found,
         "docker": _docker(),
         "package_manager": _package_manager(root),

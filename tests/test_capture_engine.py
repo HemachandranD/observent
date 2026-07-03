@@ -229,6 +229,40 @@ def test_identity_attrs_respect_otel_genai_convention(cap, exporter, monkeypatch
     assert "openinference.span.kind" not in attrs
 
 
+def test_value_mirror_serializes_dict_as_json_not_repr(cap, exporter):
+    # str({'query': 'x'}) would emit Python repr syntax (single-quoted keys),
+    # which is invalid JSON despite input.mime_type = application/json.
+    import json
+
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        cap.capture_run(lambda payload: "final answer")({"query": "what is MCP?"})
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert json.loads(attrs["input.value"]) == {"query": "what is MCP?"}
+    assert attrs["input.mime_type"] == "application/json"
+
+
+def test_value_mirror_passes_through_string_output(cap, exporter):
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        cap.capture_run(lambda payload: "final answer")({"query": "hi"})
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert attrs["output.value"] == "final answer"
+    assert attrs["output.mime_type"] == "text/plain"
+
+
+def test_scalar_output_has_no_bare_duplicate_key(cap, exporter):
+    # A plain-string output must set output.value only -- not also a bare
+    # "output" key holding the same content (the old _flatten fallback branch
+    # duplicated the string under a dotless key).
+    tracer = trace.get_tracer("t")
+    with tracer.start_as_current_span("framework.root"):
+        cap.capture_run(lambda payload: "final answer")({"query": "hi"})
+    attrs = dict(_named(exporter.get_finished_spans(), "framework.root").attributes)
+    assert "output" not in attrs
+    assert attrs["output.value"] == "final answer"
+
+
 def test_baggage_promoted_to_child(cap, exporter):
     pytest.importorskip("opentelemetry.processor.baggage")
     tracer = trace.get_tracer("t")

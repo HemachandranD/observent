@@ -103,6 +103,42 @@ KNOWN_AUTO_INSTRUMENTING_DEPS: tuple[AutoInstrumentingDep, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class VendorTelemetry:
+    framework_slug: str  # must match a Framework.slug in FRAMEWORKS
+    display: str  # UI / docs label, e.g. "CrewAI"
+    disable_env_var: str  # documented gate that silences the built-in telemetry
+    disable_value: str  # the value that disables it (note inverted polarity: a
+    #                     ``*_DISABLE_*`` flag disables on "true", not "false")
+    span_names: tuple[str, ...]  # the vendor-telemetry span names it emits, so a
+    #                              user/troubleshooter can recognize the leak
+
+
+# Frameworks that ship their OWN built-in *product* telemetry (anonymous usage
+# pings), normally exported to the vendor's own collector. Distinct from
+# KNOWN_AUTO_INSTRUMENTING_DEPS: these are not dormant OTel instrumentation woken
+# by ``opentelemetry-sdk`` — they are usage telemetry that piggybacks on the
+# *global* TracerProvider. The vendor's telemetry client checks for an existing
+# real (non-proxy) global provider and, finding one, skips installing its own and
+# emits onto it instead. observent's ``init_observability()`` installs exactly
+# such a global provider before any agent is built (the instrumentors need it), so
+# enabling observent is what *redirects* the vendor's private usage pings into the
+# user's own backend (Phoenix/Langfuse/…). Each is silenced by a documented env
+# var that must be set *before the framework is first imported* (the telemetry
+# singleton reads it at construction). See references/matrix.md § Silencing
+# frameworks' built-in vendor telemetry. Keep this list conservative — only
+# frameworks with a *documented* disable flag belong here.
+KNOWN_VENDOR_TELEMETRY: tuple[VendorTelemetry, ...] = (
+    VendorTelemetry(
+        "crewai",
+        "CrewAI",
+        "CREWAI_DISABLE_TELEMETRY",
+        "true",
+        ("Crew Created", "Task Created", "Task Execution", "Flow Execution"),
+    ),
+)
+
+
 # --- derived views the scripts / tests consume ---------------------------
 
 
@@ -134,6 +170,21 @@ def auto_instrumenting_deps() -> list[dict[str, object]]:
             "enabled_by_default": d.enabled_by_default,
         }
         for d in KNOWN_AUTO_INSTRUMENTING_DEPS
+    ]
+
+
+def vendor_telemetry() -> list[dict[str, object]]:
+    """The known framework built-in product-telemetry sources, keyed by framework
+    slug, as plain dicts for detector output."""
+    return [
+        {
+            "framework_slug": v.framework_slug,
+            "display": v.display,
+            "disable_env_var": v.disable_env_var,
+            "disable_value": v.disable_value,
+            "span_names": list(v.span_names),
+        }
+        for v in KNOWN_VENDOR_TELEMETRY
     ]
 
 

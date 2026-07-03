@@ -17,7 +17,7 @@ Every span-kind / attribute table below derives from the OpenInference spec — 
 - OTel baggage API (Cross-cutting) — https://opentelemetry.io/docs/specs/otel/baggage/api/
 - OTel exception attributes (Exception handling) — https://opentelemetry.io/docs/specs/semconv/exceptions/
 
-Last reviewed: 2026-06-20.
+Last reviewed: 2026-07-03.
 
 ---
 
@@ -37,6 +37,7 @@ Set on every span via `openinference.span.kind`.
 | `GUARDRAIL` | Jailbreak protection / response filtering |
 | `EVALUATOR` | Output evaluation / assessment |
 | `PROMPT` | Prompt template rendering |
+| `UNKNOWN` | Fallback when the kind can't be determined — don't emit deliberately |
 
 ---
 

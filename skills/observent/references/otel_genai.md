@@ -22,7 +22,7 @@ Every table below derives from the OTel-GenAI spec, which lives in two places (r
 - OTel sampling — https://opentelemetry.io/docs/concepts/sampling/ (§ Sampling-decision attributes)
 - OTel error attributes — https://opentelemetry.io/docs/specs/semconv/general/attributes/#error-attributes (§ Errors)
 
-Last reviewed: 2026-06-20.
+Last reviewed: 2026-07-03.
 
 ---
 
@@ -92,6 +92,8 @@ Default span kind is `CLIENT`; use `INTERNAL` for same-process operations.
 | `gen_ai.usage.cache_read.input_tokens` | int | When applicable (Anthropic) |
 | `gen_ai.usage.reasoning.output_tokens` | int | When applicable (reasoning models) |
 
+**Totals are inclusive.** Per the upstream registry, `cache_creation.input_tokens` and `cache_read.input_tokens` are already **counted inside** `gen_ai.usage.input_tokens`, and `reasoning.output_tokens` inside `gen_ai.usage.output_tokens` — they are breakdowns, not addends. Don't re-add them when computing totals or cost.
+
 **Source-API note (OpenAI: Chat Completions vs Responses).** OTel-GenAI's canonical names (`gen_ai.usage.input_tokens` / `output_tokens`) match the OpenAI **Responses API** shape directly. For **Chat Completions**, the instrumentor maps `prompt_tokens → input_tokens` and `completion_tokens → output_tokens` — verify your instrumentor version applies the mapping for both endpoints if your agent mixes APIs. **Streaming gotcha:** Chat Completions streaming omits usage unless the request passes `stream_options={"include_usage": True}` (usage then arrives on the final SSE chunk); Responses API includes usage automatically. Without the opt-in, `gen_ai.usage.*` will be missing. **Reasoning tokens (o-series):** Both APIs map to `gen_ai.usage.reasoning.output_tokens` via the instrumentor — Responses surfaces them under `usage.output_tokens_details.reasoning_tokens`, Chat Completions under `usage.completion_tokens_details.reasoning_tokens`.
 
 **Sources:** OpenAI Chat Completions usage — https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage · OpenAI Responses usage — https://platform.openai.com/docs/api-reference/responses/object · `stream_options` opt-in — https://platform.openai.com/docs/api-reference/chat/create#chat-create-stream_options
@@ -153,6 +155,23 @@ These are **not** emitted by default. Enable only when capturing prompt / comple
 | `gen_ai.agent.description` | string | Conditionally required | Free-form description |
 
 Agents reuse the request / usage / response attributes above when invoking a model.
+
+---
+
+## Tool execution (`execute_tool` spans)
+
+`gen_ai.operation.name = "execute_tool"`, span kind `INTERNAL`, span name `execute_tool {gen_ai.tool.name}`.
+
+| Attribute | Type | Requirement | Notes |
+|---|---|---|---|
+| `gen_ai.tool.name` | string | Required | Tool the model invoked (e.g. `get_weather`) |
+| `gen_ai.tool.call.id` | string | Recommended (if available) | Correlates to the `tool_call` part in `gen_ai.output.messages` |
+| `gen_ai.tool.description` | string | Recommended (if available) | Free-form tool description |
+| `gen_ai.tool.type` | string | Recommended (if available) | e.g. `function`, `extension`, `datastore` |
+| `gen_ai.tool.call.arguments` | any / JSON | Opt-in (sensitive) | Parameters passed to the call — may contain PII; JSON-stringify if structured form unsupported |
+| `gen_ai.tool.call.result` | any / JSON | Opt-in (sensitive) | Value the tool returned — may contain PII |
+
+The advertised tool list (`gen_ai.tool.definitions`) is set on the **inference** span, not here — see § Opt-in.
 
 ---
 

@@ -121,6 +121,14 @@ Only when `detection.web_frameworks` is non-empty (the agent is served over HTTP
 
 State the default in one line and offer `none` / `root-only` / `full`. Record in `spec.choice.http_transport_spans`. See `references/capture.md § HTTP transport spans`.
 
+### Step 1.4d — Framework built-in vendor telemetry
+
+If Step 1.1's `detect_framework.py` output has a non-empty `framework_vendor_telemetry` list, a detected **framework** ships its own built-in *product* telemetry (anonymous usage pings) that normally goes to the vendor's own collector — but it piggybacks on the **global** `TracerProvider`. observent installs exactly such a provider in `init_observability()` before any agent is built, so those usage-ping spans get **redirected into the user's backend** (e.g. CrewAI's `Crew Created` / `Task Created` / `Task Execution` / `Flow Execution` spans landing in Phoenix/Langfuse). This is a **different mechanism** from Step 1.4b (which is a *dependency's* dormant OTel instrumentation woken by `opentelemetry-sdk`); here nothing is dormant — the vendor's telemetry actively finds and reuses the global provider. For **each** entry, ask:
+
+`<display> ships built-in product telemetry that will piggyback on observent's tracer and leak usage-ping spans (<span_names>) into your backend. Disable it (<disable_env_var>=<disable_value>) or keep it? (disable / keep)`
+
+Default to **disable** — these are the vendor's private usage pings, not agent/LLM detail, and `Task Execution` duplicates the real work's timing right next to the genuine spans, making a trace look like it has conflicting timing. Record each decision under `spec.choice.framework_vendor_telemetry.<slug>` (`disable` | `keep`). On `disable`, Phase 2 appends `<disable_env_var>=<disable_value>` to the generated `.env` **and** `.env.example` (a boolean gate, not a secret), with a comment explaining the piggyback mechanism. **Timing caveat — surface it in the comment:** the flag is read when the framework first constructs its telemetry singleton (at first import), so it must be present *before* the framework is imported; a `.env` loaded via `load_dotenv()` at the top of the entrypoint (before importing the framework) satisfies this, and setting it at the process/shell level is bulletproof. `keep` writes nothing. See `references/matrix.md § Silencing frameworks' built-in vendor telemetry`. Same `confirm` discipline as every other choice; a missing/empty list skips this step entirely.
+
 ### Step 1.5 — Local provisioning offer
 
 For each backend whose resolved `endpoints.<backend>.mode == self-host`, probe the endpoint and record reachability in `spec.detection.backends_reachable.<backend>`. When a self-host backend is **unreachable**:

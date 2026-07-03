@@ -63,7 +63,7 @@ database (in-memory by default).
 ```yaml
 services:
   phoenix:
-    image: arizephoenix/phoenix:version-15.10.0
+    image: arizephoenix/phoenix:version-17.15.0
     container_name: observent-phoenix
     ports:
       - "6006:6006"   # UI + OTLP HTTP (/v1/traces) — observent always uses this
@@ -311,7 +311,7 @@ These are exact image tags, not floors. Bump alongside the matrix's pip pins and
 
 | Backend | Image | Tag | Source |
 |---|---|---|---|
-| Phoenix | `arizephoenix/phoenix` | `version-15.10.0` | Docker Hub — https://hub.docker.com/r/arizephoenix/phoenix/tags |
+| Phoenix | `arizephoenix/phoenix` | `version-17.15.0` | Docker Hub — https://hub.docker.com/r/arizephoenix/phoenix/tags |
 | Elastic APM | `docker.elastic.co/elasticsearch/elasticsearch` | `8.15.3` | Elastic registry — https://www.docker.elastic.co |
 | Elastic APM | `docker.elastic.co/kibana/kibana` | `8.15.3` | Elastic registry |
 | Elastic APM | `docker.elastic.co/apm/apm-server` | `8.15.3` | Elastic registry |
@@ -323,7 +323,7 @@ These are exact image tags, not floors. Bump alongside the matrix's pip pins and
 | Opik | `redis` | `7.2.4-alpine3.19` (upstream compose) | https://github.com/comet-ml/opik |
 | Jaeger | `jaegertracing/jaeger` | `2.19.0` | Docker Hub — https://hub.docker.com/r/jaegertracing/jaeger/tags |
 
-*Last verified: 2026-07-01.* Langfuse and Opik tags are governed by their upstream compose files
+*Last verified: 2026-07-03.* Langfuse and Opik tags are governed by their upstream compose files
 (`upstream-clone` method); the rows above record what those files pinned at verification time.
 
 **SigNoz (`vendor-cli-generated`).** Image tags are **whatever Foundry resolves when it generates

@@ -164,6 +164,15 @@ Some third-party libraries ship their own OpenTelemetry instrumentation that is 
 3. `skills/observent/SKILL.md § 1.4b` already handles the spec-phase keep/disable question generically — no edit needed unless the interaction changes.
 4. `tests/test_detect_framework.py` — add a detection test for the new dep.
 
+### Adding a framework's built-in vendor telemetry
+
+**Distinct from the above.** Some *frameworks* ship their own built-in **product telemetry** (anonymous usage pings), normally sent to the vendor's own collector. Nothing is dormant — the framework's telemetry client reuses whatever real global `TracerProvider` is already installed, so observent installing one (which it must) *redirects* those pings into the user's backend (e.g. CrewAI's `Crew Created`/`Task Execution` spans, gated by `CREWAI_DISABLE_TELEMETRY`). To register one so the skill can offer disable-vs-keep:
+
+1. `skills/observent/scripts/observent_matrix.py` — append a `VendorTelemetry(framework_slug, display, disable_env_var, disable_value, span_names)` to `KNOWN_VENDOR_TELEMETRY`. `framework_slug` **must** match an existing `FRAMEWORKS` slug (the detector keys off detected frameworks). `detect_framework.py` derives the `framework_vendor_telemetry` JSON field from this automatically. Note the inverted polarity: a `*_DISABLE_*` flag disables on `"true"`. Only list frameworks with a **documented** disable flag.
+2. `skills/observent/references/matrix.md § Silencing frameworks' built-in vendor telemetry` — add a row (framework · leaked span names · disable flag · default), and a `⚠️` note in the relevant per-framework section.
+3. `skills/observent/SKILL.md § 1.4d` already handles the spec-phase disable/keep question generically — no edit needed unless the interaction changes.
+4. `tests/test_detect_framework.py` and `tests/test_docs_consistency.py` — add a detection test and rely on `test_known_vendor_telemetry_documented_in_matrix` (derives from the single source) to keep the table in sync.
+
 ### Cross-tool distribution (read this first)
 
 `skills/observent/SKILL.md` (with its `references/` and `scripts/`) is the **single content surface** for every tool. There is no condensed `AGENTS.md` mirror and no per-tool rule files to keep in sync — that multi-copy machinery (`install.sh`/`install.ps1`, `AGENTS.md`, `.cursor/rules/`, `.clinerules/`, `scripts/detect_providers.py`, the Antigravity extension manifest) was retired in favour of `npx skills`.

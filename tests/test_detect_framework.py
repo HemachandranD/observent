@@ -122,6 +122,29 @@ def test_no_auto_instrumenting_deps_in_clean_project(tmp_path, monkeypatch):
     assert report["auto_instrumenting_deps"] == []
 
 
+def test_vendor_telemetry_surfaced_for_detected_framework(tmp_path):
+    # CrewAI ships built-in product telemetry that piggybacks on observent's global
+    # provider; when CrewAI is detected, the report must surface it plus its disable
+    # flag so the spec phase can offer keep-vs-disable.
+    (tmp_path / "requirements.txt").write_text("crewai>=1.15\n")
+    report = detect(tmp_path)
+    found = report["framework_vendor_telemetry"]
+    assert "crewai" in {e["framework_slug"] for e in found}
+    crewai = next(e for e in found if e["framework_slug"] == "crewai")
+    assert crewai["disable_env_var"] == "CREWAI_DISABLE_TELEMETRY"
+    assert crewai["disable_value"] == "true"
+    assert "Task Execution" in crewai["span_names"]
+
+
+def test_no_vendor_telemetry_without_matching_framework(tmp_path, monkeypatch):
+    # Only detected frameworks with a KNOWN_VENDOR_TELEMETRY entry are surfaced;
+    # a project with no such framework reports an empty list.
+    monkeypatch.setattr(detect_framework, "_is_installed", lambda module: False)
+    (tmp_path / "requirements.txt").write_text("langgraph>=1.2\n")
+    report = detect(tmp_path)
+    assert report["framework_vendor_telemetry"] == []
+
+
 def test_name_match_normalizes_separators_and_case():
     assert _name_match("llama_index", {"LLAMA-INDEX"})
     assert _name_match("elastic-apm", {"elastic_apm"})

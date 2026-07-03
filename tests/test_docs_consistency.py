@@ -152,6 +152,39 @@ def test_known_auto_instrumenting_deps_documented_in_matrix() -> None:
         )
 
 
+def test_known_vendor_telemetry_documented_in_matrix() -> None:
+    # Each framework in the single-source KNOWN_VENDOR_TELEMETRY (observent_matrix.py,
+    # surfaced by detect_framework.py) must be documented in matrix.md's "Silencing
+    # frameworks' built-in vendor telemetry" section — both its display name and its
+    # disable env var — so the detector's list and the user-facing table can't
+    # silently diverge.
+    text = _read(MATRIX)
+    section = re.search(
+        r"## Silencing frameworks' built-in vendor telemetry(.+?)(?:\n## |\Z)", text, re.DOTALL
+    )
+    assert section, "'Silencing frameworks' built-in vendor telemetry' section not found in matrix.md"
+    body = section.group(1)
+    entries = observent_matrix.vendor_telemetry()
+    assert entries, "KNOWN_VENDOR_TELEMETRY is empty"
+    for entry in entries:
+        assert entry["display"] in body, (
+            f"vendor-telemetry framework `{entry['display']}` missing from matrix.md table"
+        )
+        assert entry["disable_env_var"] in body, (
+            f"disable flag `{entry['disable_env_var']}` for `{entry['display']}` missing from matrix.md table"
+        )
+
+
+def test_vendor_telemetry_framework_slugs_are_real() -> None:
+    # A VendorTelemetry entry keys off a framework slug; it must match a real
+    # FRAMEWORKS slug or detect_framework.py can never surface it.
+    slugs = {f.slug for f in observent_matrix.FRAMEWORKS}
+    for entry in observent_matrix.vendor_telemetry():
+        assert entry["framework_slug"] in slugs, (
+            f"KNOWN_VENDOR_TELEMETRY slug `{entry['framework_slug']}` is not a real FRAMEWORKS slug"
+        )
+
+
 def test_crewai_canonical_snippet_uses_event_listener() -> None:
     # CrewAIInstrumentor drops every LLM span unless instrument()'d with
     # use_event_listener=True (see matrix.md § CrewAI). Guard the canonical

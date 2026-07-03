@@ -65,33 +65,33 @@ Last reviewed: 2026-06-20.
 
 ## Verified Versions
 
-Last verified: 2026-06-25 against Python 3.12.
+Last verified: 2026-07-03 against Python 3.12.
 
 | Package | Pinned version |
 |---|---|
-| arize-phoenix | ==15.10.0 |
-| langfuse | ==4.6.1 |
-| elastic-apm | ==6.25.0 |
-| langsmith | ==0.8.5 |
-| opik | ==2.1.3 |
-| opentelemetry-sdk | ==1.41.1 |
-| opentelemetry-exporter-otlp-proto-http | ==1.41.1 |
-| langgraph | ==1.2.0 |
-| crewai | ==1.14.4 |
-| agent-framework | ==1.4.0 |
-| anthropic | ==0.102.0 |
-| openai-agents | ==0.17.2 |
-| smolagents | ==1.25.0 |
-| llama-index | ==0.14.22 |
-| openinference-instrumentation-langchain | ==0.1.65 |
-| openinference-instrumentation-crewai | ==1.1.6 |
-| openinference-instrumentation-openai | ==0.1.48 |
-| openinference-instrumentation-openai-agents | ==1.5.0 |
-| openinference-instrumentation-anthropic | ==1.0.4 |
-| openinference-instrumentation-llama-index | ==4.4.1 |
-| openinference-instrumentation-smolagents | ==0.1.30 |
+| arize-phoenix | ==17.15.0 |
+| langfuse | ==4.13.0 |
+| elastic-apm | ==6.26.2 |
+| langsmith | ==0.9.7 |
+| opik | ==2.1.14 |
+| opentelemetry-sdk | ==1.43.0 |
+| opentelemetry-exporter-otlp-proto-http | ==1.43.0 |
+| langgraph | ==1.2.7 |
+| crewai | ==1.15.1 |
+| agent-framework | ==1.10.0 |
+| anthropic | ==0.116.0 |
+| openai-agents | ==0.17.7 |
+| smolagents | ==1.26.0 |
+| llama-index | ==0.14.23 |
+| openinference-instrumentation-langchain | ==0.1.67 |
+| openinference-instrumentation-crewai | ==1.1.10 |
+| openinference-instrumentation-openai | ==0.1.52 |
+| openinference-instrumentation-openai-agents | ==1.6.1 |
+| openinference-instrumentation-anthropic | ==1.0.6 |
+| openinference-instrumentation-llama-index | ==4.4.3 |
+| openinference-instrumentation-smolagents | ==0.1.32 |
 | google-adk | ==2.3.0 |
-| openinference-instrumentation-google-adk | ==0.1.15 |
+| openinference-instrumentation-google-adk | ==0.1.17 |
 
 These are the exact versions `examples.md` and the per-framework install commands below target. When bumping any pin, update this table **and** the matching per-backend Install line, the per-framework `pip install` snippet, and the `*Last verified: …*` footer of any example in `examples.md` that was re-run.
 
@@ -112,7 +112,7 @@ These are the exact versions `examples.md` and the per-framework install command
 - **Auth:** None for local. Cloud uses `PHOENIX_API_KEY` as `Authorization: Bearer <key>`.
 - **Required env vars:** None local. Cloud: `PHOENIX_API_KEY`, optional `PHOENIX_COLLECTOR_ENDPOINT`.
 - **Optional env vars:** `PHOENIX_PROJECT_NAME` (groups traces into projects).
-- **Install:** `pip install 'arize-phoenix==15.10.0' 'opentelemetry-sdk==1.41.1' 'opentelemetry-exporter-otlp-proto-http==1.41.1'`
+- **Install:** `pip install 'arize-phoenix==17.15.0' 'opentelemetry-sdk==1.43.0' 'opentelemetry-exporter-otlp-proto-http==1.43.0'`
 - **Sources:** Phoenix docs — https://docs.arize.com/phoenix · `phoenix.otel.register` — https://docs.arize.com/phoenix/tracing/how-to-tracing/setup-tracing/setup-tracing-python · OpenInference instrumentors — https://github.com/Arize-ai/openinference/tree/main/python
 
 **Canonical setup snippet:**
@@ -164,7 +164,7 @@ session = px.launch_app()  # UI on http://localhost:6006
   - Cloud EU: `https://cloud.langfuse.com/api/public/otel/v1/traces`
 - **Auth:** HTTP Basic — `Authorization: Basic base64(public_key:secret_key)`.
 - **Required env vars:** `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`. Optional `LANGFUSE_HOST` (defaults to `https://cloud.langfuse.com`).
-- **Install:** `pip install 'langfuse==4.6.1'` (plus framework-specific extras as listed below) — required only for the LangChain-callback / `@observe` decorator / OpenAI-wrapper integration mechanisms above. The `langfuse` PyPI package is **not** required for the **OTLP path** observent generates for the multi-backend fan-out (which POSTs to `<host>/api/public/otel/v1/traces` with Basic auth and imports only `opentelemetry-exporter-otlp-proto-http`); install it only if you also want the Langfuse SDK directly (datasets, evals, prompt management).
+- **Install:** `pip install 'langfuse==4.13.0'` (plus framework-specific extras as listed below) — required only for the LangChain-callback / `@observe` decorator / OpenAI-wrapper integration mechanisms above. The `langfuse` PyPI package is **not** required for the **OTLP path** observent generates for the multi-backend fan-out (which POSTs to `<host>/api/public/otel/v1/traces` with Basic auth and imports only `opentelemetry-exporter-otlp-proto-http`); install it only if you also want the Langfuse SDK directly (datasets, evals, prompt management).
 - **Sources:** Langfuse docs — https://langfuse.com/docs · OTel integration — https://langfuse.com/docs/opentelemetry/get-started · LangChain integration — https://langfuse.com/docs/integrations/langchain · `@observe` decorator — https://langfuse.com/docs/sdk/python/decorators
 
 **Canonical setup snippets:**
@@ -217,7 +217,7 @@ exporter = OTLPSpanExporter(
   - Cloud UI: `https://<tenant>.{us,eu,in}.signoz.cloud`
 - **Auth:** None for self-host. Cloud requires header `signoz-access-token: <token>`. (Verify against current SigNoz docs — header name has changed historically.)
 - **Required env vars:** `SIGNOZ_ENDPOINT` (full OTLP traces URL). Cloud also requires `SIGNOZ_INGESTION_KEY`.
-- **Install:** `pip install 'opentelemetry-sdk==1.41.1' 'opentelemetry-exporter-otlp-proto-http==1.41.1'` + relevant `openinference-instrumentation-*` packages.
+- **Install:** `pip install 'opentelemetry-sdk==1.43.0' 'opentelemetry-exporter-otlp-proto-http==1.43.0'` + relevant `openinference-instrumentation-*` packages.
 - **Sources:** SigNoz docs — https://signoz.io/docs · OTel Python instrumentation guide — https://signoz.io/docs/instrumentation/opentelemetry-python/ · Cloud ingestion-key header — https://signoz.io/docs/ingestion/signoz-cloud/keys/
 
 **Self-host quickstart:** SigNoz deprecated its `docker-compose` manifests (2026); self-host now
@@ -269,7 +269,7 @@ trace.set_tracer_provider(provider)
   - Cloud Kibana UI: `https://<deployment>.kb.<region>.cloud.es.io/app/apm`
 - **Auth:** Self-host — none unless a secret token is configured. Cloud — `Authorization: Bearer <ELASTIC_APM_SECRET_TOKEN>` or `Authorization: ApiKey <ELASTIC_APM_API_KEY>` (the agent reads either from env vars).
 - **Required env vars:** `ELASTIC_APM_SERVER_URL` (defaults to `http://localhost:8200`). Cloud also needs `ELASTIC_APM_SECRET_TOKEN` or `ELASTIC_APM_API_KEY`. Optional: `ELASTIC_APM_SERVICE_NAME`, `ELASTIC_APM_ENVIRONMENT`.
-- **Install:** `pip install 'elastic-apm==6.25.0'` + relevant `openinference-instrumentation-*` packages.
+- **Install:** `pip install 'elastic-apm==6.26.2'` + relevant `openinference-instrumentation-*` packages.
 - **Sources:** Elastic APM Python agent — https://www.elastic.co/guide/en/apm/agent/python/current/index.html · OTel bridge — https://www.elastic.co/guide/en/apm/agent/python/current/opentelemetry-bridge.html · APM Server OTLP intake — https://www.elastic.co/guide/en/observability/current/apm-open-telemetry-direct.html
 
 **Canonical setup (native agent — primary):**
@@ -324,7 +324,7 @@ Use the OTLP path only when you have a strong reason to avoid the `elastic-apm` 
   - Cloud UI: `https://smith.langchain.com` (US), `https://eu.smith.langchain.com` (EU)
 - **Auth:** Header `x-api-key: ${LANGSMITH_API_KEY}`. Project routing via optional header `Langsmith-Project: ${LANGSMITH_PROJECT}` (otherwise traces land in the `default` project).
 - **Required env vars:** `LANGSMITH_API_KEY`. Optional: `LANGSMITH_ENDPOINT` (default `https://api.smith.langchain.com`), `LANGSMITH_PROJECT`.
-- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http==1.41.1`. The `langsmith` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `langsmith` SDK directly (datasets, evals).
+- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http==1.43.0`. The `langsmith` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `langsmith` SDK directly (datasets, evals).
 - **Sources:** LangSmith docs — https://docs.smith.langchain.com · OTel ingest endpoint — https://docs.smith.langchain.com/observability/how_to_guides/trace_with_opentelemetry · LangSmith regions & endpoints — https://docs.smith.langchain.com/administration/concepts#data-regions
 
 **Canonical setup (pure OTLP):**
@@ -362,7 +362,7 @@ LangSmith is cloud-first and has no localhost default — `LANGSMITH_API_KEY` mu
   - Self-host UI: `http://localhost:5173` · Cloud UI: `https://www.comet.com/opik`
 - **Auth:** Self-host requires no auth by default (single-user local). Opik Cloud needs header `Authorization: ${OPIK_API_KEY}` + `Comet-Workspace: ${OPIK_WORKSPACE}`; project routing via optional header `projectName: ${OPIK_PROJECT_NAME}` (otherwise traces land in the `Default Project`).
 - **Required env vars:** Self-host: `OPIK_URL_OVERRIDE=http://localhost:5173/api`. Cloud: `OPIK_API_KEY`, `OPIK_WORKSPACE` (plus `OPIK_URL_OVERRIDE=https://www.comet.com/opik/api`). Optional: `OPIK_PROJECT_NAME`. The OTLP traces endpoint is `${OPIK_URL_OVERRIDE}/v1/private/otel/v1/traces`.
-- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http==1.41.1`. The `opik` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `opik` SDK directly (datasets, evals, the `@track` decorator).
+- **Install:** Relevant `openinference-instrumentation-*` packages plus `opentelemetry-exporter-otlp-proto-http==1.43.0`. The `opik` PyPI package is **not** required for the OTLP path observent generates — install it only if you also want to use the `opik` SDK directly (datasets, evals, the `@track` decorator).
 - **Sources:** Opik docs — https://www.comet.com/docs/opik/ · OTel integration — https://www.comet.com/docs/opik/tracing/opentelemetry/overview · Self-host — https://www.comet.com/docs/opik/self-host/local_deployment
 
 **Canonical setup (pure OTLP):**
@@ -403,7 +403,7 @@ For self-host, set `OPIK_URL_OVERRIDE=http://localhost:5173/api` and leave the a
   - Self-host UI: `http://localhost:16686`
 - **Auth:** None (local service).
 - **Required env vars:** `JAEGER_ENDPOINT` (default `http://localhost:4318/v1/traces`). No keys.
-- **Install:** `opentelemetry-exporter-otlp-proto-http==1.41.1` plus the relevant `openinference-instrumentation-*` packages. Jaeger itself is a Docker image, not a pip dependency — nothing to add to `requirements.txt`.
+- **Install:** `opentelemetry-exporter-otlp-proto-http==1.43.0` plus the relevant `openinference-instrumentation-*` packages. Jaeger itself is a Docker image, not a pip dependency — nothing to add to `requirements.txt`.
 - **Sources:** Jaeger docs — https://www.jaegertracing.io/docs/ · OTLP ingestion — https://www.jaegertracing.io/docs/latest/apis/#opentelemetry-protocol · all-in-one image — https://hub.docker.com/r/jaegertracing/jaeger
 
 **Canonical setup (pure OTLP):**
@@ -436,7 +436,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** LangChain callback system + standard OTel via `LangChainInstrumentor`.
 - **Key entry points:** `StateGraph.compile()` → `.invoke()`, `.stream()`, `.astream()`.
 - **Where to thread `session_id`:** `RunnableConfig.configurable["session_id"]` and as OTel baggage.
-- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-langchain==0.1.65'` then call `LangChainInstrumentor().instrument(tracer_provider=provider)`.
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-langchain==0.1.67'` then call `LangChainInstrumentor().instrument(tracer_provider=provider)`.
 - **Langfuse:** `langfuse.langchain.CallbackHandler` passed via `config={"callbacks": [handler]}`.
 - **Sources:** LangGraph docs — https://langchain-ai.github.io/langgraph/ · `openinference-instrumentation-langchain` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain · Langfuse LangChain callback — https://langfuse.com/docs/integrations/langchain
 
@@ -445,7 +445,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** Native CrewAI events + LangChain callbacks for the underlying LLM calls.
 - **Key entry points:** `Crew.kickoff()`, `Agent`, `Task` (delegations create child spans).
 - **Where to thread `session_id`:** Pass via `inputs` dict and set OTel baggage at the top.
-- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-crewai==1.1.6' 'openinference-instrumentation-langchain==0.1.65'` then:
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-crewai==1.1.10' 'openinference-instrumentation-langchain==0.1.67'` then:
 
   **Canonical setup snippet:**
   ```python
@@ -457,6 +457,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **⚠️ `use_event_listener=True` is required to capture LLM spans.** The instrumentor's default (`use_event_listener=False`) only wraps `Crew.kickoff`/`Task._execute_core`/`Agent.kickoff`/`Flow.kickoff`/`BaseTool.run` — there is **no LLM-call wrapper anywhere in that path**, so it cannot produce an `llm`-kind span regardless of which LLM class CrewAI is configured with (`crewai.LLM`, LangChain's `ChatOpenAI`, anything). CrewAI ≥1.10 fires LLM calls through its internal event bus rather than a directly-wrappable method, so `use_event_listener=True` is the *only* path that emits LLM spans — it subscribes an `OpenInferenceEventListener` to Crew/Task/Agent/LiteAgent/Tool/Flow/Method events **and** `LLMCallStarted`/`LLMCallCompleted`/`LLMCallFailed` events, replacing the wrapper-based hierarchy rather than layering on top of it. Omitting the flag silently drops every LLM span while Crew/Task/Agent spans still show up, making the trace look deceptively complete — worth raising upstream that `use_event_listener=True` should be the instrumentor's own default.
 - **⚠️ Known readability limitation — CrewAI's native span names are not human-meaningful.** CrewAI's own instrumentor names spans `Crew_<uuid>.kickoff` (embeds the Crew's per-run UUID — different every run for what is logically "the same" operation) and generic constants like `Task Execution`, `Flow Execution`, `Environment Context`, `Crew Created` (identical across every agent/run, giving no hint which query/service they belong to without opening `input.value`). These are **upstream CrewAI names** — the skill neither generates nor can rename them. Only observent's own root span (the `open_or_enrich_span` fallback, `capture.md § Public entry point`) is nameable, so set `_SERVICE_NAME` per service (`text2sql.run`, …) to give at least the top of each trace a stable, legible name; the CrewAI subtree stays generic.
 - **⚠️ Non-primitive attribute warning (`crew_context`).** CrewAI may attach a `CrewContext` object to a span attribute, triggering `Invalid type CrewContext for attribute 'crew_context' value. Expected one of ['bool','str','bytes','int','float']…` from the OTel SDK. It's a benign upstream warning (the attribute is dropped, the span is otherwise fine) — observent's own capture coerces non-primitives to `str` via `_coerce` before `set_attribute`, so nothing observent generates emits it; the warning originates in CrewAI's instrumentor. Ignore it, or filter the OTel `logging` warning.
+- **⚠️ CrewAI's built-in product telemetry leaks into your backend — disable it.** CrewAI ships anonymous usage telemetry (`crewai/telemetry/telemetry.py`) that normally pings `telemetry.crewai.com`. It starts its spans on the **global** tracer (`trace.get_tracer("crewai.telemetry")`) and, in `Telemetry.set_tracer()`, if a real (non-`ProxyTracerProvider`) global provider is already installed it **skips installing its own and piggybacks on the existing one**. observent's `init_observability()` sets exactly such a global provider before any Crew is built, so CrewAI's usage pings — spans named `Crew Created`, `Task Created`, `Task Execution`, `Flow Execution` — get exported to Phoenix/Langfuse alongside your real spans. `Task Execution` is the worst: it mirrors the real task's duration and sits next to the genuine OpenInference `Task`/`Agent`/`LLM` spans, so the trace looks like it has duplicated/conflicting timing. **Fix:** set `CREWAI_DISABLE_TELEMETRY=true` in the environment **before the first `crewai` import** (the flag is read when CrewAI constructs its `Telemetry` singleton). `CREWAI_DISABLE_TRACKING=true` is honored too; do **not** use `OTEL_SDK_DISABLED=true` — it would also disable *your* tracing. observent's Step 1.4d emits this into the generated `.env`/`.env.example` by default. See § Silencing frameworks' built-in vendor telemetry.
 - **⚠️ Flow span ordering can look inconsistent (needs-investigation).** With CrewAI **Flows**, the `Flow Execution` / step span tree sometimes appears out of sequence in the waterfall from run to run (a reported-but-not-yet-root-caused symptom). If you hit it, it is almost always a **context-propagation** issue rather than a capture bug — check the § "Trace tree is broken / orphan spans" list (async `create_task` context, `start_as_current_span` vs `start_span`, thread `attach`/`detach`), since Flow steps may run on tasks/threads that don't inherit the parent context. Reproduce against a Flow example before changing generated code; observent's own capture doesn't reorder spans.
 - **Sources:** CrewAI docs — https://docs.crewai.com · `openinference-instrumentation-crewai` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai · `openinference-instrumentation-langchain` (underlying LLM calls) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-langchain
 
@@ -465,7 +466,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** Native OpenTelemetry emission built into `agent-framework`. The framework's spans land on the global `TracerProvider` automatically — just register the provider before constructing any `Agent`. Underlying model calls captured by `OpenAIInstrumentor` (or `AnthropicInstrumentor` for Anthropic-backed agents).
 - **Key entry points:** `Agent.run()`, `agent_framework.openai.OpenAIChatClient`, the workflow primitives (sequential, concurrent, handoff, group collaboration) under `agent_framework.workflows`.
 - **Where to thread `session_id`:** OTel baggage at the top — MAF's native context propagation carries it across agents and tool calls.
-- **Phoenix / SigNoz / Langfuse / LangSmith / Opik / Jaeger via OTLP:** `pip install 'agent-framework==1.4.0' 'openinference-instrumentation-openai==0.1.48'` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
+- **Phoenix / SigNoz / Langfuse / LangSmith / Opik / Jaeger via OTLP:** `pip install 'agent-framework==1.10.0' 'openinference-instrumentation-openai==0.1.52'` — MAF emits OTel-GenAI spans natively; the OI instrumentor adds raw model spans.
 - **Note:** observent no longer supports AutoGen (v0.2 `pyautogen` or v0.4 `autogen-agentchat`) — Microsoft has unified AutoGen and Semantic Kernel into agent-framework. Migrate AutoGen code to MAF, or use the **Custom** path.
 - **Sources:** Microsoft Agent Framework — https://github.com/microsoft/agent-framework · MAF observability guidance — search "Observability" / "OpenTelemetry" in the repo README · `openinference-instrumentation-openai` (raw model spans) — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai
 
@@ -474,7 +475,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** Wrap entry points with the OpenInference Anthropic instrumentor or with Langfuse `@observe` decorators.
 - **Key entry points:** `client.messages.create()`, `client.beta.messages.create()`, agent tool-call loops.
 - **Where to thread `session_id`:** Set OTel baggage at the top of each conversation turn.
-- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-anthropic==1.0.4'` — captures `prompt_token_count`, `completion_token_count`, **prompt cache read/write tokens**, tool calls.
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-anthropic==1.0.6'` — captures `prompt_token_count`, `completion_token_count`, **prompt cache read/write tokens**, tool calls.
 - **Langfuse:** `@observe(as_type="generation")` and update via `langfuse_context.update_current_observation(usage={...})`.
 - **Sources:** Anthropic agents docs — https://docs.anthropic.com/en/docs/agents · `openinference-instrumentation-anthropic` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-anthropic · Anthropic prompt caching — https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 
@@ -483,7 +484,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** **Native** — the SDK has its own tracing pipeline configurable via `set_trace_processors()`. This captures handoffs, guardrails, and agent runs as first-class spans, not as raw OpenAI API calls.
 - **Key entry points:** `Runner.run()`, `Agent`, `handoff()`, `Guardrail`.
 - **Where to thread `session_id`:** Pass via `Runner.run(... metadata={"session.id": ...})`; use OTel baggage as fallback.
-- **Phoenix:** `pip install 'openinference-instrumentation-openai-agents==1.5.0'` then:
+- **Phoenix:** `pip install 'openinference-instrumentation-openai-agents==1.6.1'` then:
   ```python
   from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
   OpenAIAgentsInstrumentor().instrument(tracer_provider=provider)
@@ -497,14 +498,14 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 
 - **Tracing model:** `openinference-instrumentation-smolagents` covers `CodeAgent.run()`, `ToolCallingAgent.run()`, tool calls, LLM calls.
 - **Phoenix / SigNoz / Langfuse:** Same instrumentor — only the exporter destination changes.
-- **Install:** `pip install 'openinference-instrumentation-smolagents==0.1.30'`
+- **Install:** `pip install 'openinference-instrumentation-smolagents==0.1.32'`
 - **Sources:** smolagents docs — https://huggingface.co/docs/smolagents · `openinference-instrumentation-smolagents` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-smolagents
 
 ### LlamaIndex (`llama_index`)
 
 - **Tracing model:** `openinference-instrumentation-llama-index` (preferred) or LlamaIndex's `set_global_handler()` API.
 - **Key entry points:** `Workflow.run()`, `QueryEngine.query()`, `RetrieverQueryEngine.query()`, `AgentWorker.run_step()`.
-- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-llama-index==4.4.1'`
+- **Phoenix / SigNoz:** `pip install 'openinference-instrumentation-llama-index==4.4.3'`
 - **Langfuse:** `from langfuse.llama_index import LlamaIndexCallbackHandler` then `Settings.callback_manager = CallbackManager([handler])`.
 - **Sources:** LlamaIndex docs — https://docs.llamaindex.ai · `openinference-instrumentation-llama-index` — https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-llama-index · Langfuse LlamaIndex integration — https://langfuse.com/docs/integrations/llama-index
 
@@ -513,7 +514,7 @@ Jaeger is a generic trace store/UI — great for a fast, dependency-free local s
 - **Tracing model:** `openinference-instrumentation-google-adk` wraps the Agent Development Kit's runner and agent execution — captures `Runner.run()` / `Runner.run_async()`, agent invocations, tool calls, and the underlying model (Gemini / LiteLLM) requests as a connected span tree. ADK also emits some native OpenTelemetry spans; the OI instrumentor adds the LLM-specific attributes Phoenix and the OTel-GenAI backends read.
 - **Key entry points:** `google.adk.agents.Agent` / `LlmAgent`, `google.adk.runners.Runner` (`run`, `run_async`), tool functions and `google.adk.tools.*`.
 - **Where to thread `session_id`:** ADK's own `Session` (`session_service.create_session(...)`) carries an id end-to-end; also set OTel baggage (`session.id`) at the top of the turn so it lands on every span.
-- **Phoenix / SigNoz / Langfuse / Elastic APM / LangSmith / Opik / Jaeger:** `pip install 'google-adk==2.3.0' 'openinference-instrumentation-google-adk==0.1.15'` then:
+- **Phoenix / SigNoz / Langfuse / Elastic APM / LangSmith / Opik / Jaeger:** `pip install 'google-adk==2.3.0' 'openinference-instrumentation-google-adk==0.1.17'` then:
   ```python
   from openinference.instrumentation.google_adk import GoogleADKInstrumentor
   GoogleADKInstrumentor().instrument(tracer_provider=provider)
@@ -880,6 +881,10 @@ You're using `openinference-instrumentation-openai`. Switch to `openinference-in
 
 A dependency ships its **own** OpenTelemetry instrumentation that was dormant until you installed `opentelemetry-sdk` — see § Known auto-instrumenting dependencies below. Set that library's documented gate env var to `false` to silence it.
 
+### "Junk spans like `Crew Created` / `Task Execution` / `Flow Execution` I never created"
+
+Your **framework** is emitting its own built-in product telemetry onto the global provider observent installed — see § Silencing frameworks' built-in vendor telemetry. For CrewAI, set `CREWAI_DISABLE_TELEMETRY=true` before the first `crewai` import.
+
 ---
 
 ## Known auto-instrumenting dependencies
@@ -893,3 +898,21 @@ Some third-party libraries ship **their own** OpenTelemetry instrumentation that
 | `a2a-sdk` | its own server/handlers/event-queue/client transports — spans like `a2a.server.*` (`JsonRpcDispatcher`, `DefaultRequestHandler*`, `EventQueueSource`, …), built from `@trace_class`/`@trace_function` decorators in `a2a/utils/telemetry.py` | `OTEL_INSTRUMENTATION_A2A_SDK_ENABLED` | `true` (enabled) |
 
 To add a dependency here: append an `AutoInstrumentingDep(...)` to `KNOWN_AUTO_INSTRUMENTING_DEPS` in `scripts/observent_matrix.py` (slug, display, probe modules, gate env var, default) and add a row above. Only list libraries with a **documented** on/off env var — an undocumented internal flag is not a stable gate.
+
+---
+
+## Silencing frameworks' built-in vendor telemetry
+
+**Distinct from the section above.** Auto-instrumenting *dependencies* ship dormant OTel instrumentation that `opentelemetry-sdk` wakes up. This section is about *frameworks* that ship their own **product telemetry** — anonymous usage pings normally sent to the vendor's own collector. Nothing is dormant: the framework's telemetry client checks for an existing real (non-`ProxyTracerProvider`) **global** `TracerProvider` and, finding one, **skips installing its own collector and emits onto the existing global provider instead**.
+
+The moment observent's `init_observability()` installs a real global provider (which it must — the instrumentors need it, and it happens before any agent is built), the vendor's private usage pings get **redirected into the user's backend**. So enabling observent is what causes the leak: without a global provider those spans would quietly go to the vendor's servers. This is a **general pattern** — any framework that emits its own telemetry against the global provider will leak the same way.
+
+`detect_framework.py` carries a small known-list (source of truth: `scripts/observent_matrix.py` `KNOWN_VENDOR_TELEMETRY`) and reports any **detected framework** that has an entry under `framework_vendor_telemetry` in its JSON, with the disable flag. SKILL.md Phase 1 § 1.4d then offers **disable** (default — set the flag) or **keep**, emitting the flag into the generated `.env`/`.env.example` on disable.
+
+| Framework | Built-in telemetry (leaked span names) | Disable flag | Default |
+|---|---|---|---|
+| CrewAI | anonymous usage pings from `crewai/telemetry/telemetry.py` (python version, cpu count, platform, `crew_number_of_tasks`, `crew_number_of_agents`, …) — spans named `Crew Created`, `Task Created`, `Task Execution`, `Flow Execution` | `CREWAI_DISABLE_TELEMETRY=true` (also honors `CREWAI_DISABLE_TRACKING=true`) | enabled (leaks) |
+
+**Timing.** The disable flag is read when the framework first constructs its telemetry singleton — i.e. at first import. It must be set **before** the framework is imported: a `.env` loaded via `load_dotenv()` at the top of the entrypoint (before importing the framework) works; setting it at the process/shell level is bulletproof. Do **not** reach for `OTEL_SDK_DISABLED=true` to silence one framework — it disables *all* OTel, including the user's own tracing.
+
+To add a framework here: append a `VendorTelemetry(...)` to `KNOWN_VENDOR_TELEMETRY` in `scripts/observent_matrix.py` (framework slug matching a `FRAMEWORKS` entry, display, disable env var, disable value, leaked span names) and add a row above. Only list frameworks with a **documented** disable flag.
