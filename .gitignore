@@ -223,3 +223,7 @@ __marimo__/
 # Maintainer-only skills — kept locally for repo development, not shipped to
 # users via `npx skills` (which would otherwise discover every SKILL.md).
 .claude/skills/
+
+# Maintainer-only feedback notes — local working notes captured while running
+# the skill against real projects; drive fixes but are not part of the repo.
+tests/feedback_loops/
