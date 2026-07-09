@@ -28,9 +28,14 @@ An optional **Evaluate** step then turns that telemetry into a deterministic, of
 ### Claude Code plugin (with `/observent*` slash commands)
 
 ```bash
-claude plugin marketplace add HemachandranD/observent
+claude plugin marketplace add https://github.com/HemachandranD/observent.git#release
 claude plugin install observent@observent
 ```
+
+> The `#release` ref points at a lean branch carrying only the plugin runtime
+> (skill, commands, manifests) — so the marketplace clone in
+> `~/.claude/plugins/marketplaces/` stays small, without the repo's tests, CI, and
+> dev tooling.
 
 Run:
 
@@ -181,7 +186,7 @@ LangSmith is not auto-provisioned (no free OSS Docker edition).
 
 | Provider | How observent runs | Install |
 |---|---|---|
-| Claude Code | Native plugin with `/observent*` slash commands (or skill-only via `npx skills`) | `claude plugin marketplace add HemachandranD/observent` then `claude plugin install observent@observent` |
+| Claude Code | Native plugin with `/observent*` slash commands (or skill-only via `npx skills`) | `claude plugin marketplace add https://github.com/HemachandranD/observent.git#release` then `claude plugin install observent@observent` |
 | Cursor, Windsurf, Cline, GitHub Copilot, OpenAI Codex, Google Antigravity (CLI + IDE) | Skill loaded from each agent's skills directory | `npx skills add HemachandranD/observent` |
 
 `npx skills` supports 70+ agents. See the canonical list in [vercel-labs/skills](https://github.com/vercel-labs/skills#supported-agents).
