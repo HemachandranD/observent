@@ -1,0 +1,11 @@
+description = "observent: run the Plan phase only — produce .observent/plan.md from spec.md"
+prompt = """
+Run the observent SDD Plan phase for this project.
+
+Preconditions:
+  - `.observent/spec.md` must exist with `status: locked`. If it does not, instruct the user to run `/observent-spec` first.
+
+Follow Phase 2 (Plan) of the observent skill: read `spec.md`, decide the file/processor structure using `references/matrix.md`, then write `.observent/plan.md` per the canonical schema (`references/spec_schema.md § 2`) — YAML frontmatter plus the full generated content for every file in anchored fenced blocks (`<!-- plan:<slug> -->`).
+
+Set `spec_fingerprint` to sha256 of the live `spec.md` frontmatter. Do NOT proceed into Tasks / Implement.
+"""

@@ -1,0 +1,15 @@
+description = "Detect installed agent frameworks and observability backends in this project"
+prompt = """
+Run the observent framework and backend detector on this project.
+
+Execute both detection scripts:
+  !`python "${CLAUDE_SKILL_DIR}/scripts/detect_framework.py"`
+  !`python "${CLAUDE_SKILL_DIR}/scripts/existing_setup.py"`
+
+Then report:
+  - Which agent frameworks are installed or declared as dependencies.
+  - Which observability backends are installed.
+  - Whether any existing observability config was found (imports, env vars, config files).
+  - Docker availability (from the detector's `docker` block: `available` / `compose_available`) — this determines whether observent can offer to provision an unreachable self-host backend locally.
+  - Recommended next step (run /observent [framework] [backend] to proceed). If Docker is available, note that /observent will offer to spin up any chosen self-host backend (Phoenix · Langfuse · SigNoz · Elastic APM · Opik · Jaeger) that isn't already running. LangSmith has no OSS self-host and is never provisioned locally.
+"""
