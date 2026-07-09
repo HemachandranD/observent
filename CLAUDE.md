@@ -235,3 +235,16 @@ The 9×7 matrix in `references/matrix.md` is canonical. If you change a row or c
 The **Image Versions** table in `references/self_host.md` is the canonical record of exact Docker image tags for the local-provisioning stacks (analogous to the matrix's Verified Versions, but for images not pip packages). When you bump an image tag, update that table and its `Last verified` footer; the compose templates in the same file are the only place image tags are written — don't duplicate them elsewhere.
 
 The **Verified Versions** table in `references/matrix.md` is the canonical record of exact dependency pins (`==X.Y.Z`) — not floors. When you bump a pin, update the table **and** the matching per-backend Install line, every per-framework `pip install` snippet that mentions that package, and the `*Last verified: …*` footer of any example in `references/examples.md` that was re-run against the new version. The per-example footers are a different signal: they record when each individual example was last actually re-run end-to-end. Don't conflate them: the table is "what we claim works," the footer is "when we last proved it for this example." `scripts/validate_setup.py` error messages intentionally stay on `>=` form so user-facing hints suggest a minimum that will work, not the maintainer's exact pin.
+
+## Releasing
+
+Users install the Claude Code plugin from the **`release`** branch, not `main`. `claude plugin marketplace add` clones — *in full* — whichever branch hosts `.claude-plugin/marketplace.json`, so pointing users at `main` would drag the entire dev repo (`tests/`, `.github/`, caches, this `CLAUDE.md`) into their `~/.claude/plugins/marketplaces/` cache. The `release` branch carries **only** the plugin runtime surface; `main` stays the development branch.
+
+- **Single source of truth for the allowlist:** `scripts/build-release-branch.sh` — the `RELEASE_PATHS` array is the exact set of paths shipped to users (`.claude-plugin/`, `commands/`, `skills/`, `assets/logo.svg`, `README.md`, `LICENSE`, `NOTICE`, `package.json`). Everything else stays on `main`. If you add a new file that users need at runtime, add it here or it won't ship.
+- **How `release` refreshes:** the `.github/workflows/release-sync.yml` workflow rebuilds the lean tree from `main` and force-pushes it to `release`. It runs **only** on a `v*` tag push or manual `workflow_dispatch` — **a plain push to `main` does not update what users install.** So everyday commits stay internal until you cut a release:
+  ```bash
+  git tag v0.4.0 && git push origin v0.4.0   # → workflow → refreshes release
+  ```
+  To ship a fix without tagging: run the workflow manually from the Actions tab, or `bash scripts/build-release-branch.sh --push` locally (dry-run without `--push` to inspect the tree first). `release` is an orphan single-commit branch, force-pushed each time — never base work on it.
+- **`plugin.json` / `marketplace.json` `version`** and the install command's `#release` ref are independent of the git tag — bump the manifest versions as part of the change on `main`; the tag just triggers the sync. Keep the README install command on the `…git#release` form.
+- **`npx skills` (all other agents) is unaffected** — it copies `skills/` from `main`'s default branch directly, so it always tracks `main` and needs no release step.
